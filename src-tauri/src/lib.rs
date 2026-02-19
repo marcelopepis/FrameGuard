@@ -13,9 +13,21 @@ pub fn run() {
             system_info::get_system_info,
             system_info::get_system_usage,
             system_info::get_system_summary,
-            // Otimizações
-            optimizations::get_optimizations,
-            optimizations::toggle_optimization,
+            // Otimizações — Compressão de Wallpaper
+            optimizations::get_wallpaper_compression_status,
+            optimizations::get_wallpaper_compression_info,
+            optimizations::disable_wallpaper_compression,
+            optimizations::revert_wallpaper_compression,
+            // Otimizações — Armazenamento Reservado
+            optimizations::get_reserved_storage_status,
+            optimizations::get_reserved_storage_info,
+            optimizations::disable_reserved_storage,
+            optimizations::enable_reserved_storage,
+            // Otimizações — Otimização de Entrega
+            optimizations::get_delivery_optimization_status,
+            optimizations::get_delivery_optimization_info,
+            optimizations::disable_delivery_optimization,
+            optimizations::revert_delivery_optimization,
             // Limpeza
             cleanup::analyze_cleanup,
             cleanup::run_cleanup,
