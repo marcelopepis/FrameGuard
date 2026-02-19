@@ -31,8 +31,18 @@ pub fn run() {
             // Limpeza
             cleanup::analyze_cleanup,
             cleanup::run_cleanup,
-            // Verificação de saúde
-            health_check::run_health_check,
+            // Saúde do Sistema — DISM
+            health_check::run_dism_cleanup,
+            health_check::run_dism_checkhealth,
+            health_check::run_dism_scanhealth,
+            health_check::run_dism_restorehealth,
+            // Saúde do Sistema — Verificações
+            health_check::run_sfc,
+            health_check::run_chkdsk,
+            health_check::run_ssd_trim,
+            // Saúde do Sistema — Manutenção
+            health_check::flush_dns,
+            health_check::run_temp_cleanup,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o FrameGuard");
