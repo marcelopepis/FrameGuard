@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import { Dashboard, Optimizations, Cleanup, HealthCheck, Settings } from './pages';
+import { Dashboard, Optimizations, Cleanup, HealthCheck, Plans, Settings } from './pages';
 
 // Componente raiz: Layout como rota pai, páginas como filhas (Outlet)
 export default function App() {
@@ -12,6 +12,7 @@ export default function App() {
           <Route path="/optimizations" element={<Optimizations />} />
           <Route path="/cleanup"       element={<Cleanup />} />
           <Route path="/health"        element={<HealthCheck />} />
+          <Route path="/plans"         element={<Plans />} />
           <Route path="/settings"      element={<Settings />} />
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Route>

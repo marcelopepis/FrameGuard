@@ -242,6 +242,51 @@ pub fn get_all_plans() -> Result<Vec<Plan>, String> {
     Ok(plans)
 }
 
+/// Substitui completamente o estado de planos pelo conteúdo fornecido.
+///
+/// Usado pela importação de configurações (`import_config` no modo `"replace"`).
+/// Persiste no disco e atualiza o cache em memória atomicamente, garantindo
+/// consistência imediata sem necessidade de reiniciar o aplicativo.
+pub fn replace_all_plans(new_state: PlansFile) -> Result<(), String> {
+    let mut state = get_state()
+        .lock()
+        .map_err(|_| "Falha ao adquirir lock no estado de planos".to_string())?;
+
+    save_to_disk(&new_state)?;
+    *state = new_state;
+    Ok(())
+}
+
+/// Mescla planos importados com o estado atual, preservando os existentes.
+///
+/// Usado pela importação de configurações (`import_config` no modo `"merge"`).
+/// Apenas planos cujos IDs **não existem** na base atual são adicionados —
+/// planos com o mesmo ID são preservados sem modificação.
+///
+/// # Retorna
+/// A quantidade de planos efetivamente adicionados.
+pub fn merge_plans(new_plans: Vec<Plan>) -> Result<usize, String> {
+    let mut state = get_state()
+        .lock()
+        .map_err(|_| "Falha ao adquirir lock no estado de planos".to_string())?;
+
+    let mut added = 0;
+
+    for plan in new_plans {
+        if !state.plans.contains_key(&plan.id) {
+            state.plans.insert(plan.id.clone(), plan);
+            added += 1;
+        }
+    }
+
+    if added > 0 {
+        state.last_modified = now_utc();
+        save_to_disk(&state)?;
+    }
+
+    Ok(added)
+}
+
 /// Registra o timestamp da execução mais recente de um plano.
 ///
 /// Chamado automaticamente por `execute_plan` ao término de cada execução.

@@ -4,6 +4,7 @@ import {
   Zap,
   Trash2,
   Activity,
+  ListChecks,
   Settings,
   Shield,
 } from 'lucide-react';
@@ -24,7 +25,8 @@ const navItems: NavItem[] = [
   { path: '/optimizations',  label: 'Otimizações',     Icon: Zap },
   { path: '/cleanup',        label: 'Limpeza',         Icon: Trash2 },
   { path: '/health',         label: 'Saúde do Sistema', Icon: Activity },
-  { path: '/settings',       label: 'Configurações',   Icon: Settings },
+  { path: '/plans',          label: 'Planos',           Icon: ListChecks },
+  { path: '/settings',       label: 'Configurações',    Icon: Settings },
 ];
 
 export default function Sidebar() {

@@ -264,6 +264,48 @@ pub fn get_all_backups() -> Result<HashMap<String, BackupEntry>, String> {
     Ok(state.backups.clone())
 }
 
+/// Substitui completamente o estado de backups pelo conteúdo fornecido.
+///
+/// Usado pela importação de configurações (`import_config` no modo `"replace"`).
+/// Persiste no disco e atualiza o cache em memória atomicamente, garantindo
+/// consistência imediata sem necessidade de reiniciar o aplicativo.
+pub fn replace_all_backups(new_state: BackupFile) -> Result<(), String> {
+    let mut state = get_state()
+        .lock()
+        .map_err(|_| "Falha ao adquirir lock no estado de backups".to_string())?;
+
+    save_to_disk(&new_state)?;
+    *state = new_state;
+    Ok(())
+}
+
+/// Mescla entradas de backup com o estado atual, substituindo as existentes.
+///
+/// Usado pela importação de configurações (`import_config` no modo `"merge"`).
+/// Todas as entradas do mapa fornecido são inseridas — se a chave já existir,
+/// a entrada atual é sobrescrita pela importada.
+///
+/// # Retorna
+/// A quantidade de entradas inseridas ou atualizadas.
+pub fn merge_backups(entries: HashMap<String, BackupEntry>) -> Result<usize, String> {
+    let mut state = get_state()
+        .lock()
+        .map_err(|_| "Falha ao adquirir lock no estado de backups".to_string())?;
+
+    let count = entries.len();
+
+    for (key, entry) in entries {
+        state.backups.insert(key, entry);
+    }
+
+    if count > 0 {
+        state.last_modified = now_utc();
+        save_to_disk(&state)?;
+    }
+
+    Ok(count)
+}
+
 /// Remove permanentemente o backup de um tweak específico do arquivo.
 ///
 /// Use após confirmar que a reversão foi bem-sucedida e o backup não é mais
