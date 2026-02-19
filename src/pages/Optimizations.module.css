@@ -1,0 +1,512 @@
+/* ─── Layout da página ────────────────────────────────────── */
+
+.page {
+  padding: 36px 40px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ─── Estados de carregamento e erro da página ───────────── */
+
+.pageLoading,
+.pageError {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+}
+
+.pageError {
+  color: var(--color-error);
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.btnRetry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btnRetry:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+/* ─── Header ─────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+/* ─── Botão de refresh ───────────────────────────────────── */
+
+.btnRefresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.btnRefresh:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+/* ─── Lista de tweaks ────────────────────────────────────── */
+
+.tweakList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Card de tweak ──────────────────────────────────────── */
+
+.tweakCard {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition:
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal);
+}
+
+.tweakCard:hover {
+  border-color: var(--color-border-hover);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(34, 211, 238, 0.05);
+}
+
+/* Reduz levemente a opacidade enquanto a ação está em andamento */
+.tweakCardBusy {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* ─── Body do card (duas colunas) ────────────────────────── */
+
+.tweakBody {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 22px 24px;
+}
+
+/* ─── Lado esquerdo ──────────────────────────────────────── */
+
+.tweakLeft {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.tweakName {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.tweakDesc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ─── Botão "Saiba mais" ─────────────────────────────────── */
+
+.btnDetails {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  width: fit-content;
+  transition: color var(--transition-fast);
+}
+
+.btnDetails:hover {
+  color: var(--color-accent-hover);
+}
+
+/* ─── Painel de detalhes técnicos ────────────────────────── */
+
+.detailsPanel {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(34, 211, 238, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.detailsText {
+  font-family: 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+/* ─── Badges ─────────────────────────────────────────────── */
+
+.badgeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.riskBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid;
+  letter-spacing: 0.1px;
+  user-select: none;
+}
+
+.riskLow {
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.25);
+  color: var(--color-success);
+}
+
+.riskMedium {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.26);
+  color: #fbbf24;
+}
+
+.riskHigh {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.24);
+  color: var(--color-error);
+}
+
+.restartBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(148, 163, 184, 0.07);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+/* ─── Data de última aplicação ───────────────────────────── */
+
+.lastApplied {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+/* ─── Lado direito ───────────────────────────────────────── */
+
+.tweakRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 168px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+/* ─── Badge de status (Ativo / Inativo) ──────────────────── */
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  font-size: 12.5px;
+  font-weight: 600;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.statusActive {
+  background: rgba(52, 211, 153, 0.07);
+  border-color: rgba(52, 211, 153, 0.22);
+  color: var(--color-success);
+}
+
+.statusInactive {
+  background: rgba(148, 163, 184, 0.06);
+  border-color: rgba(148, 163, 184, 0.16);
+  color: var(--color-text-muted);
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotActive {
+  background: var(--color-success);
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+.dotInactive {
+  background: var(--color-text-muted);
+  opacity: 0.45;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* ─── Botões de ação ─────────────────────────────────────── */
+
+.btnApply {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: var(--color-accent);
+  color: #0a0e17;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.btnApply:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.btnApply:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btnRevert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.btnRevert:hover:not(:disabled) {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+  transform: translateY(-1px);
+}
+
+.btnRevert:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.noBackup {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  text-align: right;
+}
+
+/* ─── Estado de carregamento inline ──────────────────────── */
+
+.loadingState {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ─── Feedback de sucesso / erro ─────────────────────────── */
+
+.feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  white-space: nowrap;
+  animation: feedbackIn 0.2s ease-out;
+}
+
+.feedbackSuccess {
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.22);
+  color: var(--color-success);
+}
+
+.feedbackError {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.22);
+  color: var(--color-error);
+}
+
+@keyframes feedbackIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Log de progresso DISM ──────────────────────────────── */
+
+.dismLog {
+  max-height: 140px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.48);
+  border-top: 1px solid rgba(34, 211, 238, 0.08);
+  padding: 10px 18px;
+  font-family: 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
+  font-size: 11.5px;
+  line-height: 1.65;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.15) transparent;
+}
+
+.dismLog::-webkit-scrollbar        { width: 4px; }
+.dismLog::-webkit-scrollbar-track  { background: transparent; }
+.dismLog::-webkit-scrollbar-thumb  {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 2px;
+}
+
+.dismLine {
+  color: #4ade80;
+}
+
+/* Oculta linhas completamente vazias */
+.dismLine:empty {
+  display: none;
+}
+
+/* ─── Aviso de reinicialização ───────────────────────────── */
+
+.restartWarning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  background: rgba(251, 191, 36, 0.06);
+  border-top: 1px solid rgba(251, 191, 36, 0.14);
+  color: #fbbf24;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.restartWarning > svg {
+  flex-shrink: 0;
+}
+
+.restartWarning > span {
+  flex: 1;
+}
+
+.btnDismissWarning {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  color: rgba(251, 191, 36, 0.45);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.btnDismissWarning:hover {
+  color: #fbbf24;
+}
