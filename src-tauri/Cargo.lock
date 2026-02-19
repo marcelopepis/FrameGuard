@@ -984,6 +984,7 @@ dependencies = [
 name = "frameguard"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "sysinfo",
