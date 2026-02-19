@@ -247,6 +247,7 @@ pub fn run_command_with_progress(
 ///
 /// # Parâmetros
 /// - `script`: script PowerShell inline (ex: `"Get-PSDrive -PSProvider FileSystem"`)
+#[allow(dead_code)]
 pub fn run_powershell(script: &str) -> Result<CommandOutput, String> {
     run_command(
         "powershell.exe",
@@ -279,6 +280,7 @@ pub fn run_powershell(script: &str) -> Result<CommandOutput, String> {
 /// ```ignore
 /// run_dism(&app, &["/Online", "/Cleanup-Image", "/RestoreHealth"])?;
 /// ```
+#[allow(dead_code)]
 pub fn run_dism(app_handle: &tauri::AppHandle, args: &[&str]) -> Result<CommandOutput, String> {
     run_command_with_progress(app_handle, "dism-progress", "dism.exe", args)
 }

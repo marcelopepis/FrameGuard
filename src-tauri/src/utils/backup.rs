@@ -244,6 +244,7 @@ pub fn restore_from_backup(tweak_id: &str) -> Result<OriginalValue, String> {
 /// - `Ok(None)` — nenhum backup registrado para este `tweak_id`
 /// - `Ok(Some(Applied))` — backup existe e o tweak está ativo no sistema
 /// - `Ok(Some(Reverted))` — backup existe, mas o tweak já foi revertido
+#[allow(dead_code)]
 pub fn get_backup_status(tweak_id: &str) -> Result<Option<BackupStatus>, String> {
     let state = get_state()
         .lock()
@@ -311,6 +312,7 @@ pub fn merge_backups(entries: HashMap<String, BackupEntry>) -> Result<usize, Str
 /// Use após confirmar que a reversão foi bem-sucedida e o backup não é mais
 /// necessário, ou para limpeza de registros obsoletos.
 /// Retorna erro se o `tweak_id` não existir nos backups.
+#[allow(dead_code)]
 pub fn delete_backup(tweak_id: &str) -> Result<(), String> {
     let mut state = get_state()
         .lock()

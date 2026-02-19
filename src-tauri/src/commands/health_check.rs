@@ -22,7 +22,7 @@ use std::thread;
 use std::time::Instant;
 use tauri::Emitter;
 
-use crate::utils::command_runner::{run_command, run_command_with_progress, CommandEvent};
+use crate::utils::command_runner::{run_command_with_progress, CommandEvent};
 
 /// Suprime janela de console ao lançar subprocessos — duplicado de command_runner (privado lá).
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;

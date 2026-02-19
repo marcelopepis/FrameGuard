@@ -119,6 +119,7 @@ pub fn write_dword(hive: Hive, path: &str, key: &str, value: u32) -> Result<(), 
 /// Retorna `Ok(None)` se a subchave ou o valor não existirem.
 /// Retorna `Err` para problemas de acesso ou se o tipo armazenado
 /// não for compatível com String.
+#[allow(dead_code)]
 pub fn read_string(hive: Hive, path: &str, key: &str) -> Result<Option<String>, String> {
     let subkey = match hive.as_regkey().open_subkey(path) {
         Ok(k) => k,
@@ -147,6 +148,7 @@ pub fn read_string(hive: Hive, path: &str, key: &str) -> Result<Option<String>, 
 /// Escreve um valor String (`REG_SZ`) no registro.
 ///
 /// Cria a subchave automaticamente se ela não existir.
+#[allow(dead_code)]
 pub fn write_string(hive: Hive, path: &str, key: &str, value: &str) -> Result<(), String> {
     let (subkey, _) = hive
         .as_regkey()

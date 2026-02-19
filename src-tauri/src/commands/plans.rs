@@ -15,7 +15,7 @@
 //! no resumo final, mas não são executados.
 
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 use tauri::Emitter;
 
