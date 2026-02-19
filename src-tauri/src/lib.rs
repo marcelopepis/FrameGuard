@@ -12,6 +12,7 @@ pub fn run() {
             // Informações do sistema
             system_info::get_system_info,
             system_info::get_system_usage,
+            system_info::get_system_summary,
             // Otimizações
             optimizations::get_optimizations,
             optimizations::toggle_optimization,

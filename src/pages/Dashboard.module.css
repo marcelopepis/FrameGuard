@@ -1,0 +1,253 @@
+/* ─── Layout da página ────────────────────────────────────── */
+
+.page {
+  padding: 36px 40px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ─── Header ─────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+}
+
+/* ─── Grid de cards ──────────────────────────────────────── */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  cursor: default;
+  transition:
+    border-color var(--transition-normal),
+    transform var(--transition-normal),
+    box-shadow var(--transition-normal);
+}
+
+.card:hover {
+  border-color: var(--color-border-hover);
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(34, 211, 238, 0.06);
+}
+
+/* Cabeçalho do card: ícone + label */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 6px;
+}
+
+.iconWrap {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent-subtle);
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.cardLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--color-text-muted);
+}
+
+/* Valor principal */
+.cardValue {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+/* Detalhe secundário */
+.cardDetail {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.highlight {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* ─── Progress bar (RAM) ─────────────────────────────────── */
+
+.progressTrack {
+  width: 100%;
+  height: 4px;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--color-accent) 0%, rgba(34, 211, 238, 0.6) 100%);
+  transition: width 0.5s ease;
+}
+
+.progressLabel {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+/* Placeholder enquanto o invoke está carregando */
+.loading {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* ─── Admin tag (card Sistema) ───────────────────────────── */
+
+.adminTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 4px;
+  width: fit-content;
+  letter-spacing: 0.1px;
+}
+
+.adminOn {
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.22);
+  color: var(--color-success);
+}
+
+.adminOff {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.2);
+  color: var(--color-error);
+}
+
+/* ─── Seção Status Rápido ────────────────────────────────── */
+
+.statusSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--color-text-muted);
+}
+
+.badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ─── Badge de status ────────────────────────────────────── */
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  font-size: 13px;
+  user-select: none;
+}
+
+.badgeOn {
+  background: rgba(52, 211, 153, 0.06);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+.badgeOff {
+  background: rgba(248, 113, 113, 0.06);
+  border-color: rgba(248, 113, 113, 0.18);
+}
+
+/* Indicador circular */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotOn {
+  background: var(--color-success);
+  box-shadow: 0 0 7px rgba(52, 211, 153, 0.65);
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+.dotOff {
+  background: var(--color-error);
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+.badgeLabel {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.badgeStatus {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
