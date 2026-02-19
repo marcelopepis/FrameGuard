@@ -4,3 +4,4 @@ pub mod wmi;
 pub mod elevated;
 pub mod backup;
 pub mod command_runner;
+pub mod plan_manager;

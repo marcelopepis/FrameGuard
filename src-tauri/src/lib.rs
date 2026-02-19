@@ -2,7 +2,7 @@
 mod commands;
 mod utils;
 
-use commands::{cleanup, health_check, optimizations, system_info};
+use commands::{cleanup, health_check, optimizations, plans, system_info};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -43,6 +43,13 @@ pub fn run() {
             // Saúde do Sistema — Manutenção
             health_check::flush_dns,
             health_check::run_temp_cleanup,
+            // Planos de Execução
+            plans::create_plan,
+            plans::update_plan,
+            plans::delete_plan,
+            plans::get_plan,
+            plans::get_all_plans,
+            plans::execute_plan,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o FrameGuard");
