@@ -1,22 +1,40 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, useLocation, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import { Dashboard, Optimizations, Cleanup, HealthCheck, Plans, Settings } from './pages';
 
-// Componente raiz: Layout como rota pai, páginas como filhas (Outlet)
+// Todas as rotas declaradas aqui. A ordem determina a renderização no DOM.
+const ROUTES = [
+  { path: '/',              Page: Dashboard },
+  { path: '/optimizations', Page: Optimizations },
+  { path: '/cleanup',       Page: Cleanup },
+  { path: '/health',        Page: HealthCheck },
+  { path: '/plans',         Page: Plans },
+  { path: '/settings',      Page: Settings },
+];
+
+// Renderiza todas as páginas simultaneamente usando keep-alive:
+// páginas inativas ficam ocultas via CSS (display: none), mas permanecem
+// montadas — preservando estado React, execuções em andamento e listeners Tauri.
+function Pages() {
+  const { pathname } = useLocation();
+  const isKnown = ROUTES.some(r => r.path === pathname);
+
+  return (
+    <Layout>
+      {!isKnown && <Navigate to="/" replace />}
+      {ROUTES.map(({ path, Page }) => (
+        <div key={path} style={{ display: pathname === path ? 'contents' : 'none' }}>
+          <Page />
+        </div>
+      ))}
+    </Layout>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/"              element={<Dashboard />} />
-          <Route path="/optimizations" element={<Optimizations />} />
-          <Route path="/cleanup"       element={<Cleanup />} />
-          <Route path="/health"        element={<HealthCheck />} />
-          <Route path="/plans"         element={<Plans />} />
-          <Route path="/settings"      element={<Settings />} />
-          <Route path="*"              element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+      <Pages />
     </BrowserRouter>
   );
 }
