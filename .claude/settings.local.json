@@ -2,7 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(npm install)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(cargo tree:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(start /B /I \"\" \"I:\\\\FrameGuard\\\\src-tauri\\\\target\\\\debug\\\\frameguard.exe\")",
+      "Bash(powershell.exe -Command 'Get-WinEvent -LogName Application -MaxEvents 10 -ErrorAction SilentlyContinue | Where-Object { $_.Id -eq 1000 -and $_.TimeCreated -ge \\(Get-Date\\).AddMinutes\\(-3\\) } | Select-Object -First 3 | ForEach-Object { $_.Message }')",
+      "Bash(rustup component add:*)",
+      "Bash(ls:*)",
+      "Bash(~/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/x86_64-pc-windows-msvc/bin/llvm-objdump.exe:*)",
+      "Bash(powershell.exe -NoProfile -Command '$f = \"\"C:\\\\Windows\\\\System32\\\\vcruntime140_1.dll\"\"; if \\(Test-Path $f\\) { $v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo\\($f\\); Write-Output \"\"Found: $\\($v.FileName\\) v$\\($v.FileVersion\\)\"\" } else { Write-Output \"\"NOT FOUND in System32\"\" }')",
+      "Bash(~/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/x86_64-pc-windows-msvc/bin/llvm-nm.exe:*)",
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\marce\\\\AppData\\\\Local\\\\Temp\\\\check_imports.ps1\")",
+      "Bash(cargo build:*)"
     ]
   }
 }
