@@ -134,7 +134,13 @@ pub fn run_command_with_progress(
 ) -> Result<CommandOutput, String> {
     let start = Instant::now();
 
-    emit_event(app_handle, event_name, "started", command);
+    // Inclui os argumentos no evento "started" para legibilidade no log da UI
+    let started_label = if args.is_empty() {
+        command.to_string()
+    } else {
+        format!("{} {}", command, args.join(" "))
+    };
+    emit_event(app_handle, event_name, "started", &started_label);
 
     // Inicia o processo com pipes nos dois streams
     let mut child = Command::new(command)
@@ -162,24 +168,50 @@ pub fn run_command_with_progress(
     let (tx_out, rx) = mpsc::channel::<StreamLine>();
     let tx_err = tx_out.clone();
 
-    // Thread A: lê stdout linha a linha e envia para o canal
+    // Thread A: lê stdout byte a byte com tolerância a encoding CP-1252 / não-UTF-8.
+    // BufReader::lines() para na primeira linha com byte inválido em UTF-8 (ex: 'ã' em
+    // CP-1252 = 0xE3). read_until + from_utf8_lossy substitui bytes inválidos por U+FFFD
+    // em vez de abandonar a leitura, preservando todo o output do processo.
     thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines().flatten() {
-            if tx_out.send(StreamLine::Out(line)).is_err() {
-                break;
+        let mut reader = BufReader::new(stdout);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) => break,
+                Ok(_) => {
+                    while buf.last() == Some(&b'\n') || buf.last() == Some(&b'\r') {
+                        buf.pop();
+                    }
+                    let line = String::from_utf8_lossy(&buf).into_owned();
+                    if tx_out.send(StreamLine::Out(line)).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
             }
         }
-        // Sinaliza ao loop principal que este pipe foi esgotado
         let _ = tx_out.send(StreamLine::Done);
     });
 
-    // Thread B: lê stderr linha a linha e envia para o canal
+    // Thread B: lê stderr com a mesma tolerância a encoding
     thread::spawn(move || {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines().flatten() {
-            if tx_err.send(StreamLine::Err(line)).is_err() {
-                break;
+        let mut reader = BufReader::new(stderr);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) => break,
+                Ok(_) => {
+                    while buf.last() == Some(&b'\n') || buf.last() == Some(&b'\r') {
+                        buf.pop();
+                    }
+                    let line = String::from_utf8_lossy(&buf).into_owned();
+                    if tx_err.send(StreamLine::Err(line)).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
             }
         }
         let _ = tx_err.send(StreamLine::Done);

@@ -209,23 +209,47 @@ fn run_chkdsk_drive(
     let (tx_out, rx) = mpsc::channel::<ChkdskLine>();
     let tx_err = tx_out.clone();
 
-    // Thread A: lê stdout linha a linha
+    // Thread A: lê stdout com tolerância a encoding CP-1252
     thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines().flatten() {
-            if tx_out.send(ChkdskLine::Out(line)).is_err() {
-                break;
+        let mut reader = BufReader::new(stdout);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) => break,
+                Ok(_) => {
+                    while buf.last() == Some(&b'\n') || buf.last() == Some(&b'\r') {
+                        buf.pop();
+                    }
+                    let line = String::from_utf8_lossy(&buf).into_owned();
+                    if tx_out.send(ChkdskLine::Out(line)).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
             }
         }
         let _ = tx_out.send(ChkdskLine::Done);
     });
 
-    // Thread B: lê stderr linha a linha
+    // Thread B: lê stderr com tolerância a encoding CP-1252
     thread::spawn(move || {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines().flatten() {
-            if tx_err.send(ChkdskLine::Err(line)).is_err() {
-                break;
+        let mut reader = BufReader::new(stderr);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) => break,
+                Ok(_) => {
+                    while buf.last() == Some(&b'\n') || buf.last() == Some(&b'\r') {
+                        buf.pop();
+                    }
+                    let line = String::from_utf8_lossy(&buf).into_owned();
+                    if tx_err.send(ChkdskLine::Err(line)).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
             }
         }
         let _ = tx_err.send(ChkdskLine::Done);

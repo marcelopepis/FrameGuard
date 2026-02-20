@@ -503,54 +503,60 @@ export default function SystemHealth() {
     }));
   }
 
-  function appendLog(id: string, line: LogLine) {
-    setStates(prev => ({
-      ...prev,
-      [id]: { ...prev[id], log: [...prev[id].log, line] },
-    }));
-  }
-
-  function updateProgress(id: string, progress: number) {
-    setStates(prev => ({
-      ...prev,
-      [id]: { ...prev[id], progress },
-    }));
-  }
-
   async function handleRun(meta: ActionMeta) {
-    updateAction(meta.id, {
-      running: true,
-      log: [],
-      progress: null,
-      showLog: true,
-    });
+    updateAction(meta.id, { running: true, log: [], progress: null, showLog: true });
+
+    // Buffer local: acumula linhas entre flushes para evitar centenas de re-renders
+    // por segundo durante comandos longos como DISM ScanHealth (causa UI freeze).
+    let pendingLines: LogLine[] = [];
+    let pendingProgress: number | null = null;
+
+    // Flush a cada 80 ms → máximo ~12 re-renders/s independente do volume de output
+    const flushTimer = setInterval(() => {
+      if (pendingLines.length === 0 && pendingProgress === null) return;
+      const lines = pendingLines.splice(0);
+      const p = pendingProgress;
+      pendingProgress = null;
+      setStates(prev => {
+        const cur = prev[meta.id];
+        // Limita a 500 linhas para não sobrecarregar o DOM
+        const nextLog = lines.length > 0 ? [...cur.log, ...lines].slice(-500) : cur.log;
+        return {
+          ...prev,
+          [meta.id]: { ...cur, log: nextLog, progress: p !== null ? p : cur.progress },
+        };
+      });
+    }, 80);
 
     const unlisten = await listen<CommandEvent>(meta.eventChannel, event => {
       const { event_type, data } = event.payload;
-
-      appendLog(meta.id, { type: event_type, text: data });
-
-      // Detecta percentual de progresso em linhas de stdout (ex: DISM " 42.0%")
+      pendingLines.push({ type: event_type, text: data });
       if (event_type === 'stdout') {
         const pct = extractProgress(data);
-        if (pct !== null) updateProgress(meta.id, pct);
+        if (pct !== null) pendingProgress = pct;
       }
     });
 
     try {
-      const result = await invoke<HealthCheckResult>(
-        meta.command,
-        meta.invokeArgs ?? {}
-      );
-      updateAction(meta.id, {
-        running: false,
-        progress: null,
-        lastResult: result,
-        showLog: true,
+      const result = await invoke<HealthCheckResult>(meta.command, meta.invokeArgs ?? {});
+      clearInterval(flushTimer);
+      const remaining = pendingLines.splice(0);
+      setStates(prev => {
+        const cur = prev[meta.id];
+        const nextLog = remaining.length > 0 ? [...cur.log, ...remaining].slice(-500) : cur.log;
+        return {
+          ...prev,
+          [meta.id]: { ...cur, running: false, progress: null, lastResult: result, showLog: true, log: nextLog },
+        };
       });
     } catch (e) {
-      appendLog(meta.id, { type: 'error', text: String(e) });
-      updateAction(meta.id, { running: false, progress: null });
+      clearInterval(flushTimer);
+      const remaining = pendingLines.splice(0);
+      setStates(prev => {
+        const cur = prev[meta.id];
+        const nextLog = [...cur.log, ...remaining, { type: 'error', text: String(e) }].slice(-500);
+        return { ...prev, [meta.id]: { ...cur, running: false, progress: null, log: nextLog } };
+      });
     } finally {
       unlisten();
     }
