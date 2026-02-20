@@ -21,6 +21,8 @@ pub struct SystemInfo {
     pub ram_usage_percent: f32,
     /// Nome da GPU principal (ex: "NVIDIA GeForce RTX 4080")
     pub gpu_name: String,
+    /// VRAM da GPU em GB (0.0 se não disponível)
+    pub gpu_vram_gb: f64,
     /// `true` se o Windows Game Mode está ativo (HKCU\Software\Microsoft\GameBar)
     pub game_mode_enabled: bool,
     /// `true` se HAGS (Hardware-Accelerated GPU Scheduling) está ativo
@@ -69,9 +71,10 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
         };
 
         // ── GPU via PowerShell ─────────────────────────────────────────────────
-        // Ordena por AdapterRAM decrescente para priorizar a placa discreta
-        // quando há mais de uma GPU (discreta + integrada).
-        let gpu_name = run_command(
+        // Win32_VideoController.AdapterRAM é uint32 → trava em ~4 GB para placas maiores.
+        // Lê HardwareInformation.qwMemorySize (QWORD 64-bit) da chave de registro do driver.
+        // Retorna "Nome|vram_bytes". Fallback para AdapterRAM se a chave não for encontrada.
+        let gpu_raw = run_command(
             "powershell.exe",
             &[
                 "-NoProfile",
@@ -80,15 +83,32 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
                 "Bypass",
                 "-Command",
                 "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
-                 (Get-WmiObject Win32_VideoController | \
-                  Sort-Object AdapterRAM -Descending | \
-                  Select-Object -First 1 -ExpandProperty Name)",
+                 $g = Get-WmiObject Win32_VideoController | Sort-Object AdapterRAM -Descending | Select-Object -First 1; \
+                 $vram = (Get-ChildItem 'HKLM:\\SYSTEM\\ControlSet001\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' \
+                   -ErrorAction SilentlyContinue | ForEach-Object { \
+                     $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; \
+                     if ($p.DriverDesc -eq $g.Name) { $p.'HardwareInformation.qwMemorySize' } \
+                   } | Where-Object { $_ } | Select-Object -First 1); \
+                 if (-not $vram) { $vram = [uint64]$g.AdapterRAM }; \
+                 \"$($g.Name)|$vram\"",
             ],
         )
         .ok()
         .filter(|r| r.success && !r.stdout.trim().is_empty())
         .map(|r| r.stdout.trim().to_string())
-        .unwrap_or_else(|| "GPU Desconhecida".to_string());
+        .unwrap_or_default();
+
+        let mut parts = gpu_raw.splitn(2, '|');
+        let gpu_name = parts
+            .next()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "GPU Desconhecida".to_string());
+        let gpu_vram_gb = parts
+            .next()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .map(|bytes| (bytes as f64 / 1_073_741_824.0 * 10.0).round() / 10.0)
+            .unwrap_or(0.0);
 
         // ── Status via registro ────────────────────────────────────────────────
         use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
@@ -98,20 +118,22 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
 
         // Game Mode: HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled
+        // Padrão: ativo (desde Windows 10 Creators Update — chave pode não existir)
         let game_mode_enabled = hkcu
             .open_subkey(r"Software\Microsoft\GameBar")
             .ok()
             .and_then(|k| k.get_value::<u32, _>("AutoGameModeEnabled").ok())
             .map(|v| v != 0)
-            .unwrap_or(false);
+            .unwrap_or(true);
 
         // HAGS: HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\HwSchMode (2 = ativo)
+        // Padrão: ativo no Windows 11 para GPUs compatíveis — chave só existe se alterado
         let hags_enabled = hklm
             .open_subkey(r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers")
             .ok()
             .and_then(|k| k.get_value::<u32, _>("HwSchMode").ok())
             .map(|v| v == 2)
-            .unwrap_or(false);
+            .unwrap_or(true);
 
         // VBS: HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\EnableVirtualizationBasedSecurity
         let vbs_enabled = hklm
@@ -132,6 +154,7 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
             ram_used_gb,
             ram_usage_percent,
             gpu_name,
+            gpu_vram_gb,
             game_mode_enabled,
             hags_enabled,
             vbs_enabled,

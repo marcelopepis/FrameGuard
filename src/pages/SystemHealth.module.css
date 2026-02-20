@@ -407,10 +407,15 @@
     transform var(--transition-fast);
 }
 
-.btnRun:hover {
+.btnRun:hover:not(:disabled) {
   background: rgba(34, 211, 238, 0.18);
   border-color: rgba(34, 211, 238, 0.4);
   transform: translateY(-1px);
+}
+
+.btnRun:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* Badge "Executando" (substitui o botão durante a execução) */

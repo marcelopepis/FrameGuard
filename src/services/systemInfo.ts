@@ -16,6 +16,7 @@ export interface SystemInfo {
   ram_used_gb: number;
   ram_usage_percent: number;
   gpu_name: string;
+  gpu_vram_gb: number;
   game_mode_enabled: boolean;
   hags_enabled: boolean;
   vbs_enabled: boolean;

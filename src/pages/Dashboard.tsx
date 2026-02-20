@@ -66,7 +66,7 @@ export default function Dashboard() {
           <p className={styles.cardDetail}>
             {info ? (
               <span className={styles.highlight}>
-                {info.cpu_cores > 0 ? `${info.cpu_cores} núcleos` : 'Placa de vídeo'}
+                {info.gpu_vram_gb > 0 ? `${info.gpu_vram_gb} GB VRAM` : 'GPU dedicada'}
               </span>
             ) : '—'}
           </p>
@@ -117,9 +117,24 @@ export default function Dashboard() {
       <section className={styles.statusSection}>
         <h2 className={styles.sectionTitle}>Status Rápido</h2>
         <div className={styles.badges}>
-          <StatusBadge label="Game Mode" active={info?.game_mode_enabled ?? false} loading={!info} />
-          <StatusBadge label="HAGS"      active={info?.hags_enabled ?? false}       loading={!info} />
-          <StatusBadge label="VBS"       active={info?.vbs_enabled ?? false}        loading={!info} />
+          <StatusBadge
+            label="Game Mode"
+            active={info?.game_mode_enabled ?? false}
+            loading={!info}
+            tooltip="Prioriza CPU e GPU para o jogo em execução, reduzindo interferência de processos em segundo plano. Recomendado: Ativo."
+          />
+          <StatusBadge
+            label="HAGS"
+            active={info?.hags_enabled ?? false}
+            loading={!info}
+            tooltip="Hardware-Accelerated GPU Scheduling: a GPU gerencia sua própria memória, reduzindo latência e carga da CPU. Recomendado: Ativo."
+          />
+          <StatusBadge
+            label="VBS"
+            active={info?.vbs_enabled ?? false}
+            loading={!info}
+            tooltip="Virtualization Based Security protege o Windows via virtualização, mas pode reduzir performance em games em até 10–15%. Recomendado: Inativo para gaming."
+          />
         </div>
       </section>
     </div>
@@ -144,9 +159,10 @@ interface StatusBadgeProps {
   label: string;
   active: boolean;
   loading?: boolean;
+  tooltip?: string;
 }
 
-function StatusBadge({ label, active, loading }: StatusBadgeProps) {
+function StatusBadge({ label, active, loading, tooltip }: StatusBadgeProps) {
   return (
     <div className={`${styles.badge} ${loading ? '' : active ? styles.badgeOn : styles.badgeOff}`}>
       <span className={`${styles.dot} ${loading ? '' : active ? styles.dotOn : styles.dotOff}`} />
@@ -154,6 +170,7 @@ function StatusBadge({ label, active, loading }: StatusBadgeProps) {
       <span className={styles.badgeStatus}>
         {loading ? '…' : active ? 'Ativo' : 'Inativo'}
       </span>
+      {tooltip && <div className={styles.badgeTooltip}>{tooltip}</div>}
     </div>
   );
 }

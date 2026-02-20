@@ -9,8 +9,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import {
   ShieldCheck, Search, Wrench, Package,
-  FileCheck, HardDrive, Zap, Globe, Trash2,
-  ChevronDown, ChevronUp, Loader2,
+  FileCheck, HardDrive, Zap,
+  Globe, ChevronDown, ChevronUp, Loader2,
   CheckCircle2, XCircle, AlertTriangle,
   Play, RefreshCw,
 } from 'lucide-react';
@@ -83,11 +83,6 @@ const SECTIONS: Section[] = [
     id: 'verificacao',
     title: 'Verificação de Disco',
     subtitle: 'Integridade do sistema de arquivos e otimização de SSDs',
-  },
-  {
-    id: 'manutencao',
-    title: 'Manutenção',
-    subtitle: 'Limpeza e otimizações pontuais do sistema',
   },
 ];
 
@@ -231,45 +226,6 @@ Apenas SSDs são processados — HDDs são detectados e ignorados automaticament
     category: 'verificacao',
   },
 
-  // ── Manutenção ───────────────────────────────────────────────────────────────
-  {
-    id: 'flush_dns',
-    name: 'Flush DNS',
-    Icon: Globe,
-    description: 'Limpa o cache DNS local. Resolve problemas de conectividade causados por entradas desatualizadas ou corrompidas.',
-    technicalDetails:
-`Executa: ipconfig.exe /flushdns
-
-O cache DNS local armazena resoluções de nomes recentes (ex: "google.com → 142.250.x.x") para acelerar conexões. Pode ficar desatualizado após mudanças de DNS ou conter entradas corrompidas que causam falhas de conexão.
-
-O flush força o Windows a consultar os servidores DNS configurados na próxima requisição, garantindo endereços atualizados.
-
-Útil para: sites que não carregam após mudança de DNS, troca de provedor, ou alterações no arquivo hosts.`,
-    estimatedDuration: '< 1 segundo',
-    eventChannel: 'dns_flush_progress',
-    command: 'flush_dns',
-    category: 'manutencao',
-  },
-  {
-    id: 'temp_cleanup',
-    name: 'Limpeza de Temporários',
-    Icon: Trash2,
-    description: 'Remove arquivos temporários de %TEMP%, Windows\\Temp e do cache do Windows Update. Arquivos em uso são ignorados.',
-    technicalDetails:
-`Remove arquivos de três locais:
-
-• %TEMP%                                   — Temporários do usuário atual (instaladores, extrações, caches)
-• C:\\Windows\\Temp                         — Temporários do sistema e serviços Windows
-• C:\\Windows\\SoftwareDistribution\\Download — Cache do Windows Update (atualizações já instaladas)
-
-Arquivos em uso são pulados silenciosamente. A pasta SoftwareDistribution\\Download é recriada automaticamente pelo Windows Update quando necessário.
-
-O espaço liberado é calculado com precisão comparando o tamanho antes e depois da remoção.`,
-    estimatedDuration: '30 segundos–3 minutos',
-    eventChannel: 'temp_cleanup_progress',
-    command: 'run_temp_cleanup',
-    category: 'manutencao',
-  },
 ];
 
 // ── Utilitários ────────────────────────────────────────────────────────────────
@@ -300,15 +256,15 @@ function formatSpaceFreed(mb: number): string {
   return `${(mb / 1024).toFixed(1)} GB`;
 }
 
-function makeActionState(): ActionState {
-  return {
-    running: false,
-    log: [],
-    progress: null,
-    lastResult: null,
-    showLog: false,
-    showDetails: false,
-  };
+const LS_KEY = (id: string) => `frameguard:health:${id}`;
+
+function makeActionState(id: string): ActionState {
+  let lastResult: HealthCheckResult | null = null;
+  try {
+    const saved = localStorage.getItem(LS_KEY(id));
+    if (saved) lastResult = JSON.parse(saved) as HealthCheckResult;
+  } catch { /* ignora */ }
+  return { running: false, log: [], progress: null, lastResult, showLog: false, showDetails: false };
 }
 
 // ── Subcomponente ActionCard ────────────────────────────────────────────────────
@@ -319,9 +275,10 @@ interface ActionCardProps {
   onRun: () => void;
   onToggleLog: () => void;
   onToggleDetails: () => void;
+  disabled?: boolean;
 }
 
-function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails }: ActionCardProps) {
+function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, disabled }: ActionCardProps) {
   const logRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll para a última linha conforme o log cresce
@@ -453,7 +410,7 @@ function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails }: Action
               <span>Executando</span>
             </div>
           ) : (
-            <button className={styles.btnRun} onClick={onRun}>
+            <button className={styles.btnRun} onClick={onRun} disabled={disabled}>
               <Play size={13} />
               Executar
             </button>
@@ -492,9 +449,11 @@ function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails }: Action
 export default function SystemHealth() {
   const [states, setStates] = useState<Record<string, ActionState>>(() => {
     const s: Record<string, ActionState> = {};
-    for (const a of ACTIONS) s[a.id] = makeActionState();
+    for (const a of ACTIONS) s[a.id] = makeActionState(a.id);
     return s;
   });
+
+  const isAnyRunning = Object.values(states).some(a => a.running);
 
   function updateAction(id: string, updates: Partial<ActionState>) {
     setStates(prev => ({
@@ -541,6 +500,7 @@ export default function SystemHealth() {
       const result = await invoke<HealthCheckResult>(meta.command, meta.invokeArgs ?? {});
       clearInterval(flushTimer);
       const remaining = pendingLines.splice(0);
+      try { localStorage.setItem(LS_KEY(meta.id), JSON.stringify(result)); } catch { /* ignora */ }
       setStates(prev => {
         const cur = prev[meta.id];
         const nextLog = remaining.length > 0 ? [...cur.log, ...remaining].slice(-500) : cur.log;
@@ -609,6 +569,7 @@ export default function SystemHealth() {
                     onRun={() => handleRun(meta)}
                     onToggleLog={() => toggleLog(meta.id)}
                     onToggleDetails={() => toggleDetails(meta.id)}
+                    disabled={isAnyRunning && !states[meta.id].running}
                   />
                 ))}
               </div>

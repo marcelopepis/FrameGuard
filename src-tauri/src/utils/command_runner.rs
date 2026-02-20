@@ -50,6 +50,72 @@ enum StreamLine {
     Done,
 }
 
+// ─── Encoding ─────────────────────────────────────────────────────────────────
+
+/// Decodifica bytes de saída de processo para String UTF-8.
+///
+/// Tenta UTF-8 primeiro (saída de PowerShell com `-OutputEncoding UTF8`, etc.).
+/// Se inválido, usa `MultiByteToWideChar(CP_OEMCP)` — o OEM code page do sistema —
+/// que é o encoding que DISM, SFC e outros programas Win32 usam ao escrever em pipes.
+fn decode_bytes(bytes: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        return s.to_string();
+    }
+    oem_bytes_to_string(bytes)
+}
+
+/// Converte bytes OEM (CP_OEMCP = 1) para String UTF-8 via MultiByteToWideChar.
+fn oem_bytes_to_string(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+
+    // CP_OEMCP = 1: usa a página de código OEM do sistema (ex: 850 em PT-BR, 437 em EN-US).
+    // DISM, SFC e ferramentas Win32 de console usam OEM ao escrever em pipes.
+    const CP_OEMCP: u32 = 1;
+
+    extern "system" {
+        fn MultiByteToWideChar(
+            CodePage: u32,
+            dwFlags: u32,
+            lpMultiByteStr: *const u8,
+            cbMultiByte: i32,
+            lpWideCharStr: *mut u16,
+            cchWideChar: i32,
+        ) -> i32;
+    }
+
+    // Primeira chamada: obtém o tamanho do buffer wide necessário
+    let wide_len = unsafe {
+        MultiByteToWideChar(
+            CP_OEMCP,
+            0,
+            bytes.as_ptr(),
+            bytes.len() as i32,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+
+    if wide_len <= 0 {
+        return String::from_utf8_lossy(bytes).into_owned();
+    }
+
+    let mut wide = vec![0u16; wide_len as usize];
+    unsafe {
+        MultiByteToWideChar(
+            CP_OEMCP,
+            0,
+            bytes.as_ptr(),
+            bytes.len() as i32,
+            wide.as_mut_ptr(),
+            wide_len,
+        );
+    }
+
+    String::from_utf16_lossy(&wide)
+}
+
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
 /// Retorna o instante atual formatado em ISO 8601 UTC.
@@ -96,8 +162,8 @@ pub fn run_command(command: &str, args: &[&str]) -> Result<CommandOutput, String
     let duration_ms = start.elapsed().as_millis() as u64;
 
     Ok(CommandOutput {
-        stdout: String::from_utf8_lossy(&output.stdout).trim_end().to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).trim_end().to_string(),
+        stdout: decode_bytes(&output.stdout).trim_end().to_string(),
+        stderr: decode_bytes(&output.stderr).trim_end().to_string(),
         exit_code: output.status.code().unwrap_or(-1),
         success: output.status.success(),
         duration_ms,
@@ -176,10 +242,8 @@ pub fn run_command_with_progress(
     let (tx_out, rx) = mpsc::channel::<StreamLine>();
     let tx_err = tx_out.clone();
 
-    // Thread A: lê stdout byte a byte com tolerância a encoding CP-1252 / não-UTF-8.
-    // BufReader::lines() para na primeira linha com byte inválido em UTF-8 (ex: 'ã' em
-    // CP-1252 = 0xE3). read_until + from_utf8_lossy substitui bytes inválidos por U+FFFD
-    // em vez de abandonar a leitura, preservando todo o output do processo.
+    // Thread A: lê stdout byte a byte via read_until; decodifica com decode_bytes
+    // (UTF-8 first, fallback OEM) para preservar caracteres PT-BR de DISM/SFC.
     thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
         let mut buf = Vec::new();
@@ -191,7 +255,7 @@ pub fn run_command_with_progress(
                     while buf.last() == Some(&b'\n') || buf.last() == Some(&b'\r') {
                         buf.pop();
                     }
-                    let line = String::from_utf8_lossy(&buf).into_owned();
+                    let line = decode_bytes(&buf);
                     if tx_out.send(StreamLine::Out(line)).is_err() {
                         break;
                     }
@@ -202,7 +266,7 @@ pub fn run_command_with_progress(
         let _ = tx_out.send(StreamLine::Done);
     });
 
-    // Thread B: lê stderr com a mesma tolerância a encoding
+    // Thread B: lê stderr com a mesma lógica de decoding
     thread::spawn(move || {
         let mut reader = BufReader::new(stderr);
         let mut buf = Vec::new();
@@ -214,7 +278,7 @@ pub fn run_command_with_progress(
                     while buf.last() == Some(&b'\n') || buf.last() == Some(&b'\r') {
                         buf.pop();
                     }
-                    let line = String::from_utf8_lossy(&buf).into_owned();
+                    let line = decode_bytes(&buf);
                     if tx_err.send(StreamLine::Err(line)).is_err() {
                         break;
                     }
