@@ -1,7 +1,8 @@
 // Página de Otimizações do FrameGuard.
 //
-// Exibe os tweaks de performance disponíveis com controles para aplicar
-// e reverter cada otimização individualmente, com feedback em tempo real.
+// Exibe tweaks de performance agrupados por seção. Cada tweak tem botões
+// Aplicar/Reverter com feedback em tempo real e disable global quando
+// qualquer comando de longa duração estiver em execução em outra página.
 
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -11,6 +12,7 @@ import {
   XCircle, AlertTriangle, RotateCcw, Play, RefreshCw, X,
 } from 'lucide-react';
 import styles from './Optimizations.module.css';
+import { useGlobalRunning } from '../contexts/RunningContext';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -41,30 +43,70 @@ const TWEAK_IDS = [
   'disable_wallpaper_compression',
   'disable_reserved_storage',
   'disable_delivery_optimization',
+  'enable_hags',
+  'enable_game_mode',
+  'disable_vbs',
 ] as const;
 
 const INFO_COMMANDS: Record<string, string> = {
   disable_wallpaper_compression: 'get_wallpaper_compression_info',
   disable_reserved_storage:      'get_reserved_storage_info',
   disable_delivery_optimization: 'get_delivery_optimization_info',
+  enable_hags:                   'get_hags_info',
+  enable_game_mode:              'get_game_mode_info',
+  disable_vbs:                   'get_vbs_info',
 };
 
 const APPLY_COMMANDS: Record<string, string> = {
   disable_wallpaper_compression: 'disable_wallpaper_compression',
   disable_reserved_storage:      'disable_reserved_storage',
   disable_delivery_optimization: 'disable_delivery_optimization',
+  enable_hags:                   'enable_hags',
+  enable_game_mode:              'enable_game_mode',
+  disable_vbs:                   'disable_vbs',
 };
 
 const REVERT_COMMANDS: Record<string, string> = {
   disable_wallpaper_compression: 'revert_wallpaper_compression',
   disable_reserved_storage:      'enable_reserved_storage',
   disable_delivery_optimization: 'revert_delivery_optimization',
+  enable_hags:                   'disable_hags',
+  enable_game_mode:              'disable_game_mode',
+  disable_vbs:                   'enable_vbs',
 };
 
 // Tweaks baseados em DISM que emitem progresso via eventos Tauri
 const DISM_EVENT: Record<string, string> = {
   disable_reserved_storage: 'dism-reserved-storage',
 };
+
+// Seções da página com IDs dos tweaks pertencentes a cada uma
+const SECTIONS = [
+  {
+    id: 'geral',
+    title: 'Geral',
+    subtitle: 'Otimizações visuais e de experiência',
+    tweakIds: ['disable_wallpaper_compression'],
+  },
+  {
+    id: 'armazenamento',
+    title: 'Armazenamento',
+    subtitle: 'Gerenciamento de espaço em disco',
+    tweakIds: ['disable_reserved_storage'],
+  },
+  {
+    id: 'windows_update',
+    title: 'Windows Update',
+    subtitle: 'Configurações de atualização e distribuição',
+    tweakIds: ['disable_delivery_optimization'],
+  },
+  {
+    id: 'gamer',
+    title: 'Gamer',
+    subtitle: 'Otimizações de performance para jogos',
+    tweakIds: ['enable_hags', 'enable_game_mode', 'disable_vbs'],
+  },
+];
 
 const TECHNICAL_DETAILS: Record<string, string> = {
   disable_wallpaper_compression:
@@ -96,6 +138,36 @@ Registro: HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Deli
 Chave:    DODownloadMode = 0  (padrão: 1)
 
 Reversão: remove a chave ou restaura o valor original.`,
+
+  enable_hags:
+`Hardware-Accelerated GPU Scheduling move o agendamento de trabalhos da GPU da CPU para a própria GPU, reduzindo latência e carga da CPU durante jogos.
+
+Antes do HAGS, a CPU controlava quando a GPU executava cada frame, adicionando latência. Com o HAGS, a GPU agenda seu próprio trabalho internamente — mais eficiente.
+
+Registro: HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers
+Chave:    HwSchMode = 2  (ativado)   |  HwSchMode = 0  (desativado)
+
+Requer reinicialização para ter efeito. Disponível no Windows 10 2004+ com GPU e driver compatíveis.`,
+
+  enable_game_mode:
+`O Game Mode instrui o Windows a priorizar o processo do jogo em execução para recursos de CPU, GPU e memória, reduzindo a interferência de tarefas em segundo plano.
+
+Quando ativo, o Windows pode atrasar atualizações automáticas, reduzir prioridade de outros processos e otimizar a alocação de recursos para o jogo focado.
+
+Registro: HKEY_CURRENT_USER\\Software\\Microsoft\\GameBar
+Chave:    AutoGameModeEnabled = 1  (ativado)  |  AutoGameModeEnabled = 0  (desativado)
+
+Não requer reinicialização. Ativa automaticamente ao detectar um jogo em tela cheia.`,
+
+  disable_vbs:
+`Virtualization Based Security usa recursos de virtualização do processador (Intel VT-x / AMD-V) para isolar processos críticos do sistema operacional em um ambiente protegido.
+
+Embora aumente a segurança, a VBS introduz overhead de virtualização que pode reduzir o desempenho de aplicativos de alto desempenho como jogos em 5–15%.
+
+Registro: HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard
+Chave:    EnableVirtualizationBasedSecurity = 0  (desativado)  |  = 1  (ativado)
+
+Requer reinicialização. Em alguns sistemas, pode ser necessário desabilitar também na BIOS/UEFI.`,
 };
 
 const RISK_LABEL: Record<string, string> = {
@@ -133,12 +205,12 @@ interface TweakCardProps {
   onRevert: () => void;
   onToggleDetails: () => void;
   onDismissRestart: () => void;
+  globalDisabled?: boolean;
 }
 
-function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismissRestart }: TweakCardProps) {
+function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismissRestart, globalDisabled }: TweakCardProps) {
   const dismLogRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll do log DISM à medida que linhas chegam
   useEffect(() => {
     if (dismLogRef.current) {
       dismLogRef.current.scrollTop = dismLogRef.current.scrollHeight;
@@ -151,6 +223,45 @@ function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismiss
     high:   styles.riskHigh,
   }[tweak.risk_level];
 
+  // Botão de ação (Aplicar ou Reverter) com wrapper para tooltip quando bloqueado
+  function ActionButton() {
+    if (state.loading) {
+      return (
+        <div className={styles.loadingState}>
+          <Loader2 size={15} className={styles.spinner} />
+          <span>{state.loadingAction === 'reverting' ? 'Revertendo...' : 'Aplicando...'}</span>
+        </div>
+      );
+    }
+
+    const isApplyBtn = !tweak.is_applied;
+    const canRevert  = tweak.is_applied && tweak.has_backup;
+
+    if (!isApplyBtn && !canRevert) {
+      return <span className={styles.noBackup}>Sem backup para reverter</span>;
+    }
+
+    const disabled = globalDisabled;
+    const btnClass = isApplyBtn ? styles.btnApply : styles.btnRevert;
+    const onClick  = isApplyBtn ? onApply : onRevert;
+    const label    = isApplyBtn
+      ? <><Play size={13} />Aplicar</>
+      : <><RotateCcw size={13} />Reverter</>;
+
+    return (
+      <div className={styles.btnWrap}>
+        <button className={btnClass} onClick={!disabled ? onClick : undefined} disabled={disabled}>
+          {label}
+        </button>
+        {disabled && (
+          <div className={styles.btnTip}>
+            Outro comando em execução.<br />Aguarde a conclusão.
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`${styles.tweakCard} ${state.loading ? styles.tweakCardBusy : ''}`}>
 
@@ -162,20 +273,17 @@ function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismiss
           <div className={styles.tweakName}>{tweak.name}</div>
           <p className={styles.tweakDesc}>{tweak.description}</p>
 
-          {/* Botão "Saiba mais" */}
           <button className={styles.btnDetails} onClick={onToggleDetails}>
             {state.showDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             {state.showDetails ? 'Menos detalhes' : 'Saiba mais'}
           </button>
 
-          {/* Painel de detalhes técnicos expandido */}
           {state.showDetails && (
             <div className={styles.detailsPanel}>
               <pre className={styles.detailsText}>{TECHNICAL_DETAILS[tweak.id]}</pre>
             </div>
           )}
 
-          {/* Badges de risco e reinicialização */}
           <div className={styles.badgeRow}>
             <span className={`${styles.riskBadge} ${riskClass}`}>
               {RISK_LABEL[tweak.risk_level]}
@@ -187,7 +295,6 @@ function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismiss
             )}
           </div>
 
-          {/* Data da última aplicação */}
           <div className={styles.lastApplied}>
             {tweak.last_applied
               ? `Última aplicação: ${formatDate(tweak.last_applied)}`
@@ -198,35 +305,13 @@ function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismiss
         {/* ── Lado direito ── */}
         <div className={styles.tweakRight}>
 
-          {/* Badge de status atual */}
           <div className={`${styles.statusBadge} ${tweak.is_applied ? styles.statusActive : styles.statusInactive}`}>
             <span className={`${styles.statusDot} ${tweak.is_applied ? styles.dotActive : styles.dotInactive}`} />
             {tweak.is_applied ? 'Ativo' : 'Inativo'}
           </div>
 
-          {/* Botão de ação ou estado de carregamento */}
-          {state.loading ? (
-            <div className={styles.loadingState}>
-              <Loader2 size={15} className={styles.spinner} />
-              <span>{state.loadingAction === 'reverting' ? 'Revertendo...' : 'Aplicando...'}</span>
-            </div>
-          ) : tweak.is_applied ? (
-            tweak.has_backup ? (
-              <button className={styles.btnRevert} onClick={onRevert}>
-                <RotateCcw size={13} />
-                Reverter
-              </button>
-            ) : (
-              <span className={styles.noBackup}>Sem backup para reverter</span>
-            )
-          ) : (
-            <button className={styles.btnApply} onClick={onApply}>
-              <Play size={13} />
-              Aplicar
-            </button>
-          )}
+          <ActionButton />
 
-          {/* Feedback de sucesso ou erro (desaparece em 3s) */}
           {state.feedback && (
             <div className={`${styles.feedback} ${state.feedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackError}`}>
               {state.feedback.type === 'success'
@@ -269,7 +354,8 @@ export default function Optimizations() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [cardStates, setCardStates] = useState<Record<string, CardState>>({});
 
-  // Carrega o estado atual de todos os tweaks via Tauri
+  const { isRunning } = useGlobalRunning();
+
   async function loadTweaks() {
     setPageLoading(true);
     setPageError(null);
@@ -292,7 +378,6 @@ export default function Optimizations() {
 
   useEffect(() => { loadTweaks(); }, []);
 
-  // Atualiza campos parciais de um card sem afetar os demais
   function updateCard(id: string, updates: Partial<CardState>) {
     setCardStates(prev => ({
       ...prev,
@@ -300,7 +385,6 @@ export default function Optimizations() {
     }));
   }
 
-  // Exibe feedback temporário por 3 segundos e depois limpa
   function showFeedback(id: string, type: 'success' | 'error', message: string) {
     updateCard(id, { feedback: { type, message } });
     setTimeout(() => updateCard(id, { feedback: null }), 3000);
@@ -314,7 +398,6 @@ export default function Optimizations() {
       showRestartWarning: false,
     });
 
-    // Tweaks DISM: registra listener antes do invoke para capturar o streaming
     let unlisten: (() => void) | null = null;
     if (tweak.id in DISM_EVENT) {
       unlisten = await listen<string>(DISM_EVENT[tweak.id], event => {
@@ -330,7 +413,6 @@ export default function Optimizations() {
 
     try {
       await invoke(APPLY_COMMANDS[tweak.id]);
-      // Atualiza o estado do tweak após aplicação bem-sucedida
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
       showFeedback(tweak.id, 'success', 'Tweak aplicado com sucesso!');
@@ -427,21 +509,41 @@ export default function Optimizations() {
         </button>
       </div>
 
-      {/* ── Lista de tweaks ── */}
-      <div className={styles.tweakList}>
-        {tweaks.map(tweak => {
-          const state = cardStates[tweak.id];
-          if (!state) return null;
+      {/* ── Seções de tweaks ── */}
+      <div className={styles.sections}>
+        {SECTIONS.map(section => {
+          const sectionTweaks = section.tweakIds
+            .map(id => tweaks.find(t => t.id === id))
+            .filter((t): t is TweakInfo => t !== undefined);
+
+          if (sectionTweaks.length === 0) return null;
+
           return (
-            <TweakCard
-              key={tweak.id}
-              tweak={tweak}
-              state={state}
-              onApply={() => handleApply(tweak)}
-              onRevert={() => handleRevert(tweak)}
-              onToggleDetails={() => toggleDetails(tweak.id)}
-              onDismissRestart={() => updateCard(tweak.id, { showRestartWarning: false })}
-            />
+            <div key={section.id} className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <span className={styles.sectionTitle}>{section.title}</span>
+                <span className={styles.sectionSubtitle}>{section.subtitle}</span>
+              </div>
+
+              <div className={styles.tweakList}>
+                {sectionTweaks.map(tweak => {
+                  const state = cardStates[tweak.id];
+                  if (!state) return null;
+                  return (
+                    <TweakCard
+                      key={tweak.id}
+                      tweak={tweak}
+                      state={state}
+                      onApply={() => handleApply(tweak)}
+                      onRevert={() => handleRevert(tweak)}
+                      onToggleDetails={() => toggleDetails(tweak.id)}
+                      onDismissRestart={() => updateCard(tweak.id, { showRestartWarning: false })}
+                      globalDisabled={isRunning && !state.loading}
+                    />
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>

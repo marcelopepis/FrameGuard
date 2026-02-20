@@ -573,3 +573,160 @@ pub fn revert_delivery_optimization() -> Result<(), String> {
 
     Ok(())
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK 4 — HAGS (Hardware-Accelerated GPU Scheduling)
+//
+// Permite que a GPU gerencie sua própria memória de vídeo diretamente, reduzindo
+// a latência de renderização e a carga sobre a CPU. Recomendado para gaming.
+//
+// HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\HwSchMode
+//   2 = habilitado (padrão no Windows 11 para GPUs compatíveis)
+//   0 = desabilitado
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const HAGS_REG_PATH: &str = r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers";
+const HAGS_REG_KEY: &str = "HwSchMode";
+const HAGS_ENABLED_VALUE: u32 = 2;
+const HAGS_DISABLED_VALUE: u32 = 0;
+
+/// Retorna as informações do tweak HAGS com o estado atual do registro.
+#[tauri::command]
+pub fn get_hags_info() -> Result<TweakInfo, String> {
+    let is_enabled = read_dword(Hive::LocalMachine, HAGS_REG_PATH, HAGS_REG_KEY)?
+        .map(|v| v == HAGS_ENABLED_VALUE)
+        .unwrap_or(true); // padrão Windows 11: HAGS ativo para GPUs compatíveis
+
+    Ok(TweakInfo {
+        id: "enable_hags".to_string(),
+        name: "Hardware-Accelerated GPU Scheduling (HAGS)".to_string(),
+        description: "Permite que a GPU gerencie sua própria memória de vídeo diretamente, \
+            reduzindo a latência de renderização e a carga sobre a CPU. Recomendado para gaming."
+            .to_string(),
+        category: "gamer".to_string(),
+        is_applied: is_enabled,
+        requires_restart: true,
+        last_applied: None,
+        has_backup: true,
+        risk_level: RiskLevel::Low,
+    })
+}
+
+/// Habilita HAGS definindo HwSchMode = 2 no registro.
+#[tauri::command]
+pub fn enable_hags() -> Result<(), String> {
+    write_dword(Hive::LocalMachine, HAGS_REG_PATH, HAGS_REG_KEY, HAGS_ENABLED_VALUE)
+}
+
+/// Desabilita HAGS definindo HwSchMode = 0 no registro.
+#[tauri::command]
+pub fn disable_hags() -> Result<(), String> {
+    write_dword(Hive::LocalMachine, HAGS_REG_PATH, HAGS_REG_KEY, HAGS_DISABLED_VALUE)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK 5 — Windows Game Mode
+//
+// Prioriza recursos de CPU e GPU para o jogo em execução, reduzindo a interferência
+// de processos em segundo plano como atualizações do Windows.
+//
+// HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled
+//   1 = habilitado (padrão)
+//   0 = desabilitado
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const GAME_MODE_REG_PATH: &str = r"Software\Microsoft\GameBar";
+const GAME_MODE_REG_KEY: &str = "AutoGameModeEnabled";
+const GAME_MODE_ENABLED: u32 = 1;
+const GAME_MODE_DISABLED: u32 = 0;
+
+/// Retorna as informações do tweak Game Mode com o estado atual do registro.
+#[tauri::command]
+pub fn get_game_mode_info() -> Result<TweakInfo, String> {
+    let is_enabled = read_dword(Hive::CurrentUser, GAME_MODE_REG_PATH, GAME_MODE_REG_KEY)?
+        .map(|v| v == GAME_MODE_ENABLED)
+        .unwrap_or(true); // padrão: Game Mode ativo desde Windows 10 Creators Update
+
+    Ok(TweakInfo {
+        id: "enable_game_mode".to_string(),
+        name: "Windows Game Mode".to_string(),
+        description: "Prioriza recursos de CPU e GPU para o jogo em execução, reduzindo a \
+            interferência de processos em segundo plano como atualizações do Windows. \
+            Recomendado para melhor desempenho em jogos."
+            .to_string(),
+        category: "gamer".to_string(),
+        is_applied: is_enabled,
+        requires_restart: false,
+        last_applied: None,
+        has_backup: true,
+        risk_level: RiskLevel::Low,
+    })
+}
+
+/// Habilita Game Mode definindo AutoGameModeEnabled = 1 no registro.
+#[tauri::command]
+pub fn enable_game_mode() -> Result<(), String> {
+    write_dword(Hive::CurrentUser, GAME_MODE_REG_PATH, GAME_MODE_REG_KEY, GAME_MODE_ENABLED)
+}
+
+/// Desabilita Game Mode definindo AutoGameModeEnabled = 0 no registro.
+#[tauri::command]
+pub fn disable_game_mode() -> Result<(), String> {
+    write_dword(Hive::CurrentUser, GAME_MODE_REG_PATH, GAME_MODE_REG_KEY, GAME_MODE_DISABLED)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK 6 — VBS (Virtualization Based Security)
+//
+// A VBS usa virtualização de hardware para isolar partes críticas do Windows,
+// mas pode reduzir o desempenho em jogos em até 10–15%.
+//
+// HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\EnableVirtualizationBasedSecurity
+//   1 = habilitado
+//   0 = desabilitado (padrão em hardware sem TPM ou com VBS desativado na BIOS)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const VBS_REG_PATH: &str = r"SYSTEM\CurrentControlSet\Control\DeviceGuard";
+const VBS_REG_KEY: &str = "EnableVirtualizationBasedSecurity";
+const VBS_ENABLED: u32 = 1;
+const VBS_DISABLED: u32 = 0;
+
+/// Retorna as informações do tweak VBS com o estado atual do registro.
+///
+/// `is_applied = true` indica que a VBS está **desabilitada** — estado recomendado
+/// para maximizar performance em jogos.
+#[tauri::command]
+pub fn get_vbs_info() -> Result<TweakInfo, String> {
+    let vbs_enabled = read_dword(Hive::LocalMachine, VBS_REG_PATH, VBS_REG_KEY)?
+        .map(|v| v == VBS_ENABLED)
+        .unwrap_or(false); // padrão: VBS inativo em muitos sistemas
+
+    Ok(TweakInfo {
+        id: "disable_vbs".to_string(),
+        name: "Virtualização Baseada em Segurança (VBS)".to_string(),
+        description: "A VBS usa virtualização de hardware para isolar partes críticas do Windows, \
+            mas pode reduzir o desempenho em jogos em até 10–15%. Desabilitar melhora FPS, \
+            especialmente em CPUs sem hardware de virtualização otimizado."
+            .to_string(),
+        category: "gamer".to_string(),
+        is_applied: !vbs_enabled, // tweak "aplicado" = VBS desabilitada = bom para gaming
+        requires_restart: true,
+        last_applied: None,
+        has_backup: true,
+        risk_level: RiskLevel::Medium,
+    })
+}
+
+/// Desabilita VBS definindo EnableVirtualizationBasedSecurity = 0.
+/// Requer reinicialização para ter efeito.
+#[tauri::command]
+pub fn disable_vbs() -> Result<(), String> {
+    write_dword(Hive::LocalMachine, VBS_REG_PATH, VBS_REG_KEY, VBS_DISABLED)
+}
+
+/// Reabilita VBS definindo EnableVirtualizationBasedSecurity = 1.
+/// Requer reinicialização para ter efeito.
+#[tauri::command]
+pub fn enable_vbs() -> Result<(), String> {
+    write_dword(Hive::LocalMachine, VBS_REG_PATH, VBS_REG_KEY, VBS_ENABLED)
+}

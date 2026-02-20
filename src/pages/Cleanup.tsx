@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 import styles from './SystemHealth.module.css';
+import { useGlobalRunning } from '../contexts/RunningContext';
 
 // ── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -262,10 +263,17 @@ function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, disabled
               <span>Executando</span>
             </div>
           ) : (
-            <button className={styles.btnRun} onClick={onRun} disabled={disabled}>
-              <Play size={13} />
-              Executar
-            </button>
+            <div className={styles.btnRunWrap}>
+              <button className={styles.btnRun} onClick={!disabled ? onRun : undefined} disabled={disabled}>
+                <Play size={13} />
+                Executar
+              </button>
+              {disabled && (
+                <div className={styles.btnRunTip}>
+                  Outro comando em execução.<br />Aguarde a conclusão.
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -305,15 +313,10 @@ export default function Cleanup() {
     return s;
   });
 
-  const isAnyRunning = Object.values(states).some(a => a.running);
-
-  function updateAction(id: string, updates: Partial<ActionState>) {
-    setStates(prev => ({ ...prev, [id]: { ...prev[id], ...updates } }));
-  }
-  // mantém updateAction referenciado para evitar warning de linter
-  void updateAction;
+  const { isRunning, startTask, endTask } = useGlobalRunning();
 
   async function handleRun(meta: ActionMeta) {
+    startTask(meta.id);
     setStates(prev => ({
       ...prev,
       [meta.id]: { ...prev[meta.id], running: true, log: [], progress: null, showLog: true },
@@ -358,6 +361,7 @@ export default function Cleanup() {
         return { ...prev, [meta.id]: { ...cur, running: false, progress: null, log: nextLog } };
       });
     } finally {
+      endTask(meta.id);
       unlisten();
     }
   }
@@ -398,7 +402,7 @@ export default function Cleanup() {
                     onRun={() => handleRun(meta)}
                     onToggleLog={() => toggleLog(meta.id)}
                     onToggleDetails={() => toggleDetails(meta.id)}
-                    disabled={isAnyRunning && !states[meta.id].running}
+                    disabled={isRunning && !states[meta.id].running}
                   />
                 ))}
               </div>

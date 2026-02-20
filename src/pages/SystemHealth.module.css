@@ -418,6 +418,35 @@
   cursor: not-allowed;
 }
 
+/* ─── Wrapper do botão Executar (tooltip no estado disabled) ── */
+
+.btnRunWrap {
+  position: relative;
+}
+
+.btnRunTip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  padding: 7px 10px;
+  background: rgba(10, 14, 23, 0.97);
+  border: 1px solid var(--color-border-hover);
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 50;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.btnRunWrap:hover .btnRunTip {
+  opacity: 1;
+}
+
 /* Badge "Executando" (substitui o botão durante a execução) */
 .runningBadge {
   display: inline-flex;

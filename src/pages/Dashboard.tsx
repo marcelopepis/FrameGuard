@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Cpu, Layers, Database, Globe, ShieldCheck, ShieldOff } from 'lucide-react';
-import { getSystemInfo, getSystemSummary } from '../services/systemInfo';
+import { getSystemInfo, getSystemSummary, getSystemUsage } from '../services/systemInfo';
 import type { SystemInfo, SystemSummary } from '../services/systemInfo';
 import styles from './Dashboard.module.css';
 
@@ -16,6 +16,20 @@ export default function Dashboard() {
     getSystemSummary()
       .then(setSummary)
       .catch((err) => console.error('[FrameGuard] get_system_summary falhou:', err));
+  }, []);
+
+  // Polling de CPU e RAM a cada 2 segundos
+  useEffect(() => {
+    const id = setInterval(() => {
+      getSystemUsage().then(u => {
+        setInfo(prev => {
+          if (!prev) return prev;
+          const ram_used_gb = Math.round(u.ram_usage_percent / 100 * prev.ram_total_gb * 10) / 10;
+          return { ...prev, cpu_usage_percent: u.cpu_usage_percent, ram_usage_percent: u.ram_usage_percent, ram_used_gb };
+        });
+      }).catch(() => {});
+    }, 2000);
+    return () => clearInterval(id);
   }, []);
 
   const loading = <span className={styles.loading}>Carregando…</span>;

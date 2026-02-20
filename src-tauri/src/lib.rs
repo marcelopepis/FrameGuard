@@ -29,6 +29,18 @@ pub fn run() {
             optimizations::get_delivery_optimization_info,
             optimizations::disable_delivery_optimization,
             optimizations::revert_delivery_optimization,
+            // Otimizações — HAGS
+            optimizations::get_hags_info,
+            optimizations::enable_hags,
+            optimizations::disable_hags,
+            // Otimizações — Game Mode
+            optimizations::get_game_mode_info,
+            optimizations::enable_game_mode,
+            optimizations::disable_game_mode,
+            // Otimizações — VBS
+            optimizations::get_vbs_info,
+            optimizations::disable_vbs,
+            optimizations::enable_vbs,
             // Limpeza
             cleanup::analyze_cleanup,
             cleanup::run_cleanup,

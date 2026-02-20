@@ -1,6 +1,7 @@
 import { BrowserRouter, useLocation, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import { Dashboard, Optimizations, Cleanup, HealthCheck, Plans, Settings } from './pages';
+import { GlobalRunningProvider } from './contexts/RunningContext';
 
 // Todas as rotas declaradas aqui. A ordem determina a renderização no DOM.
 const ROUTES = [
@@ -34,7 +35,9 @@ function Pages() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Pages />
+      <GlobalRunningProvider>
+        <Pages />
+      </GlobalRunningProvider>
     </BrowserRouter>
   );
 }
