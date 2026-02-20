@@ -37,7 +37,6 @@
       "icons/icon.ico"
     ],
     "windows": {
-      "requestedExecutionLevel": "requireAdministrator",
       "nsis": {
         "installMode": "perMachine"
       }
