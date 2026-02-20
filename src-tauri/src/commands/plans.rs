@@ -106,7 +106,7 @@ fn now_utc() -> String {
 /// - `"disable_wallpaper_compression"`, `"revert_wallpaper_compression"`
 /// - `"disable_reserved_storage"`, `"enable_reserved_storage"`
 /// - `"disable_delivery_optimization"`, `"revert_delivery_optimization"`
-fn execute_single_tweak(app: &tauri::AppHandle, tweak_id: &str) -> ItemResult {
+async fn execute_single_tweak(app: tauri::AppHandle, tweak_id: &str) -> ItemResult {
     use super::{health_check, optimizations};
 
     // Tenta executar o tweak e converte o resultado para Option<serde_json::Value>
@@ -116,34 +116,34 @@ fn execute_single_tweak(app: &tauri::AppHandle, tweak_id: &str) -> ItemResult {
     let outcome: Result<Option<serde_json::Value>, String> = match tweak_id {
         // ── Saúde: DISM ──────────────────────────────────────────────────────
         "dism_cleanup" => health_check::run_dism_cleanup(app.clone())
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         "dism_checkhealth" => health_check::run_dism_checkhealth(app.clone())
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         "dism_scanhealth" => health_check::run_dism_scanhealth(app.clone())
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         "dism_restorehealth" => health_check::run_dism_restorehealth(app.clone())
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         // ── Saúde: Verificações ──────────────────────────────────────────────
         "sfc_scannow" => health_check::run_sfc(app.clone())
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         // chkdsk sem drive_letter especificado → padrão C:
         "chkdsk" => health_check::run_chkdsk(app.clone(), None)
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         "ssd_trim" => health_check::run_ssd_trim(app.clone())
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         // ── Saúde: Manutenção ────────────────────────────────────────────────
         "flush_dns" => health_check::flush_dns(app.clone())
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         "temp_cleanup" => health_check::run_temp_cleanup(app.clone())
-            .map(|r| Some(to_json(r))),
+            .await.map(|r| Some(to_json(r))),
 
         // ── Otimizações: Wallpaper ────────────────────────────────────────────
         "disable_wallpaper_compression" => optimizations::disable_wallpaper_compression()
@@ -283,7 +283,7 @@ pub fn get_all_plans() -> Result<Vec<plan_manager::Plan>, String> {
 /// # Retorna
 /// `PlanExecutionSummary` com contagens e resultados individuais de cada item.
 #[tauri::command]
-pub fn execute_plan(
+pub async fn execute_plan(
     app_handle: tauri::AppHandle,
     plan_id: String,
 ) -> Result<PlanExecutionSummary, String> {
@@ -344,7 +344,7 @@ pub fn execute_plan(
         );
 
         // Executa o tweak — falhas são capturadas internamente pelo dispatcher
-        let result = execute_single_tweak(&app_handle, &item.tweak_id);
+        let result = execute_single_tweak(app_handle.clone(), &item.tweak_id).await;
         processed_count += 1;
 
         // Progresso percentual após processar este item

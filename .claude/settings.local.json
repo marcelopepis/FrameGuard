@@ -13,7 +13,9 @@
       "Bash(powershell.exe -NoProfile -Command '$f = \"\"C:\\\\Windows\\\\System32\\\\vcruntime140_1.dll\"\"; if \\(Test-Path $f\\) { $v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo\\($f\\); Write-Output \"\"Found: $\\($v.FileName\\) v$\\($v.FileVersion\\)\"\" } else { Write-Output \"\"NOT FOUND in System32\"\" }')",
       "Bash(~/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/x86_64-pc-windows-msvc/bin/llvm-nm.exe:*)",
       "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\marce\\\\AppData\\\\Local\\\\Temp\\\\check_imports.ps1\")",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

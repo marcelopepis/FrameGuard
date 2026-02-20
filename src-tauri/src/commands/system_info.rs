@@ -1,51 +1,181 @@
-// Informações do sistema (CPU, GPU, RAM, OS)
+// Informações do sistema (CPU, GPU, RAM, OS, status de features)
 use serde::Serialize;
+use sysinfo::System;
 
-/// Informações gerais do sistema
+use crate::utils::command_runner::run_command;
+
+/// Informações completas de hardware e status do sistema para o dashboard.
 #[derive(Debug, Serialize)]
 pub struct SystemInfo {
-    pub os_name: String,
-    pub os_version: String,
+    /// Nome completo da CPU (ex: "Intel Core i9-13900K")
     pub cpu_name: String,
+    /// Número de núcleos físicos
     pub cpu_cores: u32,
+    /// Uso atual de CPU em percentual (0–100)
+    pub cpu_usage_percent: f32,
+    /// Total de RAM instalada em GB
     pub ram_total_gb: f64,
+    /// RAM em uso no momento em GB
     pub ram_used_gb: f64,
+    /// Percentual de RAM em uso (0–100)
+    pub ram_usage_percent: f32,
+    /// Nome da GPU principal (ex: "NVIDIA GeForce RTX 4080")
     pub gpu_name: String,
+    /// `true` se o Windows Game Mode está ativo (HKCU\Software\Microsoft\GameBar)
+    pub game_mode_enabled: bool,
+    /// `true` se HAGS (Hardware-Accelerated GPU Scheduling) está ativo
+    pub hags_enabled: bool,
+    /// `true` se VBS (Virtualization Based Security) está ativo
+    pub vbs_enabled: bool,
 }
 
-/// Retorna as informações do sistema para o dashboard
+/// Coleta todas as informações de hardware e status do sistema.
+///
+/// A coleta é executada em uma thread bloqueante separada (`spawn_blocking`)
+/// para não bloquear o event loop do Tauri. Inclui:
+/// - CPU: nome e uso atual via sysinfo (com medição de delta de 200 ms)
+/// - RAM: uso atual via sysinfo
+/// - GPU: nome via PowerShell / Win32_VideoController (prioriza maior VRAM)
+/// - Status: Game Mode, HAGS e VBS via registro do Windows
 #[tauri::command]
-pub fn get_system_info() -> Result<SystemInfo, String> {
-    // TODO: implementar coleta real via sysinfo + WMI
-    Ok(SystemInfo {
-        os_name: "Windows 11".to_string(),
-        os_version: "placeholder".to_string(),
-        cpu_name: "placeholder".to_string(),
-        cpu_cores: 0,
-        ram_total_gb: 0.0,
-        ram_used_gb: 0.0,
-        gpu_name: "placeholder".to_string(),
+pub async fn get_system_info() -> Result<SystemInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        // ── CPU e RAM via sysinfo ──────────────────────────────────────────────
+        // new_all() faz o primeiro snapshot de CPU; precisamos de um segundo
+        // snapshot após um intervalo para calcular o uso com precisão.
+        let mut sys = System::new_all();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        sys.refresh_cpu_usage();
+        sys.refresh_memory();
+
+        let cpu_name = sys
+            .cpus()
+            .first()
+            .map(|c| c.brand().trim().to_string())
+            .unwrap_or_else(|| "CPU Desconhecida".to_string());
+
+        let cpu_cores = sys.physical_core_count().unwrap_or(0) as u32;
+        let cpu_usage_percent = sys.global_cpu_usage();
+
+        let ram_total = sys.total_memory();
+        let ram_used = sys.used_memory();
+        // Arredonda para 1 casa decimal
+        let ram_total_gb = (ram_total as f64 / 1_073_741_824.0 * 10.0).round() / 10.0;
+        let ram_used_gb = (ram_used as f64 / 1_073_741_824.0 * 10.0).round() / 10.0;
+        let ram_usage_percent = if ram_total > 0 {
+            (ram_used as f32 / ram_total as f32) * 100.0
+        } else {
+            0.0
+        };
+
+        // ── GPU via PowerShell ─────────────────────────────────────────────────
+        // Ordena por AdapterRAM decrescente para priorizar a placa discreta
+        // quando há mais de uma GPU (discreta + integrada).
+        let gpu_name = run_command(
+            "powershell.exe",
+            &[
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+                 (Get-WmiObject Win32_VideoController | \
+                  Sort-Object AdapterRAM -Descending | \
+                  Select-Object -First 1 -ExpandProperty Name)",
+            ],
+        )
+        .ok()
+        .filter(|r| r.success && !r.stdout.trim().is_empty())
+        .map(|r| r.stdout.trim().to_string())
+        .unwrap_or_else(|| "GPU Desconhecida".to_string());
+
+        // ── Status via registro ────────────────────────────────────────────────
+        use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+        use winreg::RegKey;
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+
+        // Game Mode: HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled
+        let game_mode_enabled = hkcu
+            .open_subkey(r"Software\Microsoft\GameBar")
+            .ok()
+            .and_then(|k| k.get_value::<u32, _>("AutoGameModeEnabled").ok())
+            .map(|v| v != 0)
+            .unwrap_or(false);
+
+        // HAGS: HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\HwSchMode (2 = ativo)
+        let hags_enabled = hklm
+            .open_subkey(r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers")
+            .ok()
+            .and_then(|k| k.get_value::<u32, _>("HwSchMode").ok())
+            .map(|v| v == 2)
+            .unwrap_or(false);
+
+        // VBS: HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\EnableVirtualizationBasedSecurity
+        let vbs_enabled = hklm
+            .open_subkey(r"SYSTEM\CurrentControlSet\Control\DeviceGuard")
+            .ok()
+            .and_then(|k| {
+                k.get_value::<u32, _>("EnableVirtualizationBasedSecurity")
+                    .ok()
+            })
+            .map(|v| v != 0)
+            .unwrap_or(false);
+
+        Ok::<SystemInfo, String>(SystemInfo {
+            cpu_name,
+            cpu_cores,
+            cpu_usage_percent,
+            ram_total_gb,
+            ram_used_gb,
+            ram_usage_percent,
+            gpu_name,
+            game_mode_enabled,
+            hags_enabled,
+            vbs_enabled,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
-/// Informações de uso atual de CPU e RAM
+/// Informações de uso atual de CPU e RAM (para polling periódico do dashboard).
 #[derive(Debug, Serialize)]
 pub struct SystemUsage {
     pub cpu_usage_percent: f32,
     pub ram_usage_percent: f32,
 }
 
-/// Retorna o uso atual de CPU e RAM
+/// Retorna o uso atual de CPU e RAM com medição de delta de 200 ms.
 #[tauri::command]
-pub fn get_system_usage() -> Result<SystemUsage, String> {
-    // TODO: implementar coleta em tempo real via sysinfo
-    Ok(SystemUsage {
-        cpu_usage_percent: 0.0,
-        ram_usage_percent: 0.0,
+pub async fn get_system_usage() -> Result<SystemUsage, String> {
+    tokio::task::spawn_blocking(|| {
+        let mut sys = System::new_all();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        sys.refresh_cpu_usage();
+        sys.refresh_memory();
+
+        let cpu_usage_percent = sys.global_cpu_usage();
+        let ram_total = sys.total_memory();
+        let ram_used = sys.used_memory();
+        let ram_usage_percent = if ram_total > 0 {
+            (ram_used as f32 / ram_total as f32) * 100.0
+        } else {
+            0.0
+        };
+
+        Ok::<SystemUsage, String>(SystemUsage {
+            cpu_usage_percent,
+            ram_usage_percent,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
-// ─── Resumo do sistema ────────────────────────────────────
+// ─── Resumo do sistema ────────────────────────────────────────────────────────
 
 /// Dados essenciais do sistema para prova de conceito frontend↔backend
 #[derive(Debug, Serialize)]

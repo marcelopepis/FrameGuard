@@ -368,8 +368,13 @@ pub fn disable_reserved_storage(app_handle: tauri::AppHandle) -> Result<(), Stri
     let result = run_command_with_progress(
         &app_handle,
         "dism-reserved-storage",
-        "dism.exe",
-        &["/Online", "/Set-ReservedStorageState", "/State:Disabled"],
+        "powershell.exe",
+        &[
+            "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+            "-Command",
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; dism.exe /Online /Set-ReservedStorageState /State:Disabled",
+        ],
+        Some("dism.exe /Online /Set-ReservedStorageState /State:Disabled"),
     )?;
 
     if !result.success {
@@ -396,8 +401,13 @@ pub fn enable_reserved_storage(app_handle: tauri::AppHandle) -> Result<(), Strin
     let result = run_command_with_progress(
         &app_handle,
         "dism-reserved-storage",
-        "dism.exe",
-        &["/Online", "/Set-ReservedStorageState", "/State:Enabled"],
+        "powershell.exe",
+        &[
+            "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+            "-Command",
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; dism.exe /Online /Set-ReservedStorageState /State:Enabled",
+        ],
+        Some("dism.exe /Online /Set-ReservedStorageState /State:Enabled"),
     )?;
 
     if !result.success {

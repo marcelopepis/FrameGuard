@@ -131,15 +131,23 @@ pub fn run_command_with_progress(
     event_name: &str,
     command: &str,
     args: &[&str],
+    // Texto exibido no evento "started" do log da UI.
+    // Quando `None`, o label é gerado automaticamente como "{command} {args}".
+    // Use `Some("dism.exe ...")` quando o comando real é um wrapper (ex: powershell).
+    display_label: Option<&str>,
 ) -> Result<CommandOutput, String> {
     let start = Instant::now();
 
-    // Inclui os argumentos no evento "started" para legibilidade no log da UI
-    let started_label = if args.is_empty() {
-        command.to_string()
-    } else {
-        format!("{} {}", command, args.join(" "))
-    };
+    // Usa o label explícito ou constrói a partir do comando + argumentos
+    let started_label = display_label
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            if args.is_empty() {
+                command.to_string()
+            } else {
+                format!("{} {}", command, args.join(" "))
+            }
+        });
     emit_event(app_handle, event_name, "started", &started_label);
 
     // Inicia o processo com pipes nos dois streams
@@ -314,5 +322,5 @@ pub fn run_powershell(script: &str) -> Result<CommandOutput, String> {
 /// ```
 #[allow(dead_code)]
 pub fn run_dism(app_handle: &tauri::AppHandle, args: &[&str]) -> Result<CommandOutput, String> {
-    run_command_with_progress(app_handle, "dism-progress", "dism.exe", args)
+    run_command_with_progress(app_handle, "dism-progress", "dism.exe", args, None)
 }

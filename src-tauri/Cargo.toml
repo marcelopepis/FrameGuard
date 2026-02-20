@@ -27,4 +27,5 @@ winreg = "0.55"
 sysinfo = "0.33"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+tokio = { version = "1", features = ["rt"] }
 

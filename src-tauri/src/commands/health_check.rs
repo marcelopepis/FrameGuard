@@ -5,11 +5,19 @@
 //! um processo externo ou realiza operações de I/O com streaming de output em
 //! tempo real para o frontend.
 //!
+//! Todos os comandos são `async` e delegam o trabalho bloqueante para
+//! `tokio::task::spawn_blocking`, mantendo o event loop do Tauri responsivo
+//! mesmo durante operações demoradas como DISM ScanHealth (2-15 minutos).
+//!
 //! Padrão de cada ação:
 //!   1. Emitir evento `"started"` no canal de progresso correspondente
 //!   2. Executar o comando ou operação — streaming linha a linha via Tauri events
 //!   3. Analisar resultado (exit code + conteúdo do output)
 //!   4. Retornar `HealthCheckResult` estruturado com status e detalhes completos
+//!
+//! Encoding: DISM e SFC são executados via PowerShell com
+//! `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` para garantir
+//! que a saída em PT-BR (CP-1252) seja recebida em UTF-8 pelo FrameGuard.
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -156,14 +164,6 @@ enum ChkdskLine {
 
 /// Executa chkdsk em um drive com streaming de progresso e confirmação automática
 /// de agendamento via stdin.
-///
-/// Quando o chkdsk tenta verificar o disco do sistema (ex: C:) em uso, ele não
-/// consegue bloquear o volume e apresenta um prompt "Y/N" para agendar a verificação
-/// no próximo boot. Este helper escreve `"Y\n"` no stdin imediatamente após o spawn,
-/// garantindo que o agendamento seja confirmado sem intervenção do usuário.
-///
-/// O stdin é fechado logo após a escrita (drop implícito) para que o chkdsk
-/// não fique aguardando mais input e prossiga normalmente.
 fn run_chkdsk_drive(
     app: &tauri::AppHandle,
     drive: &str,
@@ -191,10 +191,8 @@ fn run_chkdsk_drive(
         })?;
 
     // Confirma automaticamente o prompt de agendamento "Y/N".
-    // O buffer do pipe mantém "Y\n" disponível para quando o chkdsk lê stdin.
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(b"Y\n");
-        // drop(stdin) aqui — fecha o pipe; chkdsk não fica esperando mais input
     }
 
     let stdout = child
@@ -298,502 +296,514 @@ fn run_chkdsk_drive(
     ))
 }
 
+// ─── Helper de wrapper PowerShell com UTF-8 ───────────────────────────────────
+
+/// Monta os argumentos para executar `dism_args` via PowerShell com
+/// `[Console]::OutputEncoding = UTF8`, garantindo que PT-BR saia em UTF-8.
+///
+/// Retorna `(command, args_owned, display_label)` para passar a
+/// `run_command_with_progress`.
+fn ps_utf8_dism(dism_args: &str) -> (String, Vec<String>, String) {
+    let script = format!(
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; dism.exe {}",
+        dism_args
+    );
+    let args = vec![
+        "-NoProfile".to_string(),
+        "-NonInteractive".to_string(),
+        "-ExecutionPolicy".to_string(),
+        "Bypass".to_string(),
+        "-Command".to_string(),
+        script,
+    ];
+    let label = format!("dism.exe {}", dism_args);
+    ("powershell.exe".to_string(), args, label)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // DISM — Cleanup-Image /StartComponentCleanup
-//
-// O Windows Update mantém cópias antigas dos componentes do sistema no
-// Component Store (WinSxS) para permitir rollback de atualizações. Com o tempo,
-// esse acúmulo pode ocupar vários gigabytes. O StartComponentCleanup remove
-// componentes de versões antigas que não são mais necessárias para rollback.
-//
-// Duração típica: 1–10 minutos dependendo do histórico de atualizações.
-// Requer: Administrador.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Limpa componentes antigos de atualizações via DISM StartComponentCleanup.
-///
-/// Streaming de progresso emitido no canal `"dism_cleanup_progress"`.
-/// Cada linha de output do DISM é enviada ao frontend em tempo real.
 #[tauri::command]
-pub fn run_dism_cleanup(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
-    let start = Instant::now();
-    let ts = now_utc();
+pub async fn run_dism_cleanup(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let ts = now_utc();
 
-    let result = run_command_with_progress(
-        &app_handle,
-        "dism_cleanup_progress",
-        "dism.exe",
-        &["/Online", "/Cleanup-Image", "/StartComponentCleanup"],
-    )?;
+        let (cmd, args_owned, label) =
+            ps_utf8_dism("/Online /Cleanup-Image /StartComponentCleanup");
+        let args_ref: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
 
-    let duration = start.elapsed().as_secs();
-    let stdout_lower = result.stdout.to_lowercase();
+        let result = run_command_with_progress(
+            &app_handle,
+            "dism_cleanup_progress",
+            &cmd,
+            &args_ref,
+            Some(&label),
+        )?;
 
-    // DISM /StartComponentCleanup termina com "The operation completed successfully."
-    // quando bem-sucedido, independente de quanto espaço foi liberado.
-    let (status, message) = if result.success
-        && stdout_lower.contains("operation completed successfully")
-    {
-        (
-            CheckStatus::Success,
-            "Component Store limpo com sucesso. Espaço de versões antigas liberado.".to_string(),
-        )
-    } else if result.success {
-        (
-            CheckStatus::Warning,
-            "DISM concluiu mas não foi possível confirmar o resultado.".to_string(),
-        )
-    } else {
-        (
-            CheckStatus::Error,
-            format!(
-                "DISM falhou com código {}. Verifique se há atualizações pendentes.",
-                result.exit_code
-            ),
-        )
-    };
+        let duration = start.elapsed().as_secs();
+        let stdout_lower = result.stdout.to_lowercase();
 
-    Ok(HealthCheckResult {
-        id: "dism_cleanup".to_string(),
-        name: "DISM Cleanup".to_string(),
-        status,
-        message,
-        details: result.stdout,
-        duration_seconds: duration,
-        space_freed_mb: None, // DISM não reporta o total exato liberado no stdout
-        timestamp: ts,
+        let (status, message) = if result.success
+            && (stdout_lower.contains("operation completed successfully")
+                || stdout_lower.contains("concluída com êxito")
+                || stdout_lower.contains("foi concluída"))
+        {
+            (
+                CheckStatus::Success,
+                "Component Store limpo com sucesso. Espaço de versões antigas liberado."
+                    .to_string(),
+            )
+        } else if result.success {
+            (
+                CheckStatus::Warning,
+                "DISM concluiu mas não foi possível confirmar o resultado.".to_string(),
+            )
+        } else {
+            (
+                CheckStatus::Error,
+                format!(
+                    "DISM falhou com código {}. Verifique se há atualizações pendentes.",
+                    result.exit_code
+                ),
+            )
+        };
+
+        Ok(HealthCheckResult {
+            id: "dism_cleanup".to_string(),
+            name: "DISM Cleanup".to_string(),
+            status,
+            message,
+            details: result.stdout,
+            duration_seconds: duration,
+            space_freed_mb: None,
+            timestamp: ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DISM — Cleanup-Image /CheckHealth
-//
-// Verifica rapidamente se há indicações de corrupção no Component Store,
-// consultando apenas metadados locais (não faz download nem reparo).
-// É a verificação mais rápida — geralmente completa em menos de 30 segundos.
-//
-// Saídas possíveis:
-//   "No component store corruption detected." → sem corrupção
-//   "The component store is repairable."      → corrupção detectada, reparável
-//   "The component store is corrupted."       → corrupção grave
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Verificação rápida de integridade do Component Store via DISM CheckHealth.
-///
-/// Streaming de progresso emitido no canal `"dism_checkhealth_progress"`.
 #[tauri::command]
-pub fn run_dism_checkhealth(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
-    let start = Instant::now();
-    let ts = now_utc();
+pub async fn run_dism_checkhealth(
+    app_handle: tauri::AppHandle,
+) -> Result<HealthCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let ts = now_utc();
 
-    let result = run_command_with_progress(
-        &app_handle,
-        "dism_checkhealth_progress",
-        "dism.exe",
-        &["/Online", "/Cleanup-Image", "/CheckHealth"],
-    )?;
+        let (cmd, args_owned, label) = ps_utf8_dism("/Online /Cleanup-Image /CheckHealth");
+        let args_ref: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
 
-    let duration = start.elapsed().as_secs();
-    let stdout_lower = result.stdout.to_lowercase();
+        let result = run_command_with_progress(
+            &app_handle,
+            "dism_checkhealth_progress",
+            &cmd,
+            &args_ref,
+            Some(&label),
+        )?;
 
-    // Analisa saída para distinguir os três estados possíveis
-    let (status, message) = if !result.success {
-        (
-            CheckStatus::Error,
-            format!("DISM falhou com código {}.", result.exit_code),
-        )
-    } else if stdout_lower.contains("no component store corruption detected") {
-        (
-            CheckStatus::Success,
-            "Nenhuma corrupção detectada no Component Store.".to_string(),
-        )
-    } else if stdout_lower.contains("repairable") {
-        (
-            CheckStatus::Warning,
-            "Corrupção detectada no Component Store. Execute DISM RestoreHealth para reparar."
-                .to_string(),
-        )
-    } else if stdout_lower.contains("corrupted") {
-        (
-            CheckStatus::Error,
-            "Component Store corrompido. Execute DISM RestoreHealth imediatamente.".to_string(),
-        )
-    } else {
-        // Sem mensagem de status conhecida — reporta como warning para investigação
-        (
-            CheckStatus::Warning,
-            "Não foi possível determinar o estado do Component Store. Verifique os detalhes."
-                .to_string(),
-        )
-    };
+        let duration = start.elapsed().as_secs();
+        let stdout_lower = result.stdout.to_lowercase();
 
-    Ok(HealthCheckResult {
-        id: "dism_checkhealth".to_string(),
-        name: "DISM CheckHealth".to_string(),
-        status,
-        message,
-        details: result.stdout,
-        duration_seconds: duration,
-        space_freed_mb: None,
-        timestamp: ts,
+        // Detecta os três estados possíveis em inglês (EN) e PT-BR
+        let (status, message) = if !result.success {
+            (
+                CheckStatus::Error,
+                format!("DISM falhou com código {}.", result.exit_code),
+            )
+        } else if stdout_lower.contains("no component store corruption detected")
+            || stdout_lower.contains("não está danificado")
+        {
+            (
+                CheckStatus::Success,
+                "Nenhuma corrupção detectada no Component Store.".to_string(),
+            )
+        } else if stdout_lower.contains("repairable") || stdout_lower.contains("reparável") {
+            (
+                CheckStatus::Warning,
+                "Corrupção detectada no Component Store. Execute DISM RestoreHealth para reparar."
+                    .to_string(),
+            )
+        } else if stdout_lower.contains("corrupted")
+            || stdout_lower.contains("corrompido")
+            || stdout_lower.contains("danificado")
+        {
+            (
+                CheckStatus::Error,
+                "Component Store corrompido. Execute DISM RestoreHealth imediatamente.".to_string(),
+            )
+        } else {
+            (
+                CheckStatus::Warning,
+                "Não foi possível determinar o estado do Component Store. Verifique os detalhes."
+                    .to_string(),
+            )
+        };
+
+        Ok(HealthCheckResult {
+            id: "dism_checkhealth".to_string(),
+            name: "DISM CheckHealth".to_string(),
+            status,
+            message,
+            details: result.stdout,
+            duration_seconds: duration,
+            space_freed_mb: None,
+            timestamp: ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DISM — Cleanup-Image /ScanHealth
-//
-// Realiza uma varredura mais profunda que o CheckHealth: examina todos os
-// arquivos do Component Store comparando com os metadados do manifesto.
-// Não faz reparos — apenas detecta e documenta problemas encontrados.
-//
-// Duração típica: 2–15 minutos.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Varredura profunda de integridade do Component Store via DISM ScanHealth.
-///
-/// Streaming de progresso emitido no canal `"dism_scanhealth_progress"`.
-/// Pode levar vários minutos dependendo do tamanho do Component Store.
 #[tauri::command]
-pub fn run_dism_scanhealth(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
-    let start = Instant::now();
-    let ts = now_utc();
+pub async fn run_dism_scanhealth(
+    app_handle: tauri::AppHandle,
+) -> Result<HealthCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let ts = now_utc();
 
-    let result = run_command_with_progress(
-        &app_handle,
-        "dism_scanhealth_progress",
-        "dism.exe",
-        &["/Online", "/Cleanup-Image", "/ScanHealth"],
-    )?;
+        let (cmd, args_owned, label) = ps_utf8_dism("/Online /Cleanup-Image /ScanHealth");
+        let args_ref: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
 
-    let duration = start.elapsed().as_secs();
-    let stdout_lower = result.stdout.to_lowercase();
+        let result = run_command_with_progress(
+            &app_handle,
+            "dism_scanhealth_progress",
+            &cmd,
+            &args_ref,
+            Some(&label),
+        )?;
 
-    // ScanHealth usa as mesmas mensagens de diagnóstico que o CheckHealth
-    let (status, message) = if !result.success {
-        (
-            CheckStatus::Error,
-            format!("DISM ScanHealth falhou com código {}.", result.exit_code),
-        )
-    } else if stdout_lower.contains("no component store corruption detected") {
-        (
-            CheckStatus::Success,
-            "Nenhuma corrupção encontrada na varredura completa do Component Store.".to_string(),
-        )
-    } else if stdout_lower.contains("repairable") {
-        (
-            CheckStatus::Warning,
-            "Corrupção reparável encontrada. Use DISM RestoreHealth para corrigir.".to_string(),
-        )
-    } else if stdout_lower.contains("corrupted") {
-        (
-            CheckStatus::Error,
-            "Corrupção grave detectada no Component Store. Reparo necessário.".to_string(),
-        )
-    } else {
-        (
-            CheckStatus::Warning,
-            "Varredura concluída. Resultado indeterminado — verifique os detalhes.".to_string(),
-        )
-    };
+        let duration = start.elapsed().as_secs();
+        let stdout_lower = result.stdout.to_lowercase();
 
-    Ok(HealthCheckResult {
-        id: "dism_scanhealth".to_string(),
-        name: "DISM ScanHealth".to_string(),
-        status,
-        message,
-        details: result.stdout,
-        duration_seconds: duration,
-        space_freed_mb: None,
-        timestamp: ts,
+        // ScanHealth usa as mesmas mensagens de diagnóstico que o CheckHealth
+        let (status, message) = if !result.success {
+            (
+                CheckStatus::Error,
+                format!("DISM ScanHealth falhou com código {}.", result.exit_code),
+            )
+        } else if stdout_lower.contains("no component store corruption detected")
+            || stdout_lower.contains("não está danificado")
+        {
+            (
+                CheckStatus::Success,
+                "Nenhuma corrupção encontrada na varredura completa do Component Store."
+                    .to_string(),
+            )
+        } else if stdout_lower.contains("repairable") || stdout_lower.contains("reparável") {
+            (
+                CheckStatus::Warning,
+                "Corrupção reparável encontrada. Use DISM RestoreHealth para corrigir."
+                    .to_string(),
+            )
+        } else if stdout_lower.contains("corrupted")
+            || stdout_lower.contains("corrompido")
+            || stdout_lower.contains("danificado")
+        {
+            (
+                CheckStatus::Error,
+                "Corrupção grave detectada no Component Store. Reparo necessário.".to_string(),
+            )
+        } else {
+            (
+                CheckStatus::Warning,
+                "Varredura concluída. Resultado indeterminado — verifique os detalhes.".to_string(),
+            )
+        };
+
+        Ok(HealthCheckResult {
+            id: "dism_scanhealth".to_string(),
+            name: "DISM ScanHealth".to_string(),
+            status,
+            message,
+            details: result.stdout,
+            duration_seconds: duration,
+            space_freed_mb: None,
+            timestamp: ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DISM — Cleanup-Image /RestoreHealth
-//
-// Repara arquivos corrompidos do Component Store usando o Windows Update como
-// fonte de arquivos limpos. Substitui componentes danificados por versões
-// íntegras baixadas diretamente da Microsoft.
-//
-// Requer: conexão com a internet ativa.
-// Duração típica: 5–30 minutos (inclui download dos arquivos necessários).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Repara o Component Store via DISM RestoreHealth usando o Windows Update.
-///
-/// Streaming de progresso emitido no canal `"dism_restorehealth_progress"`.
-/// Requer conexão ativa com a internet para baixar os arquivos de reparo.
 #[tauri::command]
-pub fn run_dism_restorehealth(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
-    let start = Instant::now();
-    let ts = now_utc();
+pub async fn run_dism_restorehealth(
+    app_handle: tauri::AppHandle,
+) -> Result<HealthCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let ts = now_utc();
 
-    let result = run_command_with_progress(
-        &app_handle,
-        "dism_restorehealth_progress",
-        "dism.exe",
-        &["/Online", "/Cleanup-Image", "/RestoreHealth"],
-    )?;
+        let (cmd, args_owned, label) = ps_utf8_dism("/Online /Cleanup-Image /RestoreHealth");
+        let args_ref: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
 
-    let duration = start.elapsed().as_secs();
-    let stdout_lower = result.stdout.to_lowercase();
+        let result = run_command_with_progress(
+            &app_handle,
+            "dism_restorehealth_progress",
+            &cmd,
+            &args_ref,
+            Some(&label),
+        )?;
 
-    let (status, message) = if result.success
-        && stdout_lower.contains("operation completed successfully")
-    {
-        (
-            CheckStatus::Success,
-            "Component Store reparado com sucesso via Windows Update.".to_string(),
-        )
-    } else if !result.success && stdout_lower.contains("source files could not be found") {
-        // Erro comum: sem acesso ao Windows Update ou arquivo de origem ausente
-        (
-            CheckStatus::Error,
-            "Arquivos de origem não encontrados. Verifique a conexão com a internet.".to_string(),
-        )
-    } else if !result.success {
-        (
-            CheckStatus::Error,
-            format!(
-                "DISM RestoreHealth falhou com código {}. Verifique a conexão.",
-                result.exit_code
-            ),
-        )
-    } else {
-        (
-            CheckStatus::Warning,
-            "DISM concluiu mas não foi possível confirmar a conclusão do reparo.".to_string(),
-        )
-    };
+        let duration = start.elapsed().as_secs();
+        let stdout_lower = result.stdout.to_lowercase();
 
-    Ok(HealthCheckResult {
-        id: "dism_restorehealth".to_string(),
-        name: "DISM RestoreHealth".to_string(),
-        status,
-        message,
-        details: result.stdout,
-        duration_seconds: duration,
-        space_freed_mb: None,
-        timestamp: ts,
+        let (status, message) = if result.success
+            && (stdout_lower.contains("operation completed successfully")
+                || stdout_lower.contains("concluída com êxito")
+                || stdout_lower.contains("foi concluída"))
+        {
+            (
+                CheckStatus::Success,
+                "Component Store reparado com sucesso via Windows Update.".to_string(),
+            )
+        } else if !result.success
+            && (stdout_lower.contains("source files could not be found")
+                || stdout_lower.contains("arquivos de origem não foram encontrados")
+                || stdout_lower.contains("ficheiros de origem não foram encontrados"))
+        {
+            (
+                CheckStatus::Error,
+                "Arquivos de origem não encontrados. Verifique a conexão com a internet."
+                    .to_string(),
+            )
+        } else if !result.success {
+            (
+                CheckStatus::Error,
+                format!(
+                    "DISM RestoreHealth falhou com código {}. Verifique a conexão.",
+                    result.exit_code
+                ),
+            )
+        } else {
+            (
+                CheckStatus::Warning,
+                "DISM concluiu mas não foi possível confirmar a conclusão do reparo.".to_string(),
+            )
+        };
+
+        Ok(HealthCheckResult {
+            id: "dism_restorehealth".to_string(),
+            name: "DISM RestoreHealth".to_string(),
+            status,
+            message,
+            details: result.stdout,
+            duration_seconds: duration,
+            space_freed_mb: None,
+            timestamp: ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SFC — System File Checker (/scannow)
-//
-// Verifica a integridade de todos os arquivos protegidos do sistema Windows
-// e repara automaticamente os que estiverem corrompidos ou modificados,
-// substituindo-os pela versão correta do cache local do sistema.
-//
-// Diferença entre SFC e DISM RestoreHealth:
-//   - SFC usa cache local (C:\Windows\System32\dllcache) → não precisa de internet
-//   - DISM usa Windows Update → mais abrangente, requer internet
-//   - Recomendação: rodar DISM RestoreHealth primeiro, depois SFC /scannow
-//
-// Nota técnica: sfc.exe escreve no stdout usando WriteConsoleW internamente.
-// Ao redirecionar via pipe, a saída é capturada em codepage do sistema (CP-1252
-// ou similar). String::from_utf8_lossy lida com isso graciosamente.
-//
-// Duração típica: 10–30 minutos.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Executa o System File Checker (sfc /scannow) com streaming de progresso.
-///
-/// Streaming de progresso emitido no canal `"sfc_progress"`.
 #[tauri::command]
-pub fn run_sfc(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
-    let start = Instant::now();
-    let ts = now_utc();
+pub async fn run_sfc(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let ts = now_utc();
 
-    let result = run_command_with_progress(
-        &app_handle,
-        "sfc_progress",
-        "sfc.exe",
-        &["/scannow"],
-    )?;
+        // SFC também usa o codepage do sistema; wrapper PowerShell garante UTF-8
+        let script =
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; sfc.exe /scannow";
+        let result = run_command_with_progress(
+            &app_handle,
+            "sfc_progress",
+            "powershell.exe",
+            &[
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                script,
+            ],
+            Some("sfc.exe /scannow"),
+        )?;
 
-    let duration = start.elapsed().as_secs();
-    let stdout_lower = result.stdout.to_lowercase();
+        let duration = start.elapsed().as_secs();
+        let stdout_lower = result.stdout.to_lowercase();
 
-    // Analisa os quatro estados possíveis do SFC:
-    let (status, message) = if stdout_lower
-        .contains("did not find any integrity violations")
-    {
-        (
-            CheckStatus::Success,
-            "Nenhuma violação de integridade encontrada. Arquivos do sistema íntegros.".to_string(),
-        )
-    } else if stdout_lower.contains("found corrupt files and successfully repaired") {
-        // Arquivos corrompidos foram encontrados E reparados com sucesso
-        (
-            CheckStatus::Success,
-            "Arquivos corrompidos detectados e reparados com sucesso pelo SFC.".to_string(),
-        )
-    } else if stdout_lower.contains("found corrupt files but was unable to fix") {
-        // SFC encontrou corrupção mas não conseguiu reparar — executar DISM primeiro
-        (
-            CheckStatus::Warning,
-            "Arquivos corrompidos encontrados mas não reparados. Execute DISM RestoreHealth e tente novamente.".to_string(),
-        )
-    } else if stdout_lower.contains("could not perform the requested operation") {
-        (
-            CheckStatus::Error,
-            "SFC não pôde executar a operação. Tente reiniciar e executar novamente.".to_string(),
-        )
-    } else if !result.success {
-        (
-            CheckStatus::Error,
-            format!("SFC falhou com código {}.", result.exit_code),
-        )
-    } else {
-        // SFC concluiu mas sem mensagem de status reconhecida (pode ocorrer em versões localizadas)
-        (
-            CheckStatus::Warning,
-            "SFC concluído. Verifique o log em C:\\Windows\\Logs\\CBS\\CBS.log para detalhes."
-                .to_string(),
-        )
-    };
+        // Analisa os quatro estados possíveis do SFC (EN e PT-BR):
+        let (status, message) = if stdout_lower
+            .contains("did not find any integrity violations")
+            || stdout_lower.contains("nenhuma violação de integridade")
+        {
+            (
+                CheckStatus::Success,
+                "Nenhuma violação de integridade encontrada. Arquivos do sistema íntegros."
+                    .to_string(),
+            )
+        } else if stdout_lower.contains("found corrupt files and successfully repaired")
+            || stdout_lower.contains("reparou com êxito")
+            || stdout_lower.contains("reparados com êxito")
+        {
+            (
+                CheckStatus::Success,
+                "Arquivos corrompidos detectados e reparados com sucesso pelo SFC.".to_string(),
+            )
+        } else if stdout_lower.contains("found corrupt files but was unable to fix")
+            || stdout_lower.contains("não foi possível reparar")
+            || stdout_lower.contains("não conseguiu reparar")
+        {
+            (
+                CheckStatus::Warning,
+                "Arquivos corrompidos encontrados mas não reparados. Execute DISM RestoreHealth e tente novamente.".to_string(),
+            )
+        } else if stdout_lower.contains("could not perform the requested operation")
+            || stdout_lower.contains("não pôde executar")
+        {
+            (
+                CheckStatus::Error,
+                "SFC não pôde executar a operação. Tente reiniciar e executar novamente."
+                    .to_string(),
+            )
+        } else if !result.success {
+            (
+                CheckStatus::Error,
+                format!("SFC falhou com código {}.", result.exit_code),
+            )
+        } else {
+            (
+                CheckStatus::Warning,
+                "SFC concluído. Verifique o log em C:\\Windows\\Logs\\CBS\\CBS.log para detalhes."
+                    .to_string(),
+            )
+        };
 
-    Ok(HealthCheckResult {
-        id: "sfc_scannow".to_string(),
-        name: "SFC /scannow".to_string(),
-        status,
-        message,
-        details: result.stdout,
-        duration_seconds: duration,
-        space_freed_mb: None,
-        timestamp: ts,
+        Ok(HealthCheckResult {
+            id: "sfc_scannow".to_string(),
+            name: "SFC /scannow".to_string(),
+            status,
+            message,
+            details: result.stdout,
+            duration_seconds: duration,
+            space_freed_mb: None,
+            timestamp: ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Check Disk (chkdsk /r)
-//
-// Verifica e corrige erros lógicos e físicos no sistema de arquivos do disco.
-// O flag /r implica /f (corrige erros) e adiciona verificação de setores.
-//
-// Comportamento no disco do sistema (C: em uso):
-//   - chkdsk não consegue bloquear o volume em uso
-//   - Apresenta prompt "Y/N" para agendar a verificação no próximo boot
-//   - Este comando confirma automaticamente com "Y" via stdin
-//   - O chkdsk retornará imediatamente; a verificação ocorre no próximo reinício
-//
-// Exit codes do chkdsk:
-//   0 = Sem erros
-//   1 = Erros encontrados e corrigidos
-//   2 = Limpeza de disco sugerida (não crítico)
-//   3 = Volume não pôde ser verificado
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Verifica e repara erros de disco via chkdsk com agendamento automático.
-///
-/// Se `drive_letter` não for fornecido, verifica o drive C:\.
-/// Streaming de progresso emitido no canal `"chkdsk_progress"`.
-///
-/// Quando executado no disco do sistema, agenda automaticamente para o
-/// próximo boot e retorna imediatamente com status `Warning`.
 #[tauri::command]
-pub fn run_chkdsk(
+pub async fn run_chkdsk(
     app_handle: tauri::AppHandle,
     drive_letter: Option<String>,
 ) -> Result<HealthCheckResult, String> {
-    let start_ts = now_utc();
+    tokio::task::spawn_blocking(move || {
+        let start_ts = now_utc();
 
-    // Normaliza o drive: "C" → "C:", "C:" → "C:", None → "C:"
-    let drive_raw = drive_letter.unwrap_or_else(|| "C".to_string());
-    let drive = if drive_raw.ends_with(':') {
-        drive_raw
-    } else {
-        format!("{}:", drive_raw.to_uppercase())
-    };
+        // Normaliza o drive: "C" → "C:", "C:" → "C:", None → "C:"
+        let drive_raw = drive_letter.unwrap_or_else(|| "C".to_string());
+        let drive = if drive_raw.ends_with(':') {
+            drive_raw
+        } else {
+            format!("{}:", drive_raw.to_uppercase())
+        };
 
-    let (stdout, _stderr, exit_code, _success, duration_secs) =
-        run_chkdsk_drive(&app_handle, &drive)?;
+        let (stdout, _stderr, exit_code, _success, duration_secs) =
+            run_chkdsk_drive(&app_handle, &drive)?;
 
-    let stdout_lower = stdout.to_lowercase();
+        let stdout_lower = stdout.to_lowercase();
 
-    // Detecta se o chkdsk foi agendado para o próximo boot (disco do sistema em uso)
-    let is_scheduled = stdout_lower.contains("schedule")
-        || stdout_lower.contains("next restart")
-        || stdout_lower.contains("próxima reinicialização")
-        || stdout_lower.contains("cannot lock");
+        // Detecta se o chkdsk foi agendado para o próximo boot (disco do sistema em uso)
+        let is_scheduled = stdout_lower.contains("schedule")
+            || stdout_lower.contains("next restart")
+            || stdout_lower.contains("próxima reinicialização")
+            || stdout_lower.contains("cannot lock");
 
-    let (status, message) = if is_scheduled {
-        (
-            CheckStatus::Warning,
-            format!(
-                "Disco {} em uso pelo sistema. Verificação agendada para o próximo boot.",
-                drive
-            ),
-        )
-    } else {
-        match exit_code {
-            0 => (
-                CheckStatus::Success,
-                format!("Disco {} verificado. Nenhum erro encontrado.", drive),
-            ),
-            1 => (
-                CheckStatus::Success,
-                format!("Disco {} verificado. Erros encontrados e corrigidos.", drive),
-            ),
-            2 => (
+        let (status, message) = if is_scheduled {
+            (
                 CheckStatus::Warning,
                 format!(
-                    "Disco {} verificado. Limpeza de disco sugerida (execute Disk Cleanup).",
+                    "Disco {} em uso pelo sistema. Verificação agendada para o próximo boot.",
                     drive
                 ),
-            ),
-            _ => (
-                CheckStatus::Error,
-                format!(
-                    "Erro ao verificar disco {} (código {}). O volume pode estar inacessível.",
-                    drive, exit_code
+            )
+        } else {
+            match exit_code {
+                0 => (
+                    CheckStatus::Success,
+                    format!("Disco {} verificado. Nenhum erro encontrado.", drive),
                 ),
-            ),
-        }
-    };
+                1 => (
+                    CheckStatus::Success,
+                    format!("Disco {} verificado. Erros encontrados e corrigidos.", drive),
+                ),
+                2 => (
+                    CheckStatus::Warning,
+                    format!(
+                        "Disco {} verificado. Limpeza de disco sugerida (execute Disk Cleanup).",
+                        drive
+                    ),
+                ),
+                _ => (
+                    CheckStatus::Error,
+                    format!(
+                        "Erro ao verificar disco {} (código {}). O volume pode estar inacessível.",
+                        drive, exit_code
+                    ),
+                ),
+            }
+        };
 
-    Ok(HealthCheckResult {
-        id: "chkdsk".to_string(),
-        name: format!("Check Disk ({})", drive),
-        status,
-        message,
-        details: stdout,
-        duration_seconds: duration_secs,
-        space_freed_mb: None,
-        timestamp: start_ts,
+        Ok(HealthCheckResult {
+            id: "chkdsk".to_string(),
+            name: format!("Check Disk ({})", drive),
+            status,
+            message,
+            details: stdout,
+            duration_seconds: duration_secs,
+            space_freed_mb: None,
+            timestamp: start_ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TRIM de SSDs
-//
-// O TRIM é uma instrução que o sistema operacional envia ao SSD informando
-// quais blocos de dados não estão mais em uso e podem ser apagados internamente.
-// Sem TRIM, o SSD acumularia blocos "sujos" que degradam a performance de escrita.
-//
-// O Windows executa TRIM automaticamente via Scheduled Tasks, mas executar
-// manualmente garante que todos os SSDs conectados estejam otimizados agora,
-// independente do agendamento automático.
-//
-// Implementação: usa Optimize-Volume do PowerShell (mais robusto que o
-// defrag.exe para SSDs) com detecção automática via Get-PhysicalDisk.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Executa TRIM em todos os SSDs detectados via PowerShell Optimize-Volume.
-///
-/// Streaming de progresso emitido no canal `"trim_progress"`.
-/// Detecta automaticamente SSDs via `Get-PhysicalDisk | Where-Object MediaType -eq 'SSD'`.
 #[tauri::command]
-pub fn run_ssd_trim(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
-    let start = Instant::now();
-    let ts = now_utc();
+pub async fn run_ssd_trim(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let ts = now_utc();
 
-    // Script PowerShell: detecta SSDs e executa Optimize-Volume -ReTrim em cada um.
-    // [Console]::OutputEncoding garante que os logs apareçam corretamente em UTF-8.
-    // -ErrorAction SilentlyContinue em Get-Partition/Get-Volume evita erros em
-    // partições de sistema que não têm letra de unidade atribuída.
-    let ps_script = r#"
+        let ps_script = r#"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ssds = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'SSD' }
 if ($ssds.Count -eq 0) {
@@ -821,276 +831,275 @@ foreach ($disk in $ssds) {
 Write-Output "TRIM concluido em $trimmed volume(s)"
 "#;
 
-    let result = run_command_with_progress(
-        &app_handle,
-        "trim_progress",
-        "powershell.exe",
-        &[
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            ps_script,
-        ],
-    )?;
+        let result = run_command_with_progress(
+            &app_handle,
+            "trim_progress",
+            "powershell.exe",
+            &[
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_script,
+            ],
+            None,
+        )?;
 
-    let duration = start.elapsed().as_secs();
-    let stdout_lower = result.stdout.to_lowercase();
+        let duration = start.elapsed().as_secs();
+        let stdout_lower = result.stdout.to_lowercase();
 
-    let (status, message) = if stdout_lower.contains("nenhum ssd detectado") {
-        (
-            CheckStatus::Warning,
-            "Nenhum SSD detectado. O sistema pode estar usando apenas HDDs.".to_string(),
-        )
-    } else if result.success && stdout_lower.contains("trim concluido") {
-        (
-            CheckStatus::Success,
-            "TRIM executado com sucesso em todos os SSDs detectados.".to_string(),
-        )
-    } else if !result.success {
-        (
-            CheckStatus::Error,
-            format!(
-                "Erro ao executar TRIM (código {}). Verifique os detalhes.",
-                result.exit_code
-            ),
-        )
-    } else {
-        (
-            CheckStatus::Warning,
-            "TRIM executado mas o resultado não pôde ser confirmado.".to_string(),
-        )
-    };
+        let (status, message) = if stdout_lower.contains("nenhum ssd detectado") {
+            (
+                CheckStatus::Warning,
+                "Nenhum SSD detectado. O sistema pode estar usando apenas HDDs.".to_string(),
+            )
+        } else if result.success && stdout_lower.contains("trim concluido") {
+            (
+                CheckStatus::Success,
+                "TRIM executado com sucesso em todos os SSDs detectados.".to_string(),
+            )
+        } else if !result.success {
+            (
+                CheckStatus::Error,
+                format!(
+                    "Erro ao executar TRIM (código {}). Verifique os detalhes.",
+                    result.exit_code
+                ),
+            )
+        } else {
+            (
+                CheckStatus::Warning,
+                "TRIM executado mas o resultado não pôde ser confirmado.".to_string(),
+            )
+        };
 
-    Ok(HealthCheckResult {
-        id: "ssd_trim".to_string(),
-        name: "TRIM de SSDs".to_string(),
-        status,
-        message,
-        details: result.stdout,
-        duration_seconds: duration,
-        space_freed_mb: None,
-        timestamp: ts,
+        Ok(HealthCheckResult {
+            id: "ssd_trim".to_string(),
+            name: "TRIM de SSDs".to_string(),
+            status,
+            message,
+            details: result.stdout,
+            duration_seconds: duration,
+            space_freed_mb: None,
+            timestamp: ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Flush DNS
-//
-// O cache DNS local armazena resoluções de nomes recentes para acelerar
-// conexões subsequentes. Pode ficar desatualizado ou conter entradas
-// corrompidas que causam falhas de conexão.
-//
-// ipconfig /flushdns limpa o cache do Resolvedor de DNS do cliente Windows.
-// Útil para resolver problemas de conectividade após alterações de DNS ou
-// simplesmente para garantir que endereços desatualizados não sejam usados.
-//
-// Duração: instantânea (< 1 segundo normalmente).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Limpa o cache DNS do sistema via ipconfig /flushdns.
-///
-/// Streaming de progresso emitido no canal `"dns_flush_progress"`.
 #[tauri::command]
-pub fn flush_dns(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
-    let start = Instant::now();
-    let ts = now_utc();
+pub async fn flush_dns(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let ts = now_utc();
 
-    let result = run_command_with_progress(
-        &app_handle,
-        "dns_flush_progress",
-        "ipconfig.exe",
-        &["/flushdns"],
-    )?;
+        let result = run_command_with_progress(
+            &app_handle,
+            "dns_flush_progress",
+            "ipconfig.exe",
+            &["/flushdns"],
+            None,
+        )?;
 
-    let duration = start.elapsed().as_secs();
-    let stdout_lower = result.stdout.to_lowercase();
+        let duration = start.elapsed().as_secs();
+        let stdout_lower = result.stdout.to_lowercase();
 
-    // ipconfig /flushdns exibe "Successfully flushed the DNS Resolver Cache."
-    let (status, message) = if stdout_lower.contains("successfully flushed")
-        || stdout_lower.contains("liberado com êxito")
-        || stdout_lower.contains("liberado com exito")
-        || result.success
-    {
-        (
-            CheckStatus::Success,
-            "Cache DNS limpo com sucesso. Novas consultas usarão endereços atualizados."
-                .to_string(),
-        )
-    } else {
-        (
-            CheckStatus::Error,
-            "Falha ao limpar o cache DNS. Verifique se o serviço DNS Client está ativo."
-                .to_string(),
-        )
-    };
+        let (status, message) = if stdout_lower.contains("successfully flushed")
+            || stdout_lower.contains("liberado com êxito")
+            || stdout_lower.contains("liberado com exito")
+            || result.success
+        {
+            (
+                CheckStatus::Success,
+                "Cache DNS limpo com sucesso. Novas consultas usarão endereços atualizados."
+                    .to_string(),
+            )
+        } else {
+            (
+                CheckStatus::Error,
+                "Falha ao limpar o cache DNS. Verifique se o serviço DNS Client está ativo."
+                    .to_string(),
+            )
+        };
 
-    Ok(HealthCheckResult {
-        id: "flush_dns".to_string(),
-        name: "Flush DNS".to_string(),
-        status,
-        message,
-        details: result.stdout,
-        duration_seconds: duration,
-        space_freed_mb: None,
-        timestamp: ts,
+        Ok(HealthCheckResult {
+            id: "flush_dns".to_string(),
+            name: "Flush DNS".to_string(),
+            status,
+            message,
+            details: result.stdout,
+            duration_seconds: duration,
+            space_freed_mb: None,
+            timestamp: ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Limpeza de Arquivos Temporários
-//
-// Arquivos temporários se acumulam no disco durante uso normal do Windows:
-//   - %TEMP% / %TMP%: temporários do usuário atual (instaladores, extrações)
-//   - C:\Windows\Temp: temporários do sistema e serviços Windows
-//   - C:\Windows\SoftwareDistribution\Download: cache do Windows Update
-//     (arquivos de atualização baixados mas já instalados — seguros para remover)
-//
-// Arquivos em uso são pulados silenciosamente (continue on error).
-// O Windows Update pode recriar a pasta SoftwareDistribution\Download automaticamente.
-//
-// O espaço total liberado é calculado comparando tamanho antes e depois da remoção.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Remove arquivos temporários das pastas %TEMP%, Windows\Temp e
 /// Windows\SoftwareDistribution\Download, calculando o espaço total liberado.
-///
-/// Streaming de progresso emitido no canal `"temp_cleanup_progress"`.
-/// Arquivos em uso são ignorados silenciosamente sem interromper a limpeza.
 #[tauri::command]
-pub fn run_temp_cleanup(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
-    let start = Instant::now();
-    let ts = now_utc();
+pub async fn run_temp_cleanup(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let start = Instant::now();
+        let ts = now_utc();
 
-    // Define as pastas alvo com descrição legível para os eventos de progresso
-    let targets: &[(&str, &str)] = &[
-        ("%TEMP%", "Temp do usuário"),
-        (r"C:\Windows\Temp", "Windows Temp"),
-        (
-            r"C:\Windows\SoftwareDistribution\Download",
-            "Cache do Windows Update",
-        ),
-    ];
+        // Define as pastas alvo com descrição legível para os eventos de progresso
+        let targets: &[(&str, &str)] = &[
+            ("%TEMP%", "Temp do usuário"),
+            (r"C:\Windows\Temp", "Windows Temp"),
+            (
+                r"C:\Windows\SoftwareDistribution\Download",
+                "Cache do Windows Update",
+            ),
+        ];
 
-    let mut total_freed: u64 = 0;
-    let mut all_errors: Vec<String> = Vec::new();
-    let mut log_lines: Vec<String> = Vec::new();
+        let mut total_freed: u64 = 0;
+        let mut all_errors: Vec<String> = Vec::new();
+        let mut log_lines: Vec<String> = Vec::new();
 
-    emit_health_event(
-        &app_handle,
-        "temp_cleanup_progress",
-        "started",
-        "Iniciando limpeza de arquivos temporários",
-    );
+        emit_health_event(
+            &app_handle,
+            "temp_cleanup_progress",
+            "started",
+            "Iniciando limpeza de arquivos temporários",
+        );
 
-    for (folder_template, description) in targets {
-        // Expande variáveis de ambiente (ex: %TEMP% → C:\Users\...\AppData\Local\Temp)
-        let folder_path = if folder_template.starts_with('%') {
-            let var_name = folder_template.trim_matches('%');
-            match std::env::var(var_name) {
-                Ok(p) => p,
-                Err(_) => {
-                    let msg = format!("Variável de ambiente {} não encontrada — pulando", folder_template);
-                    emit_health_event(&app_handle, "temp_cleanup_progress", "stderr", &msg);
-                    log_lines.push(msg);
-                    continue;
+        for (folder_template, description) in targets {
+            // Expande variáveis de ambiente (ex: %TEMP% → C:\Users\...\AppData\Local\Temp)
+            let folder_path = if folder_template.starts_with('%') {
+                let var_name = folder_template.trim_matches('%');
+                match std::env::var(var_name) {
+                    Ok(p) => p,
+                    Err(_) => {
+                        let msg = format!(
+                            "Variável de ambiente {} não encontrada — pulando",
+                            folder_template
+                        );
+                        emit_health_event(
+                            &app_handle,
+                            "temp_cleanup_progress",
+                            "stderr",
+                            &msg,
+                        );
+                        log_lines.push(msg);
+                        continue;
+                    }
                 }
+            } else {
+                folder_template.to_string()
+            };
+
+            let path = Path::new(&folder_path);
+
+            if !path.exists() {
+                let msg = format!("{}: pasta não existe — pulando", description);
+                emit_health_event(&app_handle, "temp_cleanup_progress", "stdout", &msg);
+                log_lines.push(msg);
+                continue;
             }
+
+            // Calcula tamanho antes da remoção para relatório preciso
+            let size_before = dir_size_bytes(path);
+            let msg = format!(
+                "Limpando {} ({}) — {:.1} MB",
+                description,
+                folder_path,
+                size_before as f64 / (1024.0 * 1024.0)
+            );
+            emit_health_event(&app_handle, "temp_cleanup_progress", "stdout", &msg);
+            log_lines.push(msg.clone());
+
+            let mut freed_this_folder: u64 = 0;
+            let errors = delete_dir_contents(path, &mut freed_this_folder);
+
+            total_freed += freed_this_folder;
+
+            let result_msg = format!(
+                "  → Liberados {:.1} MB de {}",
+                freed_this_folder as f64 / (1024.0 * 1024.0),
+                description
+            );
+            emit_health_event(&app_handle, "temp_cleanup_progress", "stdout", &result_msg);
+            log_lines.push(result_msg);
+
+            // Reporta erros (arquivos em uso) como informativos, não como falha
+            for err in &errors {
+                let err_msg = format!("  [ignorado] {}", err);
+                emit_health_event(&app_handle, "temp_cleanup_progress", "stderr", &err_msg);
+                log_lines.push(err_msg);
+            }
+            all_errors.extend(errors);
+        }
+
+        let duration = start.elapsed().as_secs();
+        let freed_mb = bytes_to_mb(total_freed);
+
+        let summary = format!(
+            "Total liberado: {:.1} MB ({} arquivos/pastas inacessíveis ignorados)",
+            total_freed as f64 / (1024.0 * 1024.0),
+            all_errors.len()
+        );
+        emit_health_event(
+            &app_handle,
+            "temp_cleanup_progress",
+            "completed",
+            &summary,
+        );
+        log_lines.push(summary.clone());
+
+        // Considera sucesso mesmo com erros parciais — arquivos em uso são esperados
+        let (status, message) = if total_freed > 0 {
+            (
+                CheckStatus::Success,
+                format!(
+                    "Limpeza concluída. {:.1} MB liberados{}.",
+                    total_freed as f64 / (1024.0 * 1024.0),
+                    if all_errors.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" ({} arquivo(s) em uso ignorado(s))", all_errors.len())
+                    }
+                ),
+            )
+        } else if all_errors.is_empty() {
+            (
+                CheckStatus::Success,
+                "Pastas temporárias já estavam vazias. Nada a limpar.".to_string(),
+            )
         } else {
-            folder_template.to_string()
+            (
+                CheckStatus::Warning,
+                format!(
+                    "Nenhum arquivo foi removido ({} arquivo(s) em uso). Tente fechar outros programas.",
+                    all_errors.len()
+                ),
+            )
         };
 
-        let path = Path::new(&folder_path);
-
-        if !path.exists() {
-            let msg = format!("{}: pasta não existe — pulando", description);
-            emit_health_event(&app_handle, "temp_cleanup_progress", "stdout", &msg);
-            log_lines.push(msg);
-            continue;
-        }
-
-        // Calcula tamanho antes da remoção para relatório preciso
-        let size_before = dir_size_bytes(path);
-        let msg = format!(
-            "Limpando {} ({}) — {:.1} MB",
-            description,
-            folder_path,
-            size_before as f64 / (1024.0 * 1024.0)
-        );
-        emit_health_event(&app_handle, "temp_cleanup_progress", "stdout", &msg);
-        log_lines.push(msg.clone());
-
-        let mut freed_this_folder: u64 = 0;
-        let errors = delete_dir_contents(path, &mut freed_this_folder);
-
-        total_freed += freed_this_folder;
-
-        let result_msg = format!(
-            "  → Liberados {:.1} MB de {}",
-            freed_this_folder as f64 / (1024.0 * 1024.0),
-            description
-        );
-        emit_health_event(&app_handle, "temp_cleanup_progress", "stdout", &result_msg);
-        log_lines.push(result_msg);
-
-        // Reporta erros (arquivos em uso) como informativos, não como falha
-        for err in &errors {
-            let err_msg = format!("  [ignorado] {}", err);
-            emit_health_event(&app_handle, "temp_cleanup_progress", "stderr", &err_msg);
-            log_lines.push(err_msg);
-        }
-        all_errors.extend(errors);
-    }
-
-    let duration = start.elapsed().as_secs();
-    let freed_mb = bytes_to_mb(total_freed);
-
-    let summary = format!(
-        "Total liberado: {:.1} MB ({} arquivos/pastas inacessíveis ignorados)",
-        total_freed as f64 / (1024.0 * 1024.0),
-        all_errors.len()
-    );
-    emit_health_event(&app_handle, "temp_cleanup_progress", "completed", &summary);
-    log_lines.push(summary.clone());
-
-    // Considera sucesso mesmo com erros parciais — arquivos em uso são esperados
-    let (status, message) = if total_freed > 0 {
-        (
-            CheckStatus::Success,
-            format!(
-                "Limpeza concluída. {:.1} MB liberados{}.",
-                total_freed as f64 / (1024.0 * 1024.0),
-                if all_errors.is_empty() {
-                    String::new()
-                } else {
-                    format!(" ({} arquivo(s) em uso ignorado(s))", all_errors.len())
-                }
-            ),
-        )
-    } else if all_errors.is_empty() {
-        (
-            CheckStatus::Success,
-            "Pastas temporárias já estavam vazias. Nada a limpar.".to_string(),
-        )
-    } else {
-        (
-            CheckStatus::Warning,
-            format!(
-                "Nenhum arquivo foi removido ({} arquivo(s) em uso). Tente fechar outros programas.",
-                all_errors.len()
-            ),
-        )
-    };
-
-    Ok(HealthCheckResult {
-        id: "temp_cleanup".to_string(),
-        name: "Limpeza de Arquivos Temporários".to_string(),
-        status,
-        message,
-        details: log_lines.join("\n"),
-        duration_seconds: duration,
-        space_freed_mb: Some(freed_mb),
-        timestamp: ts,
+        Ok(HealthCheckResult {
+            id: "temp_cleanup".to_string(),
+            name: "Limpeza de Arquivos Temporários".to_string(),
+            status,
+            message,
+            details: log_lines.join("\n"),
+            duration_seconds: duration,
+            space_freed_mb: Some(freed_mb),
+            timestamp: ts,
+        })
     })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
 }

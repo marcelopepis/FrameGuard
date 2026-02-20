@@ -1,42 +1,24 @@
 import { useState, useEffect } from 'react';
 import { Cpu, Layers, Database, Globe, ShieldCheck, ShieldOff } from 'lucide-react';
-import { getSystemSummary } from '../services/systemInfo';
-import type { SystemSummary } from '../services/systemInfo';
+import { getSystemInfo, getSystemSummary } from '../services/systemInfo';
+import type { SystemInfo, SystemSummary } from '../services/systemInfo';
 import styles from './Dashboard.module.css';
 
-// Dados mockados para CPU, GPU, RAM — serão substituídos por invoke() depois
-const MOCK = {
-  cpu: {
-    name: 'Intel Core i9-13900K',
-    usage: 42,
-  },
-  gpu: {
-    name: 'NVIDIA GeForce RTX 4080',
-    tempC: 65,
-  },
-  ram: {
-    totalGb: 32,
-    usedGb: 14.2,
-    usagePercent: 44,
-  },
-  status: {
-    gameMode: true,
-    hags: true,
-    vbs: false,
-  },
-};
-
 export default function Dashboard() {
-  const { cpu, gpu, ram, status } = MOCK;
-
-  // Dados reais do backend Rust
+  const [info, setInfo] = useState<SystemInfo | null>(null);
   const [summary, setSummary] = useState<SystemSummary | null>(null);
 
   useEffect(() => {
+    getSystemInfo()
+      .then(setInfo)
+      .catch((err) => console.error('[FrameGuard] get_system_info falhou:', err));
+
     getSystemSummary()
       .then(setSummary)
       .catch((err) => console.error('[FrameGuard] get_system_summary falhou:', err));
   }, []);
+
+  const loading = <span className={styles.loading}>Carregando…</span>;
 
   return (
     <div className={styles.page}>
@@ -56,10 +38,19 @@ export default function Dashboard() {
             </div>
             <span className={styles.cardLabel}>Processador</span>
           </div>
-          <p className={styles.cardValue}>{cpu.name}</p>
+          <p className={styles.cardValue}>{info ? info.cpu_name : loading}</p>
           <p className={styles.cardDetail}>
-            <span className={styles.highlight}>{cpu.usage}%</span>
-            {' '}de uso atual
+            {info ? (
+              <>
+                <span className={styles.highlight}>{info.cpu_usage_percent.toFixed(0)}%</span>
+                {' '}de uso atual
+              </>
+            ) : (
+              <>
+                <span className={styles.highlight}>—</span>
+                {' '}de uso atual
+              </>
+            )}
           </p>
         </div>
 
@@ -71,10 +62,13 @@ export default function Dashboard() {
             </div>
             <span className={styles.cardLabel}>Placa de Vídeo</span>
           </div>
-          <p className={styles.cardValue}>{gpu.name}</p>
+          <p className={styles.cardValue}>{info ? info.gpu_name : loading}</p>
           <p className={styles.cardDetail}>
-            <span className={styles.highlight}>{gpu.tempC}°C</span>
-            {' '}temperatura
+            {info ? (
+              <span className={styles.highlight}>
+                {info.cpu_cores > 0 ? `${info.cpu_cores} núcleos` : 'Placa de vídeo'}
+              </span>
+            ) : '—'}
           </p>
         </div>
 
@@ -86,15 +80,17 @@ export default function Dashboard() {
             </div>
             <span className={styles.cardLabel}>Memória RAM</span>
           </div>
-          <p className={styles.cardValue}>{ram.usedGb} GB</p>
-          <p className={styles.cardDetail}>de {ram.totalGb} GB total</p>
+          <p className={styles.cardValue}>{info ? `${info.ram_used_gb} GB` : loading}</p>
+          <p className={styles.cardDetail}>de {info ? info.ram_total_gb : '—'} GB total</p>
           <div className={styles.progressTrack}>
             <div
               className={styles.progressFill}
-              style={{ width: `${ram.usagePercent}%` }}
+              style={{ width: `${info ? info.ram_usage_percent : 0}%` }}
             />
           </div>
-          <p className={styles.progressLabel}>{ram.usagePercent}% em uso</p>
+          <p className={styles.progressLabel}>
+            {info ? `${info.ram_usage_percent.toFixed(0)}% em uso` : '—'}
+          </p>
         </div>
 
         {/* Sistema — dados reais via Tauri */}
@@ -106,7 +102,7 @@ export default function Dashboard() {
             <span className={styles.cardLabel}>Sistema</span>
           </div>
           <p className={styles.cardValue}>
-            {summary ? summary.os_version : <span className={styles.loading}>Carregando…</span>}
+            {summary ? summary.os_version : loading}
           </p>
           <p className={styles.cardDetail}>
             {summary ? summary.hostname : '—'}
@@ -121,9 +117,9 @@ export default function Dashboard() {
       <section className={styles.statusSection}>
         <h2 className={styles.sectionTitle}>Status Rápido</h2>
         <div className={styles.badges}>
-          <StatusBadge label="Game Mode" active={status.gameMode} />
-          <StatusBadge label="HAGS"      active={status.hags} />
-          <StatusBadge label="VBS"       active={status.vbs} />
+          <StatusBadge label="Game Mode" active={info?.game_mode_enabled ?? false} loading={!info} />
+          <StatusBadge label="HAGS"      active={info?.hags_enabled ?? false}       loading={!info} />
+          <StatusBadge label="VBS"       active={info?.vbs_enabled ?? false}        loading={!info} />
         </div>
       </section>
     </div>
@@ -147,14 +143,17 @@ function AdminTag({ elevated }: { elevated: boolean }) {
 interface StatusBadgeProps {
   label: string;
   active: boolean;
+  loading?: boolean;
 }
 
-function StatusBadge({ label, active }: StatusBadgeProps) {
+function StatusBadge({ label, active, loading }: StatusBadgeProps) {
   return (
-    <div className={`${styles.badge} ${active ? styles.badgeOn : styles.badgeOff}`}>
-      <span className={`${styles.dot} ${active ? styles.dotOn : styles.dotOff}`} />
+    <div className={`${styles.badge} ${loading ? '' : active ? styles.badgeOn : styles.badgeOff}`}>
+      <span className={`${styles.dot} ${loading ? '' : active ? styles.dotOn : styles.dotOff}`} />
       <span className={styles.badgeLabel}>{label}</span>
-      <span className={styles.badgeStatus}>{active ? 'Ativo' : 'Inativo'}</span>
+      <span className={styles.badgeStatus}>
+        {loading ? '…' : active ? 'Ativo' : 'Inativo'}
+      </span>
     </div>
   );
 }
