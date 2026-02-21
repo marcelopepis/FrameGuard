@@ -1,78 +1,19 @@
 // Página de Saúde do Sistema do FrameGuard.
 //
-// Agrupa as ações de manutenção e verificação do Windows em três seções:
-// DISM (integridade do Component Store), Verificação de Disco e Manutenção.
-// Cada ação exibe saída em tempo real via eventos Tauri com auto-scroll.
+// Define as ações de manutenção e verificação do Windows (DISM, SFC, ChkDsk,
+// TRIM) e delega toda a lógica de execução e renderização aos componentes
+// compartilhados.
 
-import { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import {
   ShieldCheck, Search, Wrench, Package,
   FileCheck, HardDrive, Zap,
-  Globe, ChevronDown, ChevronUp, Loader2,
-  CheckCircle2, XCircle, AlertTriangle,
-  Play, RefreshCw,
 } from 'lucide-react';
-import type { LucideProps } from 'lucide-react';
-import styles from './SystemHealth.module.css';
-import { useGlobalRunning } from '../contexts/RunningContext';
+import { ActionCard } from '../components/ActionCard/ActionCard';
+import { useActionRunner } from '../hooks/useActionRunner';
+import type { ActionMeta, Section } from '../types/health';
+import styles from '../components/ActionCard/ActionCard.module.css';
 
-// ── Tipos ──────────────────────────────────────────────────────────────────────
-
-interface CommandEvent {
-  event_type: 'started' | 'stdout' | 'stderr' | 'completed' | 'error';
-  data: string;
-  timestamp: string;
-}
-
-interface HealthCheckResult {
-  id: string;
-  name: string;
-  status: 'success' | 'warning' | 'error';
-  message: string;
-  details: string;
-  duration_seconds: number;
-  space_freed_mb: number | null;
-  timestamp: string;
-}
-
-interface LogLine {
-  type: string;
-  text: string;
-}
-
-interface ActionState {
-  running: boolean;
-  log: LogLine[];
-  progress: number | null;
-  lastResult: HealthCheckResult | null;
-  showLog: boolean;
-  showDetails: boolean;
-}
-
-interface ActionMeta {
-  id: string;
-  name: string;
-  Icon: React.ComponentType<LucideProps>;
-  description: string;
-  technicalDetails: string;
-  estimatedDuration: string;
-  eventChannel: string;
-  command: string;
-  invokeArgs?: Record<string, unknown>;
-  requiresInternet?: boolean;
-  requiresRestart?: boolean;
-  category: string;
-}
-
-interface Section {
-  id: string;
-  title: string;
-  subtitle: string;
-}
-
-// ── Metadados estáticos das ações ──────────────────────────────────────────────
+// ── Metadados estáticos das ações ───────────────────────────────────────────
 
 const SECTIONS: Section[] = [
   {
@@ -88,7 +29,7 @@ const SECTIONS: Section[] = [
 ];
 
 const ACTIONS: ActionMeta[] = [
-  // ── DISM ────────────────────────────────────────────────────────────────────
+  // ── DISM ──────────────────────────────────────────────────────────────────
   {
     id: 'dism_checkhealth',
     name: 'DISM CheckHealth',
@@ -162,7 +103,7 @@ O Windows 10/11 faz isso automaticamente via agendamento — este comando força
     category: 'dism',
   },
 
-  // ── Verificação ─────────────────────────────────────────────────────────────
+  // ── Verificação ───────────────────────────────────────────────────────────
   {
     id: 'sfc_scannow',
     name: 'SFC /scannow',
@@ -226,332 +167,16 @@ Apenas SSDs são processados — HDDs são detectados e ignorados automaticament
     command: 'run_ssd_trim',
     category: 'verificacao',
   },
-
 ];
 
-// ── Utilitários ────────────────────────────────────────────────────────────────
-
-/** Extrai percentual de linhas DISM como " 42.0%" → 42 */
-function extractProgress(text: string): number | null {
-  const m = text.trim().match(/^(\d+(?:\.\d+)?)%$/);
-  return m ? Math.min(100, parseFloat(m[1])) : null;
-}
-
-function formatDuration(secs: number): string {
-  if (secs < 1) return '< 1s';
-  if (secs < 60) return `${secs}s`;
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return s > 0 ? `${m}m ${s}s` : `${m}m`;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-function formatSpaceFreed(mb: number): string {
-  if (mb < 1024) return `${mb} MB`;
-  return `${(mb / 1024).toFixed(1)} GB`;
-}
-
-const LS_KEY = (id: string) => `frameguard:health:${id}`;
-
-function makeActionState(id: string): ActionState {
-  let lastResult: HealthCheckResult | null = null;
-  try {
-    const saved = localStorage.getItem(LS_KEY(id));
-    if (saved) lastResult = JSON.parse(saved) as HealthCheckResult;
-  } catch { /* ignora */ }
-  return { running: false, log: [], progress: null, lastResult, showLog: false, showDetails: false };
-}
-
-// ── Subcomponente ActionCard ────────────────────────────────────────────────────
-
-interface ActionCardProps {
-  meta: ActionMeta;
-  state: ActionState;
-  onRun: () => void;
-  onToggleLog: () => void;
-  onToggleDetails: () => void;
-  disabled?: boolean;
-}
-
-function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, disabled }: ActionCardProps) {
-  const logRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll para a última linha conforme o log cresce
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
-  }, [state.log]);
-
-  const { Icon } = meta;
-  const result = state.lastResult;
-
-  const StatusIcon = result
-    ? { success: CheckCircle2, warning: AlertTriangle, error: XCircle }[result.status]
-    : null;
-
-  const statusClass = result
-    ? { success: styles.statusSuccess, warning: styles.statusWarning, error: styles.statusError }[result.status]
-    : '';
-
-  return (
-    <div className={`${styles.actionCard} ${state.running ? styles.actionCardRunning : ''}`}>
-
-      {/* ── Topo: ícone + info ── */}
-      <div className={styles.cardTop}>
-        <div className={styles.cardIcon}>
-          <Icon size={16} />
-        </div>
-
-        <div className={styles.cardInfo}>
-          <div className={styles.cardName}>{meta.name}</div>
-          <p className={styles.cardDesc}>{meta.description}</p>
-
-          {/* Saiba mais */}
-          <button className={styles.btnDetails} onClick={onToggleDetails}>
-            {state.showDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            {state.showDetails ? 'Menos detalhes' : 'Saiba mais'}
-          </button>
-
-          {state.showDetails && (
-            <div className={styles.detailsPanel}>
-              <pre className={styles.detailsText}>{meta.technicalDetails}</pre>
-            </div>
-          )}
-
-          {/* Badges e duração estimada */}
-          <div className={styles.cardMeta}>
-            {meta.requiresInternet && (
-              <span className={styles.metaBadgeInternet}>
-                <Globe size={10} /> Requer internet
-              </span>
-            )}
-            {meta.requiresRestart && (
-              <span className={styles.metaBadgeRestart}>
-                <RefreshCw size={10} /> Pode reinicializar
-              </span>
-            )}
-            <span className={styles.metaDuration}>
-              ⏱ {meta.estimatedDuration}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Divisor ── */}
-      <div className={styles.cardDivider} />
-
-      {/* ── Rodapé: resultado + botões ── */}
-      <div className={styles.cardBottom}>
-        <div className={styles.resultArea}>
-          {state.running ? (
-            /* Estado de execução com barra de progresso */
-            <div className={styles.runningState}>
-              <div className={styles.progressTrack}>
-                {state.progress !== null ? (
-                  <div
-                    className={styles.progressFill}
-                    style={{ width: `${state.progress}%` }}
-                  />
-                ) : (
-                  <div className={styles.progressIndeterminate} />
-                )}
-              </div>
-              <span className={styles.progressLabel}>
-                {state.progress !== null ? `${state.progress.toFixed(0)}%` : 'Executando...'}
-              </span>
-            </div>
-          ) : result ? (
-            /* Resultado da última execução */
-            <div className={`${styles.resultRow} ${statusClass}`}>
-              {StatusIcon && <StatusIcon size={14} className={styles.resultIcon} />}
-              <div className={styles.resultContent}>
-                <span className={styles.resultMessage}>{result.message}</span>
-                <div className={styles.resultMeta}>
-                  <span className={styles.resultDuration}>
-                    {formatDuration(result.duration_seconds)}
-                  </span>
-                  {result.space_freed_mb !== null && result.space_freed_mb > 0 && (
-                    <span className={styles.resultSpace}>
-                      {formatSpaceFreed(result.space_freed_mb)} liberados
-                    </span>
-                  )}
-                  <span className={styles.resultTimestamp}>
-                    {formatDate(result.timestamp)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Estado inicial — nunca executado */
-            <span className={styles.idleState}>Nunca executado</span>
-          )}
-        </div>
-
-        {/* Controles direitos */}
-        <div className={styles.cardControls}>
-          {/* Botão "Ver log" (visível após execução) */}
-          {result && !state.running && (
-            <button className={styles.btnLog} onClick={onToggleLog}>
-              {state.showLog ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              {state.showLog ? 'Ocultar log' : 'Ver log'}
-            </button>
-          )}
-
-          {/* Botão Executar */}
-          {state.running ? (
-            <div className={styles.runningBadge}>
-              <Loader2 size={13} className={styles.spinner} />
-              <span>Executando</span>
-            </div>
-          ) : (
-            <div className={styles.btnRunWrap}>
-              <button className={styles.btnRun} onClick={!disabled ? onRun : undefined} disabled={disabled}>
-                <Play size={13} />
-                Executar
-              </button>
-              {disabled && (
-                <div className={styles.btnRunTip}>
-                  Outro comando em execução.<br />Aguarde a conclusão.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Área de log (tempo real ou histórico) ── */}
-      {(state.running || state.showLog) && state.log.length > 0 && (
-        <div className={styles.logArea} ref={logRef}>
-          {state.log.map((line, i) => (
-            <div
-              key={i}
-              className={`${styles.logLine} ${
-                line.type === 'stderr'    ? styles.logStderr  :
-                line.type === 'started'  ? styles.logSystem  :
-                line.type === 'completed'? styles.logSystem  :
-                line.type === 'error'    ? styles.logError   :
-                styles.logStdout
-              }`}
-            >
-              {line.type === 'started' ? `$ ${line.text}` : line.text}
-            </div>
-          ))}
-          {state.running && (
-            <div className={`${styles.logLine} ${styles.logCursor}`}>▋</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Componente principal ───────────────────────────────────────────────────────
+// ── Componente ──────────────────────────────────────────────────────────────
 
 export default function SystemHealth() {
-  const [states, setStates] = useState<Record<string, ActionState>>(() => {
-    const s: Record<string, ActionState> = {};
-    for (const a of ACTIONS) s[a.id] = makeActionState(a.id);
-    return s;
-  });
-
-  const { isRunning, startTask, endTask } = useGlobalRunning();
-
-  function updateAction(id: string, updates: Partial<ActionState>) {
-    setStates(prev => ({
-      ...prev,
-      [id]: { ...prev[id], ...updates },
-    }));
-  }
-
-  async function handleRun(meta: ActionMeta) {
-    startTask(meta.id);
-    updateAction(meta.id, { running: true, log: [], progress: null, showLog: true });
-
-    // Buffer local: acumula linhas entre flushes para evitar centenas de re-renders
-    // por segundo durante comandos longos como DISM ScanHealth (causa UI freeze).
-    let pendingLines: LogLine[] = [];
-    let pendingProgress: number | null = null;
-
-    // Flush a cada 80 ms → máximo ~12 re-renders/s independente do volume de output
-    const flushTimer = setInterval(() => {
-      if (pendingLines.length === 0 && pendingProgress === null) return;
-      const lines = pendingLines.splice(0);
-      const p = pendingProgress;
-      pendingProgress = null;
-      setStates(prev => {
-        const cur = prev[meta.id];
-        // Limita a 500 linhas para não sobrecarregar o DOM
-        const nextLog = lines.length > 0 ? [...cur.log, ...lines].slice(-500) : cur.log;
-        return {
-          ...prev,
-          [meta.id]: { ...cur, log: nextLog, progress: p !== null ? p : cur.progress },
-        };
-      });
-    }, 80);
-
-    const unlisten = await listen<CommandEvent>(meta.eventChannel, event => {
-      const { event_type, data } = event.payload;
-      pendingLines.push({ type: event_type, text: data });
-      if (event_type === 'stdout') {
-        const pct = extractProgress(data);
-        if (pct !== null) pendingProgress = pct;
-      }
-    });
-
-    try {
-      const result = await invoke<HealthCheckResult>(meta.command, meta.invokeArgs ?? {});
-      clearInterval(flushTimer);
-      const remaining = pendingLines.splice(0);
-      try { localStorage.setItem(LS_KEY(meta.id), JSON.stringify(result)); } catch { /* ignora */ }
-      setStates(prev => {
-        const cur = prev[meta.id];
-        const nextLog = remaining.length > 0 ? [...cur.log, ...remaining].slice(-500) : cur.log;
-        return {
-          ...prev,
-          [meta.id]: { ...cur, running: false, progress: null, lastResult: result, showLog: true, log: nextLog },
-        };
-      });
-    } catch (e) {
-      clearInterval(flushTimer);
-      const remaining = pendingLines.splice(0);
-      setStates(prev => {
-        const cur = prev[meta.id];
-        const nextLog = [...cur.log, ...remaining, { type: 'error', text: String(e) }].slice(-500);
-        return { ...prev, [meta.id]: { ...cur, running: false, progress: null, log: nextLog } };
-      });
-    } finally {
-      endTask(meta.id);
-      unlisten();
-    }
-  }
-
-  function toggleLog(id: string) {
-    setStates(prev => ({
-      ...prev,
-      [id]: { ...prev[id], showLog: !prev[id].showLog },
-    }));
-  }
-
-  function toggleDetails(id: string) {
-    setStates(prev => ({
-      ...prev,
-      [id]: { ...prev[id], showDetails: !prev[id].showDetails },
-    }));
-  }
-
-  // ── Render ──
+  const { states, handleRun, toggleLog, toggleDetails, isRunning } =
+    useActionRunner(ACTIONS, 'frameguard:health');
 
   return (
     <div className={styles.page}>
-
-      {/* ── Header ── */}
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Saúde do Sistema</h1>
@@ -559,7 +184,6 @@ export default function SystemHealth() {
         </div>
       </div>
 
-      {/* ── Seções de ações ── */}
       <div className={styles.sections}>
         {SECTIONS.map(section => {
           const sectionActions = ACTIONS.filter(a => a.category === section.id);
@@ -569,7 +193,6 @@ export default function SystemHealth() {
                 <span className={styles.sectionTitle}>{section.title}</span>
                 <span className={styles.sectionSubtitle}>{section.subtitle}</span>
               </div>
-
               <div className={styles.actionList}>
                 {sectionActions.map(meta => (
                   <ActionCard
