@@ -41,6 +41,10 @@ pub fn run() {
             optimizations::get_vbs_info,
             optimizations::disable_vbs,
             optimizations::enable_vbs,
+            // Otimizações — Restaurar Padrão Windows (sem backup)
+            optimizations::restore_wallpaper_default,
+            optimizations::restore_delivery_optimization_default,
+            optimizations::restore_reserved_storage_default,
             // Limpeza
             cleanup::analyze_cleanup,
             cleanup::run_cleanup,

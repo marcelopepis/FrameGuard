@@ -77,6 +77,8 @@ pub struct TweakInfo {
     pub has_backup: bool,
     /// Nível de risco do tweak
     pub risk_level: RiskLevel,
+    /// Descrição do valor padrão do Windows para exibição no botão "Restaurar Padrão"
+    pub default_value_description: String,
 }
 
 // ─── Tipos de status por tweak ────────────────────────────────────────────────
@@ -180,6 +182,7 @@ pub fn get_wallpaper_compression_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
+        default_value_description: "Padrão Windows: compressão JPEG em 85% (JPEGImportQuality ausente)".to_string(),
     })
 }
 
@@ -326,6 +329,7 @@ pub fn get_reserved_storage_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Medium,
+        default_value_description: "Padrão Windows: Armazenamento Reservado habilitado (~7 GB)".to_string(),
     })
 }
 
@@ -483,6 +487,7 @@ pub fn get_delivery_optimization_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
+        default_value_description: "Padrão Windows: P2P habilitado (DODownloadMode = 1)".to_string(),
     })
 }
 
@@ -611,6 +616,7 @@ pub fn get_hags_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
+        default_value_description: "Padrão Windows 11: HAGS ativo (HwSchMode = 2)".to_string(),
     })
 }
 
@@ -664,6 +670,7 @@ pub fn get_game_mode_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
+        default_value_description: "Padrão Windows: Game Mode ativo (AutoGameModeEnabled = 1)".to_string(),
     })
 }
 
@@ -720,6 +727,7 @@ pub fn get_vbs_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Medium,
+        default_value_description: "Padrão Windows 11: VBS ativa (EnableVirtualizationBasedSecurity = 1)".to_string(),
     })
 }
 
@@ -735,4 +743,67 @@ pub fn disable_vbs() -> Result<(), String> {
 #[tauri::command]
 pub fn enable_vbs() -> Result<(), String> {
     write_dword(Hive::LocalMachine, VBS_REG_PATH, VBS_REG_KEY, VBS_ENABLED)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Restaurar Padrão Windows — sem backup
+//
+// Esses comandos restauram o valor padrão conhecido do Windows para tweaks
+// que foram aplicados externamente (sem backup no FrameGuard). Não dependem
+// de entrada em backups.json. Permitem que o usuário desfaça o tweak e depois
+// use o fluxo normal "Aplicar" para criar o backup pela primeira vez.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Remove a chave `JPEGImportQuality`, restaurando a compressão padrão do Windows (85%).
+///
+/// Equivale ao estado de fábrica do Windows — o sistema aplica 85% internamente
+/// quando a chave está ausente.
+#[tauri::command]
+pub fn restore_wallpaper_default() -> Result<(), String> {
+    if key_exists(Hive::CurrentUser, WALLPAPER_REG_PATH, WALLPAPER_REG_KEY)? {
+        delete_value(Hive::CurrentUser, WALLPAPER_REG_PATH, WALLPAPER_REG_KEY)?;
+    }
+    Ok(())
+}
+
+/// Remove a chave `DODownloadMode`, restaurando o modo P2P padrão do Windows Update.
+///
+/// Com a chave ausente, o Windows usa o padrão implícito DODownloadMode = 1
+/// (P2P habilitado entre PCs da rede local).
+#[tauri::command]
+pub fn restore_delivery_optimization_default() -> Result<(), String> {
+    if key_exists(Hive::LocalMachine, DELIVERY_OPT_REG_PATH, DELIVERY_OPT_REG_KEY)? {
+        delete_value(Hive::LocalMachine, DELIVERY_OPT_REG_PATH, DELIVERY_OPT_REG_KEY)?;
+    }
+    Ok(())
+}
+
+/// Reabilita o Armazenamento Reservado via DISM sem precisar de backup.
+///
+/// Diferente de `enable_reserved_storage`, não chama `restore_from_backup` —
+/// pode ser usado quando o tweak foi aplicado externamente e não há entrada
+/// no backups.json do FrameGuard.
+#[tauri::command]
+pub fn restore_reserved_storage_default(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let result = run_command_with_progress(
+        &app_handle,
+        "dism-reserved-storage",
+        "powershell.exe",
+        &[
+            "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+            "-Command",
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; dism.exe /Online /Set-ReservedStorageState /State:Enabled",
+        ],
+        Some("dism.exe /Online /Set-ReservedStorageState /State:Enabled"),
+    )?;
+
+    if !result.success {
+        return Err(format!(
+            "DISM retornou código de erro {}: {}",
+            result.exit_code,
+            result.stderr.trim()
+        ));
+    }
+
+    Ok(())
 }

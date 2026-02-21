@@ -1,8 +1,8 @@
 // Página de Otimizações do FrameGuard.
 //
 // Exibe tweaks de performance agrupados por seção. Cada tweak tem botões
-// Aplicar/Reverter com feedback em tempo real e disable global quando
-// qualquer comando de longa duração estiver em execução em outra página.
+// Aplicar/Reverter/Restaurar Padrão com feedback em tempo real e disable global
+// quando qualquer comando de longa duração estiver em execução em outra página.
 
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -26,11 +26,12 @@ interface TweakInfo {
   last_applied: string | null;
   has_backup: boolean;
   risk_level: 'low' | 'medium' | 'high';
+  default_value_description: string;
 }
 
 interface CardState {
   loading: boolean;
-  loadingAction: 'applying' | 'reverting' | null;
+  loadingAction: 'applying' | 'reverting' | 'restoring' | null;
   feedback: { type: 'success' | 'error'; message: string } | null;
   showDetails: boolean;
   showRestartWarning: boolean;
@@ -75,9 +76,25 @@ const REVERT_COMMANDS: Record<string, string> = {
   disable_vbs:                   'enable_vbs',
 };
 
+// Tweaks cujo revert usa backup — quando aplicados sem backup do FrameGuard,
+// exibem "Restaurar Padrão" em vez de "Reverter".
+const BACKUP_BASED = new Set([
+  'disable_wallpaper_compression',
+  'disable_reserved_storage',
+  'disable_delivery_optimization',
+]);
+
+// Comandos para restaurar o padrão Windows sem precisar de backup.
+const RESTORE_DEFAULT_COMMANDS: Record<string, string> = {
+  disable_wallpaper_compression: 'restore_wallpaper_default',
+  disable_reserved_storage:      'restore_reserved_storage_default',
+  disable_delivery_optimization: 'restore_delivery_optimization_default',
+};
+
 // Tweaks baseados em DISM que emitem progresso via eventos Tauri
 const DISM_EVENT: Record<string, string> = {
   disable_reserved_storage: 'dism-reserved-storage',
+  restore_reserved_storage_default: 'dism-reserved-storage',
 };
 
 // Seções da página com IDs dos tweaks pertencentes a cada uma
@@ -203,12 +220,18 @@ interface TweakCardProps {
   state: CardState;
   onApply: () => void;
   onRevert: () => void;
+  onRestoreDefault: () => void;
   onToggleDetails: () => void;
   onDismissRestart: () => void;
   globalDisabled?: boolean;
 }
 
-function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismissRestart, globalDisabled }: TweakCardProps) {
+function TweakCard({
+  tweak, state,
+  onApply, onRevert, onRestoreDefault,
+  onToggleDetails, onDismissRestart,
+  globalDisabled,
+}: TweakCardProps) {
   const dismLogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -223,35 +246,109 @@ function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismiss
     high:   styles.riskHigh,
   }[tweak.risk_level];
 
-  // Botão de ação (Aplicar ou Reverter) com wrapper para tooltip quando bloqueado
+  // Determina se este tweak pode ficar "aplicado sem backup" (configurado externamente).
+  const isExternal = BACKUP_BASED.has(tweak.id) && tweak.is_applied && !tweak.has_backup;
+
+  // ── Badge de status ──
+  const statusLabel = !tweak.is_applied
+    ? 'Inativo'
+    : tweak.has_backup
+      ? 'Aplicado pelo FrameGuard'
+      : isExternal
+        ? 'Aplicado (externo)'
+        : 'Ativo';
+
+  const statusMod = tweak.is_applied ? styles.statusActive : styles.statusInactive;
+  const dotMod    = tweak.is_applied ? styles.dotActive    : styles.dotInactive;
+
+  // ── Botão de ação ──
   function ActionButton() {
     if (state.loading) {
       return (
         <div className={styles.loadingState}>
           <Loader2 size={15} className={styles.spinner} />
-          <span>{state.loadingAction === 'reverting' ? 'Revertendo...' : 'Aplicando...'}</span>
+          <span>
+            {state.loadingAction === 'reverting'  ? 'Revertendo...'  :
+             state.loadingAction === 'restoring'  ? 'Restaurando...' :
+             'Aplicando...'}
+          </span>
         </div>
       );
     }
 
-    const isApplyBtn = !tweak.is_applied;
-    const canRevert  = tweak.is_applied && tweak.has_backup;
+    const disabled = !!globalDisabled;
 
-    if (!isApplyBtn && !canRevert) {
-      return <span className={styles.noBackup}>Sem backup para reverter</span>;
+    // Estado 1: não aplicado → Aplicar
+    if (!tweak.is_applied) {
+      return (
+        <div className={styles.btnWrap}>
+          <button
+            className={styles.btnApply}
+            onClick={!disabled ? onApply : undefined}
+            disabled={disabled}
+          >
+            <Play size={13} />Aplicar
+          </button>
+          {disabled && (
+            <div className={styles.btnTip}>
+              Outro comando em execução.<br />Aguarde a conclusão.
+            </div>
+          )}
+        </div>
+      );
     }
 
-    const disabled = globalDisabled;
-    const btnClass = isApplyBtn ? styles.btnApply : styles.btnRevert;
-    const onClick  = isApplyBtn ? onApply : onRevert;
-    const label    = isApplyBtn
-      ? <><Play size={13} />Aplicar</>
-      : <><RotateCcw size={13} />Reverter</>;
+    // Estado 2: aplicado com backup → Reverter (usando backup)
+    if (tweak.has_backup) {
+      return (
+        <div className={styles.btnWrap}>
+          <button
+            className={styles.btnRevert}
+            onClick={!disabled ? onRevert : undefined}
+            disabled={disabled}
+          >
+            <RotateCcw size={13} />Reverter
+          </button>
+          {disabled && (
+            <div className={styles.btnTip}>
+              Outro comando em execução.<br />Aguarde a conclusão.
+            </div>
+          )}
+        </div>
+      );
+    }
 
+    // Estado 3a: aplicado sem backup, tweak com suporte a backup (configurado externamente)
+    // → Restaurar Padrão Windows
+    if (isExternal) {
+      return (
+        <div className={styles.btnWrap}>
+          <button
+            className={styles.btnRestoreDefault}
+            onClick={!disabled ? onRestoreDefault : undefined}
+            disabled={disabled}
+          >
+            <RotateCcw size={13} />Restaurar Padrão
+          </button>
+          {disabled && (
+            <div className={styles.btnTip}>
+              Outro comando em execução.<br />Aguarde a conclusão.
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Estado 3b: aplicado sem backup, tweak gamer (revert não precisa de backup)
+    // → Reverter normalmente
     return (
       <div className={styles.btnWrap}>
-        <button className={btnClass} onClick={!disabled ? onClick : undefined} disabled={disabled}>
-          {label}
+        <button
+          className={styles.btnRevert}
+          onClick={!disabled ? onRevert : undefined}
+          disabled={disabled}
+        >
+          <RotateCcw size={13} />Reverter
         </button>
         {disabled && (
           <div className={styles.btnTip}>
@@ -298,16 +395,23 @@ function TweakCard({ tweak, state, onApply, onRevert, onToggleDetails, onDismiss
           <div className={styles.lastApplied}>
             {tweak.last_applied
               ? `Última aplicação: ${formatDate(tweak.last_applied)}`
-              : 'Nunca aplicado'}
+              : 'Nunca aplicado pelo FrameGuard'}
           </div>
+
+          {/* Dica de padrão Windows visível quando aplicado externamente */}
+          {isExternal && (
+            <div className={styles.defaultValueHint}>
+              ↩ {tweak.default_value_description}
+            </div>
+          )}
         </div>
 
         {/* ── Lado direito ── */}
         <div className={styles.tweakRight}>
 
-          <div className={`${styles.statusBadge} ${tweak.is_applied ? styles.statusActive : styles.statusInactive}`}>
-            <span className={`${styles.statusDot} ${tweak.is_applied ? styles.dotActive : styles.dotInactive}`} />
-            {tweak.is_applied ? 'Ativo' : 'Inativo'}
+          <div className={`${styles.statusBadge} ${statusMod}`}>
+            <span className={`${styles.statusDot} ${dotMod}`} />
+            {statusLabel}
           </div>
 
           <ActionButton />
@@ -390,35 +494,31 @@ export default function Optimizations() {
     setTimeout(() => updateCard(id, { feedback: null }), 3000);
   }
 
-  async function handleApply(tweak: TweakInfo) {
-    updateCard(tweak.id, {
-      loading: true,
-      loadingAction: 'applying',
-      dismLog: [],
-      showRestartWarning: false,
+  // Subscreve ao canal DISM para o tweak/comando informado e retorna unlisten
+  async function subscribeDism(tweakId: string, eventKey?: string): Promise<(() => void) | null> {
+    const key = eventKey ?? tweakId;
+    if (!(key in DISM_EVENT)) return null;
+    return listen<string>(DISM_EVENT[key], event => {
+      setCardStates(prev => ({
+        ...prev,
+        [tweakId]: {
+          ...prev[tweakId],
+          dismLog: [...prev[tweakId].dismLog, event.payload],
+        },
+      }));
     });
+  }
 
-    let unlisten: (() => void) | null = null;
-    if (tweak.id in DISM_EVENT) {
-      unlisten = await listen<string>(DISM_EVENT[tweak.id], event => {
-        setCardStates(prev => ({
-          ...prev,
-          [tweak.id]: {
-            ...prev[tweak.id],
-            dismLog: [...prev[tweak.id].dismLog, event.payload],
-          },
-        }));
-      });
-    }
+  async function handleApply(tweak: TweakInfo) {
+    updateCard(tweak.id, { loading: true, loadingAction: 'applying', dismLog: [], showRestartWarning: false });
+    const unlisten = await subscribeDism(tweak.id);
 
     try {
       await invoke(APPLY_COMMANDS[tweak.id]);
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
       showFeedback(tweak.id, 'success', 'Tweak aplicado com sucesso!');
-      if (tweak.requires_restart) {
-        updateCard(tweak.id, { showRestartWarning: true });
-      }
+      if (tweak.requires_restart) updateCard(tweak.id, { showRestartWarning: true });
     } catch (e) {
       showFeedback(tweak.id, 'error', String(e));
     } finally {
@@ -428,31 +528,33 @@ export default function Optimizations() {
   }
 
   async function handleRevert(tweak: TweakInfo) {
-    updateCard(tweak.id, {
-      loading: true,
-      loadingAction: 'reverting',
-      dismLog: [],
-      showRestartWarning: false,
-    });
-
-    let unlisten: (() => void) | null = null;
-    if (tweak.id in DISM_EVENT) {
-      unlisten = await listen<string>(DISM_EVENT[tweak.id], event => {
-        setCardStates(prev => ({
-          ...prev,
-          [tweak.id]: {
-            ...prev[tweak.id],
-            dismLog: [...prev[tweak.id].dismLog, event.payload],
-          },
-        }));
-      });
-    }
+    updateCard(tweak.id, { loading: true, loadingAction: 'reverting', dismLog: [], showRestartWarning: false });
+    const unlisten = await subscribeDism(tweak.id);
 
     try {
       await invoke(REVERT_COMMANDS[tweak.id]);
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
       showFeedback(tweak.id, 'success', 'Tweak revertido com sucesso!');
+    } catch (e) {
+      showFeedback(tweak.id, 'error', String(e));
+    } finally {
+      unlisten?.();
+      updateCard(tweak.id, { loading: false, loadingAction: null });
+    }
+  }
+
+  async function handleRestoreDefault(tweak: TweakInfo) {
+    updateCard(tweak.id, { loading: true, loadingAction: 'restoring', dismLog: [], showRestartWarning: false });
+    const cmd = RESTORE_DEFAULT_COMMANDS[tweak.id];
+    const unlisten = await subscribeDism(tweak.id, cmd);
+
+    try {
+      await invoke(cmd);
+      const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
+      setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
+      showFeedback(tweak.id, 'success', 'Padrão Windows restaurado. Agora você pode aplicar novamente com backup.');
+      if (tweak.requires_restart) updateCard(tweak.id, { showRestartWarning: true });
     } catch (e) {
       showFeedback(tweak.id, 'error', String(e));
     } finally {
@@ -536,6 +638,7 @@ export default function Optimizations() {
                       state={state}
                       onApply={() => handleApply(tweak)}
                       onRevert={() => handleRevert(tweak)}
+                      onRestoreDefault={() => handleRestoreDefault(tweak)}
                       onToggleDetails={() => toggleDetails(tweak.id)}
                       onDismissRestart={() => updateCard(tweak.id, { showRestartWarning: false })}
                       globalDisabled={isRunning && !state.loading}
