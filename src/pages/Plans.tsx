@@ -14,6 +14,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import styles from './Plans.module.css';
+import { useToast } from '../contexts/ToastContext';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -218,6 +219,8 @@ export default function Plans() {
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  const { showToast } = useToast();
+
   // Modal de execução
   const [executingPlan, setExecutingPlan] = useState<Plan | null>(null);
   const [execState, setExecState] = useState<ExecState | null>(null);
@@ -257,11 +260,14 @@ export default function Plans() {
       setConfirmDeleteId(planId);
       return;
     }
+    const planName = plans.find(p => p.id === planId)?.name;
     setConfirmDeleteId(null);
     try {
       await invoke('delete_plan', { planId });
       await loadPlans();
+      showToast('success', 'Plano excluído', planName);
     } catch (err) {
+      showToast('error', 'Erro ao excluir plano', String(err));
       console.error('[Plans] Erro ao excluir plano:', err);
     }
   }
@@ -275,12 +281,15 @@ export default function Plans() {
     try {
       if (planId) {
         await invoke('update_plan', { planId, name, description, items });
+        showToast('success', 'Plano atualizado', name);
       } else {
         await invoke('create_plan', { name, description, items });
+        showToast('success', 'Plano criado', name);
       }
       await loadPlans();
       setView('list');
     } catch (err) {
+      showToast('error', 'Erro ao salvar plano', String(err));
       console.error('[Plans] Erro ao salvar plano:', err);
     }
   }

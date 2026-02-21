@@ -10,10 +10,11 @@ import { openPath } from '@tauri-apps/plugin-opener';
 import { dataDir as getDataDir } from '@tauri-apps/api/path';
 import {
   Download, Upload, FolderOpen, Shield, Github,
-  ChevronDown, ChevronUp, CheckCircle2, XCircle,
+  ChevronDown, ChevronUp,
   Loader2, RefreshCw, MonitorCog, Database, Info,
 } from 'lucide-react';
 import styles from './Settings.module.css';
+import { useToast } from '../contexts/ToastContext';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -146,23 +147,20 @@ export default function Settings() {
   const [dataDirPath, setDataDirPath] = useState('');
 
   // ── Estado: Exportar
-  type ExportStatus = 'idle' | 'loading' | 'success' | 'error';
-  const [exportStatus, setExportStatus] = useState<ExportStatus>('idle');
-  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
-  const [exportError,  setExportError ] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
 
   // ── Estado: Importar
-  type ImportStep = 'idle' | 'selecting' | 'preview' | 'importing' | 'done' | 'error';
-  const [importStep,   setImportStep  ] = useState<ImportStep>('idle');
-  const [importInfo,   setImportInfo  ] = useState<FgFileInfo | null>(null);
-  const [importMode,   setImportMode  ] = useState<'replace' | 'merge'>('merge');
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
-  const [importError,  setImportError ] = useState('');
+  type ImportStep = 'idle' | 'selecting' | 'preview' | 'importing';
+  const [importStep, setImportStep] = useState<ImportStep>('idle');
+  const [importInfo, setImportInfo] = useState<FgFileInfo | null>(null);
+  const [importMode, setImportMode] = useState<'replace' | 'merge'>('merge');
 
   // ── Estado: Backups
   const [showBackups,    setShowBackups   ] = useState(false);
   const [backups,        setBackups       ] = useState<TweakInfo[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
+
+  const { showToast } = useToast();
 
   // ── Inicialização: carrega caminho da pasta de dados
   useEffect(() => {
@@ -178,18 +176,17 @@ export default function Settings() {
 
   // ── Exportar
   async function handleExport() {
-    setExportStatus('loading');
-    setExportError('');
-    setExportResult(null);
+    setExportLoading(true);
     try {
       const result = await invoke<ExportResult>('export_config');
-      setExportResult(result);
-      setExportStatus('success');
+      showToast('success', 'Exportado com sucesso!',
+        `${result.backup_count} backup(s) · ${result.plan_count} plano(s) · ${formatBytes(result.file_size_bytes)}`);
     } catch (e) {
       const msg = String(e);
-      if (msg.toLowerCase().includes('cancelad')) { setExportStatus('idle'); return; }
-      setExportError(msg);
-      setExportStatus('error');
+      if (msg.toLowerCase().includes('cancelad')) return;
+      showToast('error', 'Erro ao exportar', msg);
+    } finally {
+      setExportLoading(false);
     }
   }
 
@@ -197,7 +194,6 @@ export default function Settings() {
   async function handleSelectFile() {
     setImportStep('selecting');
     setImportInfo(null);
-    setImportError('');
     try {
       const selected = await openFileDialog({
         multiple: false,
@@ -211,32 +207,33 @@ export default function Settings() {
       setImportInfo(info);
       setImportStep('preview');
     } catch (e) {
-      setImportError(String(e));
-      setImportStep('error');
+      showToast('error', 'Erro ao carregar arquivo', String(e));
+      setImportStep('idle');
     }
   }
 
   // ── Importar: passo 2 — confirmar (abre diálogo nativo do Rust para selecionar novamente)
   async function handleConfirmImport() {
     setImportStep('importing');
-    setImportError('');
     try {
       const result = await invoke<ImportResult>('import_config', { mode: importMode });
-      setImportResult(result);
-      setImportStep('done');
+      const detail = `${result.backups_imported} backup(s) · ${result.plans_imported} plano(s) · modo: ${result.mode}`;
+      showToast('success', 'Importação concluída!', detail);
+      if (result.warnings.length > 0) {
+        showToast('warning', 'Avisos na importação', result.warnings.join('; '));
+      }
+      resetImport();
     } catch (e) {
       const msg = String(e);
       if (msg.toLowerCase().includes('cancelad')) { setImportStep('preview'); return; }
-      setImportError(msg);
-      setImportStep('error');
+      showToast('error', 'Erro ao importar', msg);
+      resetImport();
     }
   }
 
   function resetImport() {
     setImportStep('idle');
     setImportInfo(null);
-    setImportResult(null);
-    setImportError('');
   }
 
   // ── Ver Backups
@@ -350,7 +347,7 @@ export default function Settings() {
                 </span>
               </div>
               <div className={styles.rowAction}>
-                {exportStatus === 'loading' ? (
+                {exportLoading ? (
                   <span className={styles.actionBusy}>
                     <Loader2 size={13} className={styles.spinner} /> Exportando...
                   </span>
@@ -361,27 +358,6 @@ export default function Settings() {
                 )}
               </div>
             </div>
-
-            {exportStatus === 'success' && exportResult && (
-              <div className={styles.feedbackSuccess}>
-                <CheckCircle2 size={13} />
-                <div className={styles.feedbackContent}>
-                  <span>Exportado com sucesso!</span>
-                  <span className={styles.feedbackDetail}>
-                    {exportResult.backup_count} backup(s) · {exportResult.plan_count} plano(s) · {formatBytes(exportResult.file_size_bytes)}
-                  </span>
-                  <span className={styles.feedbackPath}>{exportResult.file_path}</span>
-                </div>
-                <button className={styles.btnClose} onClick={() => setExportStatus('idle')}>✕</button>
-              </div>
-            )}
-            {exportStatus === 'error' && (
-              <div className={styles.feedbackError}>
-                <XCircle size={13} />
-                <span>{exportError}</span>
-                <button className={styles.btnClose} onClick={() => setExportStatus('idle')}>✕</button>
-              </div>
-            )}
           </div>
 
           {/* ── Importar Configurações ── */}
@@ -404,11 +380,6 @@ export default function Settings() {
                   <span className={styles.actionBusy}>
                     <Loader2 size={13} className={styles.spinner} /> Aguardando...
                   </span>
-                )}
-                {(importStep === 'done' || importStep === 'error') && (
-                  <button className={styles.btnSecondary} onClick={resetImport}>
-                    <RefreshCw size={12} /> Novo arquivo
-                  </button>
                 )}
               </div>
             </div>
@@ -509,29 +480,6 @@ export default function Settings() {
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {importStep === 'done' && importResult && (
-              <div className={styles.feedbackSuccess}>
-                <CheckCircle2 size={13} />
-                <div className={styles.feedbackContent}>
-                  <span>Importação concluída!</span>
-                  <span className={styles.feedbackDetail}>
-                    {importResult.backups_imported} backup(s) · {importResult.plans_imported} plano(s) · modo: {importResult.mode}
-                  </span>
-                  {importResult.warnings.length > 0 && (
-                    <span className={styles.feedbackWarn}>
-                      Avisos: {importResult.warnings.join('; ')}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-            {importStep === 'error' && (
-              <div className={styles.feedbackError}>
-                <XCircle size={13} />
-                <span>{importError}</span>
               </div>
             )}
           </div>

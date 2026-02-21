@@ -8,11 +8,12 @@ import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import {
-  ChevronDown, ChevronUp, Loader2, CheckCircle2,
-  XCircle, AlertTriangle, RotateCcw, Play, RefreshCw, X,
+  ChevronDown, ChevronUp, Loader2,
+  XCircle, RotateCcw, Play, RefreshCw,
 } from 'lucide-react';
 import styles from './Optimizations.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
+import { useToast } from '../contexts/ToastContext';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -32,9 +33,7 @@ interface TweakInfo {
 interface CardState {
   loading: boolean;
   loadingAction: 'applying' | 'reverting' | 'restoring' | null;
-  feedback: { type: 'success' | 'error'; message: string } | null;
   showDetails: boolean;
-  showRestartWarning: boolean;
   dismLog: string[];
 }
 
@@ -206,9 +205,7 @@ function makeCardState(): CardState {
   return {
     loading: false,
     loadingAction: null,
-    feedback: null,
     showDetails: false,
-    showRestartWarning: false,
     dismLog: [],
   };
 }
@@ -222,14 +219,13 @@ interface TweakCardProps {
   onRevert: () => void;
   onRestoreDefault: () => void;
   onToggleDetails: () => void;
-  onDismissRestart: () => void;
   globalDisabled?: boolean;
 }
 
 function TweakCard({
   tweak, state,
   onApply, onRevert, onRestoreDefault,
-  onToggleDetails, onDismissRestart,
+  onToggleDetails,
   globalDisabled,
 }: TweakCardProps) {
   const dismLogRef = useRef<HTMLDivElement>(null);
@@ -415,15 +411,6 @@ function TweakCard({
           </div>
 
           <ActionButton />
-
-          {state.feedback && (
-            <div className={`${styles.feedback} ${state.feedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackError}`}>
-              {state.feedback.type === 'success'
-                ? <CheckCircle2 size={13} />
-                : <XCircle size={13} />}
-              <span>{state.feedback.message}</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -433,17 +420,6 @@ function TweakCard({
           {state.dismLog.map((line, i) => (
             <div key={i} className={styles.dismLine}>{line}</div>
           ))}
-        </div>
-      )}
-
-      {/* ── Aviso de reinicialização necessária ── */}
-      {state.showRestartWarning && (
-        <div className={styles.restartWarning}>
-          <AlertTriangle size={14} />
-          <span>Este tweak só terá efeito após reinicialização do Windows.</span>
-          <button className={styles.btnDismissWarning} onClick={onDismissRestart} title="Fechar aviso">
-            <X size={12} />
-          </button>
         </div>
       )}
     </div>
@@ -459,6 +435,7 @@ export default function Optimizations() {
   const [cardStates, setCardStates] = useState<Record<string, CardState>>({});
 
   const { isRunning } = useGlobalRunning();
+  const { showToast } = useToast();
 
   async function loadTweaks() {
     setPageLoading(true);
@@ -489,11 +466,6 @@ export default function Optimizations() {
     }));
   }
 
-  function showFeedback(id: string, type: 'success' | 'error', message: string) {
-    updateCard(id, { feedback: { type, message } });
-    setTimeout(() => updateCard(id, { feedback: null }), 3000);
-  }
-
   // Subscreve ao canal DISM para o tweak/comando informado e retorna unlisten
   async function subscribeDism(tweakId: string, eventKey?: string): Promise<(() => void) | null> {
     const key = eventKey ?? tweakId;
@@ -510,17 +482,20 @@ export default function Optimizations() {
   }
 
   async function handleApply(tweak: TweakInfo) {
-    updateCard(tweak.id, { loading: true, loadingAction: 'applying', dismLog: [], showRestartWarning: false });
+    updateCard(tweak.id, { loading: true, loadingAction: 'applying', dismLog: [] });
     const unlisten = await subscribeDism(tweak.id);
 
     try {
       await invoke(APPLY_COMMANDS[tweak.id]);
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
-      showFeedback(tweak.id, 'success', 'Tweak aplicado com sucesso!');
-      if (tweak.requires_restart) updateCard(tweak.id, { showRestartWarning: true });
+      showToast('success', 'Tweak aplicado!', tweak.name);
+      if (tweak.requires_restart) {
+        showToast('warning', 'Reinicialização necessária',
+          `"${tweak.name}" só terá efeito após reiniciar o Windows.`, 0);
+      }
     } catch (e) {
-      showFeedback(tweak.id, 'error', String(e));
+      showToast('error', 'Erro ao aplicar tweak', String(e));
     } finally {
       unlisten?.();
       updateCard(tweak.id, { loading: false, loadingAction: null });
@@ -528,16 +503,16 @@ export default function Optimizations() {
   }
 
   async function handleRevert(tweak: TweakInfo) {
-    updateCard(tweak.id, { loading: true, loadingAction: 'reverting', dismLog: [], showRestartWarning: false });
+    updateCard(tweak.id, { loading: true, loadingAction: 'reverting', dismLog: [] });
     const unlisten = await subscribeDism(tweak.id);
 
     try {
       await invoke(REVERT_COMMANDS[tweak.id]);
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
-      showFeedback(tweak.id, 'success', 'Tweak revertido com sucesso!');
+      showToast('success', 'Tweak revertido!', tweak.name);
     } catch (e) {
-      showFeedback(tweak.id, 'error', String(e));
+      showToast('error', 'Erro ao reverter tweak', String(e));
     } finally {
       unlisten?.();
       updateCard(tweak.id, { loading: false, loadingAction: null });
@@ -545,7 +520,7 @@ export default function Optimizations() {
   }
 
   async function handleRestoreDefault(tweak: TweakInfo) {
-    updateCard(tweak.id, { loading: true, loadingAction: 'restoring', dismLog: [], showRestartWarning: false });
+    updateCard(tweak.id, { loading: true, loadingAction: 'restoring', dismLog: [] });
     const cmd = RESTORE_DEFAULT_COMMANDS[tweak.id];
     const unlisten = await subscribeDism(tweak.id, cmd);
 
@@ -553,10 +528,13 @@ export default function Optimizations() {
       await invoke(cmd);
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
-      showFeedback(tweak.id, 'success', 'Padrão Windows restaurado. Agora você pode aplicar novamente com backup.');
-      if (tweak.requires_restart) updateCard(tweak.id, { showRestartWarning: true });
+      showToast('success', 'Padrão restaurado', 'Agora você pode aplicar novamente com backup.');
+      if (tweak.requires_restart) {
+        showToast('warning', 'Reinicialização necessária',
+          `"${tweak.name}" só terá efeito após reiniciar o Windows.`, 0);
+      }
     } catch (e) {
-      showFeedback(tweak.id, 'error', String(e));
+      showToast('error', 'Erro ao restaurar padrão', String(e));
     } finally {
       unlisten?.();
       updateCard(tweak.id, { loading: false, loadingAction: null });
@@ -640,7 +618,6 @@ export default function Optimizations() {
                       onRevert={() => handleRevert(tweak)}
                       onRestoreDefault={() => handleRestoreDefault(tweak)}
                       onToggleDetails={() => toggleDetails(tweak.id)}
-                      onDismissRestart={() => updateCard(tweak.id, { showRestartWarning: false })}
                       globalDisabled={isRunning && !state.loading}
                     />
                   );

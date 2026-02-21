@@ -2,6 +2,7 @@ import { BrowserRouter, useLocation, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import { Dashboard, Optimizations, Cleanup, HealthCheck, Plans, Settings } from './pages';
 import { GlobalRunningProvider } from './contexts/RunningContext';
+import { ToastProvider } from './contexts/ToastContext';
 
 // Todas as rotas declaradas aqui. A ordem determina a renderização no DOM.
 const ROUTES = [
@@ -36,7 +37,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <GlobalRunningProvider>
-        <Pages />
+        <ToastProvider>
+          <Pages />
+        </ToastProvider>
       </GlobalRunningProvider>
     </BrowserRouter>
   );
