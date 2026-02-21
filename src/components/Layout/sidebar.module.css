@@ -117,6 +117,15 @@
   line-height: 1;
 }
 
+/* ─── Separador visual entre grupos de navegação ────────── */
+
+.navSeparator {
+  height: 1px;
+  background: var(--color-border);
+  margin: 7px 12px;
+  opacity: 0.6;
+}
+
 /* ─── Rodapé ─────────────────────────────────────────────── */
 
 .footer {

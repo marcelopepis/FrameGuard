@@ -1,6 +1,6 @@
 import { BrowserRouter, useLocation, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import { Dashboard, Optimizations, Cleanup, HealthCheck, Plans, Settings } from './pages';
+import { Dashboard, Optimizations, Privacy, Maintenance, Services, Plans, Settings } from './pages';
 import { GlobalRunningProvider } from './contexts/RunningContext';
 import { ToastProvider } from './contexts/ToastContext';
 
@@ -8,8 +8,9 @@ import { ToastProvider } from './contexts/ToastContext';
 const ROUTES = [
   { path: '/',              Page: Dashboard },
   { path: '/optimizations', Page: Optimizations },
-  { path: '/cleanup',       Page: Cleanup },
-  { path: '/health',        Page: HealthCheck },
+  { path: '/privacy',       Page: Privacy },
+  { path: '/maintenance',   Page: Maintenance },
+  { path: '/services',      Page: Services },
   { path: '/plans',         Page: Plans },
   { path: '/settings',      Page: Settings },
 ];

@@ -15,7 +15,8 @@
       "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\marce\\\\AppData\\\\Local\\\\Temp\\\\check_imports.ps1\")",
       "Bash(cargo build:*)",
       "Bash(cargo check:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(printf:*)"
     ]
   }
 }

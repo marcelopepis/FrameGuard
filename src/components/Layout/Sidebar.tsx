@@ -1,11 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Zap,
-  Trash2,
-  Activity,
-  ListChecks,
-  Settings,
+  LayoutDashboard, Zap, ShieldAlert, Wrench, Server, ClipboardList, Settings,
   Shield,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -13,20 +8,19 @@ import styles from './sidebar.module.css';
 
 const APP_VERSION = '0.1.0';
 
-interface NavItem {
-  path: string;
-  label: string;
-  Icon: LucideIcon;
-  end?: boolean;
-}
+type NavItemDef =
+  | { kind: 'link'; path: string; label: string; Icon: LucideIcon; end?: boolean }
+  | { kind: 'sep' };
 
-const navItems: NavItem[] = [
-  { path: '/',               label: 'Dashboard',       Icon: LayoutDashboard, end: true },
-  { path: '/optimizations',  label: 'Otimizações',     Icon: Zap },
-  { path: '/cleanup',        label: 'Limpeza',         Icon: Trash2 },
-  { path: '/health',         label: 'Saúde do Sistema', Icon: Activity },
-  { path: '/plans',          label: 'Planos',           Icon: ListChecks },
-  { path: '/settings',       label: 'Configurações',    Icon: Settings },
+const ITEMS: NavItemDef[] = [
+  { kind: 'link', path: '/',              label: 'Dashboard',     Icon: LayoutDashboard, end: true },
+  { kind: 'link', path: '/optimizations', label: 'Otimizações',   Icon: Zap },
+  { kind: 'link', path: '/privacy',       label: 'Privacidade',   Icon: ShieldAlert },
+  { kind: 'link', path: '/maintenance',   label: 'Manutenção',    Icon: Wrench },
+  { kind: 'link', path: '/services',      label: 'Serviços',      Icon: Server },
+  { kind: 'link', path: '/plans',         label: 'Planos',        Icon: ClipboardList },
+  { kind: 'sep' },
+  { kind: 'link', path: '/settings',      label: 'Configurações', Icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -40,19 +34,25 @@ export default function Sidebar() {
 
       {/* Navegação principal */}
       <nav className={styles.nav}>
-        {navItems.map(({ path, label, Icon, end }) => (
-          <NavLink
-            key={path}
-            to={path}
-            end={end}
-            className={({ isActive }) =>
-              `${styles.navItem}${isActive ? ` ${styles.navItemActive}` : ''}`
-            }
-          >
-            <Icon size={17} className={styles.navIcon} strokeWidth={2} />
-            <span className={styles.navLabel}>{label}</span>
-          </NavLink>
-        ))}
+        {ITEMS.map((item, i) => {
+          if (item.kind === 'sep') {
+            return <div key={i} className={styles.navSeparator} />;
+          }
+          const { path, label, Icon, end } = item;
+          return (
+            <NavLink
+              key={path}
+              to={path}
+              end={end}
+              className={({ isActive }) =>
+                `${styles.navItem}${isActive ? ` ${styles.navItemActive}` : ''}`
+              }
+            >
+              <Icon size={17} className={styles.navIcon} strokeWidth={2} />
+              <span className={styles.navLabel}>{label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Rodapé com versão */}

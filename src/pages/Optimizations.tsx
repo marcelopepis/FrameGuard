@@ -4,12 +4,13 @@
 // Aplicar/Reverter/Restaurar Padrão com feedback em tempo real e disable global
 // quando qualquer comando de longa duração estiver em execução em outra página.
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import {
   ChevronDown, ChevronUp, Loader2,
   XCircle, RotateCcw, Play, RefreshCw,
+  ShieldCheck, ShieldAlert, ShieldQuestion,
 } from 'lucide-react';
 import styles from './Optimizations.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
@@ -27,6 +28,7 @@ interface TweakInfo {
   last_applied: string | null;
   has_backup: boolean;
   risk_level: 'low' | 'medium' | 'high';
+  evidence_level: 'proven' | 'plausible' | 'unproven';
   default_value_description: string;
 }
 
@@ -40,39 +42,105 @@ interface CardState {
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
 const TWEAK_IDS = [
-  'disable_wallpaper_compression',
-  'disable_reserved_storage',
-  'disable_delivery_optimization',
+  // GPU e Display
   'enable_hags',
+  'disable_game_dvr',
+  'disable_xbox_overlay',
+  'enable_msi_mode_gpu',
+  'disable_mpo',
+  'disable_nvidia_telemetry',
+  // Gaming
   'enable_game_mode',
   'disable_vbs',
+  'enable_timer_resolution',
+  'disable_mouse_acceleration',
+  'disable_fullscreen_optimizations',
+  // Energia e CPU
+  'enable_ultimate_performance',
+  'disable_power_throttling',
+  // Armazenamento
+  'disable_reserved_storage',
+  'disable_hibernation',
+  'disable_ntfs_last_access',
+  // Rede
+  'disable_delivery_optimization',
+  'disable_nagle',
+  // Visual e Experiência
+  'disable_wallpaper_compression',
+  'disable_sticky_keys',
+  'disable_bing_search',
 ] as const;
 
 const INFO_COMMANDS: Record<string, string> = {
-  disable_wallpaper_compression: 'get_wallpaper_compression_info',
-  disable_reserved_storage:      'get_reserved_storage_info',
-  disable_delivery_optimization: 'get_delivery_optimization_info',
-  enable_hags:                   'get_hags_info',
-  enable_game_mode:              'get_game_mode_info',
-  disable_vbs:                   'get_vbs_info',
+  enable_hags:                      'get_hags_info',
+  disable_game_dvr:                 'get_game_dvr_info',
+  disable_xbox_overlay:             'get_xbox_overlay_info',
+  enable_msi_mode_gpu:              'get_msi_mode_gpu_info',
+  disable_mpo:                      'get_mpo_info',
+  disable_nvidia_telemetry:         'get_nvidia_telemetry_info',
+  enable_game_mode:                 'get_game_mode_info',
+  disable_vbs:                      'get_vbs_info',
+  enable_timer_resolution:          'get_timer_resolution_info',
+  disable_mouse_acceleration:       'get_mouse_acceleration_info',
+  disable_fullscreen_optimizations: 'get_fullscreen_optimizations_info',
+  enable_ultimate_performance:      'get_ultimate_performance_info',
+  disable_power_throttling:         'get_power_throttling_info',
+  disable_reserved_storage:         'get_reserved_storage_info',
+  disable_hibernation:              'get_hibernation_info',
+  disable_ntfs_last_access:         'get_ntfs_last_access_info',
+  disable_delivery_optimization:    'get_delivery_optimization_info',
+  disable_nagle:                    'get_nagle_info',
+  disable_wallpaper_compression:    'get_wallpaper_compression_info',
+  disable_sticky_keys:              'get_sticky_keys_info',
+  disable_bing_search:              'get_bing_search_info',
 };
 
 const APPLY_COMMANDS: Record<string, string> = {
-  disable_wallpaper_compression: 'disable_wallpaper_compression',
-  disable_reserved_storage:      'disable_reserved_storage',
-  disable_delivery_optimization: 'disable_delivery_optimization',
-  enable_hags:                   'enable_hags',
-  enable_game_mode:              'enable_game_mode',
-  disable_vbs:                   'disable_vbs',
+  enable_hags:                      'enable_hags',
+  disable_game_dvr:                 'disable_game_dvr',
+  disable_xbox_overlay:             'disable_xbox_overlay',
+  enable_msi_mode_gpu:              'enable_msi_mode_gpu',
+  disable_mpo:                      'disable_mpo',
+  disable_nvidia_telemetry:         'disable_nvidia_telemetry',
+  enable_game_mode:                 'enable_game_mode',
+  disable_vbs:                      'disable_vbs',
+  enable_timer_resolution:          'enable_timer_resolution',
+  disable_mouse_acceleration:       'disable_mouse_acceleration',
+  disable_fullscreen_optimizations: 'disable_fullscreen_optimizations',
+  enable_ultimate_performance:      'enable_ultimate_performance',
+  disable_power_throttling:         'disable_power_throttling',
+  disable_reserved_storage:         'disable_reserved_storage',
+  disable_hibernation:              'disable_hibernation',
+  disable_ntfs_last_access:         'disable_ntfs_last_access',
+  disable_delivery_optimization:    'disable_delivery_optimization',
+  disable_nagle:                    'disable_nagle',
+  disable_wallpaper_compression:    'disable_wallpaper_compression',
+  disable_sticky_keys:              'disable_sticky_keys',
+  disable_bing_search:              'disable_bing_search',
 };
 
 const REVERT_COMMANDS: Record<string, string> = {
-  disable_wallpaper_compression: 'revert_wallpaper_compression',
-  disable_reserved_storage:      'enable_reserved_storage',
-  disable_delivery_optimization: 'revert_delivery_optimization',
-  enable_hags:                   'disable_hags',
-  enable_game_mode:              'disable_game_mode',
-  disable_vbs:                   'enable_vbs',
+  enable_hags:                      'disable_hags',
+  disable_game_dvr:                 'revert_game_dvr',
+  disable_xbox_overlay:             'revert_xbox_overlay',
+  enable_msi_mode_gpu:              'disable_msi_mode_gpu',
+  disable_mpo:                      'revert_mpo',
+  disable_nvidia_telemetry:         'revert_nvidia_telemetry',
+  enable_game_mode:                 'disable_game_mode',
+  disable_vbs:                      'enable_vbs',
+  enable_timer_resolution:          'disable_timer_resolution',
+  disable_mouse_acceleration:       'revert_mouse_acceleration',
+  disable_fullscreen_optimizations: 'revert_fullscreen_optimizations',
+  enable_ultimate_performance:      'revert_ultimate_performance',
+  disable_power_throttling:         'revert_power_throttling',
+  disable_reserved_storage:         'enable_reserved_storage',
+  disable_hibernation:              'enable_hibernation',
+  disable_ntfs_last_access:         'revert_ntfs_last_access',
+  disable_delivery_optimization:    'revert_delivery_optimization',
+  disable_nagle:                    'revert_nagle',
+  disable_wallpaper_compression:    'revert_wallpaper_compression',
+  disable_sticky_keys:              'revert_sticky_keys',
+  disable_bing_search:              'revert_bing_search',
 };
 
 // Tweaks cujo revert usa backup — quando aplicados sem backup do FrameGuard,
@@ -99,28 +167,40 @@ const DISM_EVENT: Record<string, string> = {
 // Seções da página com IDs dos tweaks pertencentes a cada uma
 const SECTIONS = [
   {
-    id: 'geral',
-    title: 'Geral',
-    subtitle: 'Otimizações visuais e de experiência',
-    tweakIds: ['disable_wallpaper_compression'],
+    id: 'gpu_display',
+    title: 'GPU e Display',
+    subtitle: 'Otimizações de driver gráfico e pipeline de renderização',
+    tweakIds: ['enable_hags', 'disable_game_dvr', 'disable_xbox_overlay', 'enable_msi_mode_gpu', 'disable_mpo', 'disable_nvidia_telemetry'],
   },
   {
-    id: 'armazenamento',
+    id: 'gaming',
+    title: 'Gaming',
+    subtitle: 'Configurações de desempenho para jogos',
+    tweakIds: ['enable_game_mode', 'disable_vbs', 'enable_timer_resolution', 'disable_mouse_acceleration', 'disable_fullscreen_optimizations'],
+  },
+  {
+    id: 'energy_cpu',
+    title: 'Energia e CPU',
+    subtitle: 'Plano de energia e gerenciamento de processador',
+    tweakIds: ['enable_ultimate_performance', 'disable_power_throttling'],
+  },
+  {
+    id: 'storage',
     title: 'Armazenamento',
-    subtitle: 'Gerenciamento de espaço em disco',
-    tweakIds: ['disable_reserved_storage'],
+    subtitle: 'Gerenciamento de espaço e desempenho de disco',
+    tweakIds: ['disable_reserved_storage', 'disable_hibernation', 'disable_ntfs_last_access'],
   },
   {
-    id: 'windows_update',
-    title: 'Windows Update',
-    subtitle: 'Configurações de atualização e distribuição',
-    tweakIds: ['disable_delivery_optimization'],
+    id: 'network',
+    title: 'Rede',
+    subtitle: 'Configurações de conectividade e protocolo',
+    tweakIds: ['disable_delivery_optimization', 'disable_nagle'],
   },
   {
-    id: 'gamer',
-    title: 'Gamer',
-    subtitle: 'Otimizações de performance para jogos',
-    tweakIds: ['enable_hags', 'enable_game_mode', 'disable_vbs'],
+    id: 'visual',
+    title: 'Visual e Experiência',
+    subtitle: 'Ajustes visuais e de usabilidade',
+    tweakIds: ['disable_wallpaper_compression', 'disable_sticky_keys', 'disable_bing_search'],
   },
 ];
 
@@ -184,12 +264,200 @@ Registro: HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard
 Chave:    EnableVirtualizationBasedSecurity = 0  (desativado)  |  = 1  (ativado)
 
 Requer reinicialização. Em alguns sistemas, pode ser necessário desabilitar também na BIOS/UEFI.`,
+
+  disable_game_dvr:
+`O Xbox Game Bar mantém um buffer circular de gravação de vídeo em segundo plano (Game DVR), capturando os últimos segundos de gameplay mesmo sem o usuário solicitar.
+
+Este processo usa GPU encode (NVENC / VCE / Quick Sync) de forma contínua e consome RAM adicional para o buffer circular.
+
+Registro: HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR
+Chave:    AppCaptureEnabled = 0  (desabilitado)
+
+Também pode ser desabilitado via Configurações → Xbox Game Bar → Gravação em segundo plano.`,
+
+  disable_xbox_overlay:
+`O Xbox Game Bar é um overlay de sistema que permanece em memória para fornecer funcionalidades de captura, desempenho e social durante jogos.
+
+O processo GameBarPresenceWriter.exe consome recursos mesmo quando o overlay não está visível, verificando periodicamente se um jogo está em execução.
+
+Registro: HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\GameBar
+Chave:    UseNexusForGameBarEnabled = 0
+
+Atenção: desabilitar impede o uso de capturas de tela e clips via Win+G.`,
+
+  enable_msi_mode_gpu:
+`Message Signaled Interrupts (MSI) é um método de interrupção mais eficiente que o tradicional Line-Based Interrupts (LBI).
+
+Com MSI habilitado, a GPU envia interrupções diretamente pelo barramento PCIe sem precisar de linhas físicas de IRQ compartilhadas, reduzindo latência de interrupção e eliminando possíveis conflitos de IRQ com outros dispositivos.
+
+Registro: HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Enum\\PCI\\<ID da GPU>\\Device Parameters\\Interrupt Management\\MessageSignaledInterruptProperties
+Chave:    MSISupported = 1  (habilitado)  |  0  (desabilitado)
+
+Requer reinicialização. Verifique compatibilidade com seu driver antes de aplicar.`,
+
+  disable_mpo:
+`Multiplane Overlay (MPO) permite que a GPU componha múltiplos planos de imagem de forma independente, teóricamente reduzindo carga da GPU em cenários multi-janela.
+
+Na prática, MPO pode causar stuttering, tearing e artefatos visuais em configurações multi-monitor com determinados drivers NVIDIA e AMD — especialmente ao arrastar janelas sobrepostas.
+
+Registro: HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\Dwm
+Chave:    OverlayTestMode = 5  (desabilita MPO)
+
+Requer reinicialização para ter efeito.`,
+
+  disable_nvidia_telemetry:
+`O driver NVIDIA instala serviços de telemetria que coletam dados de uso e enviam periodicamente para servidores da NVIDIA.
+
+Serviços tipicamente afetados: NvTelemetryContainer, nvidia-reporter, NvContainerLocalSystem.
+
+Esses serviços realizam operações de I/O e rede em segundo plano que são desnecessárias para uso gamer.
+
+Nota: aplicável apenas em sistemas com GPU NVIDIA instalada. A ausência dos serviços não causa erro.`,
+
+  enable_timer_resolution:
+`O Windows usa por padrão um timer de interrupção com resolução de ~15,6 ms — o sistema "acorda" para verificar tarefas pendentes ~64 vezes por segundo.
+
+Reduzir para 1 ms faz o sistema verificar tarefas 1000x por segundo, melhorando responsividade e reduzindo variações de frametime (jitter).
+
+Implementação via registro:
+HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel
+Chave: GlobalTimerResolutionRequests = 1
+
+Nota: no Windows 11 23H2+, a resolução do timer passou a ser por processo — jogos modernos já solicitam alta resolução automaticamente.`,
+
+  disable_mouse_acceleration:
+`Enhanced Pointer Precision é a implementação Windows do algoritmo de aceleração de mouse — a velocidade do cursor aumenta de forma não-linear com a velocidade física do mouse.
+
+Para jogos FPS, esse comportamento é prejudicial: o músculo aprende a associar distância física de movimento com distância na tela, e a aceleração quebra essa correlação.
+
+Registro: HKEY_CURRENT_USER\\Control Panel\\Mouse
+Chaves:   MouseSpeed = 0
+          MouseThreshold1 = 0
+          MouseThreshold2 = 0
+
+Efeito imediato após logoff/logon ou via API SPI_SETMOUSE.`,
+
+  disable_fullscreen_optimizations:
+`"Otimizações de Tela Cheia" intercepta janelas exclusivas e as converte internamente em borderless windowed, permitindo alt-tab rápido e funcionamento de overlays.
+
+Benefício: alt-tab mais rápido, sobreposições (Discord, Steam) funcionam melhor.
+Desvantagem: adiciona camada de composição DWM que pode aumentar latência de input.
+
+Resultado varia: jogos Vulkan/DX12 nativos têm impacto mínimo. Jogos DX11 antigos com modo exclusivo real podem se beneficiar da desativação.
+
+Registro (por executável): HKEY_CURRENT_USER\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers
+Valor: DISABLEDXMAXIMIZEDWINDOWEDMODE`,
+
+  enable_ultimate_performance:
+`O plano "Desempenho Máximo" foi introduzido no Windows 10 1803 para workstations e é oculto por padrão no Windows 11 Home/Pro.
+
+Diferenças em relação ao plano Alto Desempenho:
+  - Desabilita C-states profundos do processador (sem deep sleep)
+  - Remove latência de transição entre estados de energia da CPU
+  - Mantém processador em frequência máxima continuamente
+
+Ativação via powercfg:
+powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61
+
+Atenção: aumenta consumo de energia e temperatura em repouso. Não recomendado para notebooks na bateria.`,
+
+  disable_power_throttling:
+`Power Throttling é um recurso do Windows 10+ que limita a alocação de CPU para processos classificados como "background" pelo sistema de estimativa de energia (EIGEN).
+
+O problema para gamers: o Windows pode classificar incorretamente processos relacionados a jogos, launchers ou streaming como background e limitar sua CPU.
+
+Registro: HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power
+Chave:    PowerThrottlingOff = 1  (desabilitado)  |  ausente / 0  (habilitado)
+
+Processos em foreground nunca são throttled — o impacto real varia por caso de uso.`,
+
+  disable_hibernation:
+`A hibernação salva o estado completo da RAM em disco (hiberfil.sys) para permitir boot rápido e retomada do estado após desligamento total.
+
+O arquivo hiberfil.sys ocupa tipicamente 40–70% do total de RAM instalada.
+Exemplo: 16 GB RAM → hiberfil.sys de ~6,4–11 GB
+
+Desabilitar via:  powercfg /hibernate off
+
+Também desabilita o Fast Startup do Windows (que usa hibernação do kernel para boot rápido).
+
+Nota: SSDs NVMe modernos têm tempo de boot suficientemente rápido sem precisar de hibernação.`,
+
+  disable_ntfs_last_access:
+`Por padrão, o NTFS atualiza o timestamp "Last Access Time" de cada arquivo toda vez que ele é lido — mesmo em operações de leitura simples como listar uma pasta.
+
+Em sistemas com muitas operações de leitura (antivírus, indexação, caches), isso gera escritas desnecessárias e contínuas no disco.
+
+Comando: fsutil behavior set disablelastaccess 1
+
+Valores possíveis:
+  0 = atualização de timestamp habilitada (padrão Windows)
+  1 = desabilitado pelo usuário
+  2 = habilitado pelo sistema (Windows 10 1803+, gerenciado pelo SO)
+  3 = desabilitado pelo sistema`,
+
+  disable_nagle:
+`O algoritmo de Nagle (RFC 896) agrupa múltiplos pacotes TCP pequenos em um único pacote maior antes de enviar, otimizando uso de banda às custas de latência adicional.
+
+Para jogos com protocolo TCP (alguns MMORPGs, jogos de estratégia online), isso adiciona delay aguardando mais dados para completar o pacote — podendo chegar a 200 ms.
+
+Registro: HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\<adaptador>
+Chaves:   TcpAckFrequency = 1
+          TCPNoDelay = 1
+
+Atenção: efetivo apenas em jogos TCP. A maioria dos FPS modernos usa UDP — sem impacto nesses casos.`,
+
+  disable_sticky_keys:
+`Sticky Keys é um recurso de acessibilidade que mantém teclas modificadoras (Shift, Ctrl, Alt) pressionadas enquanto a próxima tecla é digitada.
+
+O atalho de ativação padrão (Shift × 5 rapidamente) é facilmente acionado acidentalmente em jogos que usam Shift para sprint, esquiva ou itens, interrompendo o gameplay com uma janela de diálogo.
+
+Registro: HKEY_CURRENT_USER\\Control Panel\\Accessibility\\StickyKeys
+Chave:    Flags — remove o bit de atalho de teclado do bitmask de configuração
+
+Este tweak desabilita apenas o atalho de ativação acidental, não o recurso Sticky Keys em si (que pode ser ativado manualmente nas configurações de acessibilidade).`,
+
+  disable_bing_search:
+`Por padrão, o Menu Iniciar do Windows 11 envia cada pesquisa ao Bing, gerando requisições de rede mesmo para buscas de aplicativos locais.
+
+Isso adiciona latência à pesquisa local (aguarda resposta do Bing antes de exibir resultados), consome banda de rede e pode revelar hábitos de uso para a Microsoft.
+
+Registro: HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Search
+Chave:    BingSearchEnabled = 0
+
+Complementar recomendado: DisableSearchBoxSuggestions = 1 para desabilitar sugestões de busca na web.`,
 };
 
 const RISK_LABEL: Record<string, string> = {
   low:    'Baixo Risco',
   medium: 'Risco Médio',
   high:   'Alto Risco',
+};
+
+const EVIDENCE_META: Record<TweakInfo['evidence_level'], {
+  label: string;
+  tooltip: string;
+  icon: React.ElementType;
+  className: string;
+}> = {
+  proven: {
+    label:     'Comprovado',
+    tooltip:   'Benchmarks documentados confirmam o benefício deste tweak',
+    icon:      ShieldCheck,
+    className: styles.evidenceProven,
+  },
+  plausible: {
+    label:     'Plausível',
+    tooltip:   'Raciocínio técnico sólido, mas sem benchmarks rigorosos publicados',
+    icon:      ShieldQuestion,
+    className: styles.evidencePlausible,
+  },
+  unproven: {
+    label:     'Não comprovado',
+    tooltip:   'Amplamente compartilhado na comunidade, sem evidência formal',
+    icon:      ShieldAlert,
+    className: styles.evidenceUnproven,
+  },
 };
 
 // ── Utilitários ────────────────────────────────────────────────────────────────
@@ -208,6 +476,22 @@ function makeCardState(): CardState {
     showDetails: false,
     dismLog: [],
   };
+}
+
+// ── Subcomponente EvidenceBadge ────────────────────────────────────────────────
+
+function EvidenceBadge({ level }: { level: TweakInfo['evidence_level'] }) {
+  const meta = EVIDENCE_META[level];
+  const Icon = meta.icon;
+  return (
+    <span className={styles.evidenceBadgeWrap}>
+      <span className={`${styles.evidenceBadge} ${meta.className}`}>
+        <Icon size={11} />
+        {meta.label}
+      </span>
+      <span className={styles.evidenceTip}>{meta.tooltip}</span>
+    </span>
+  );
 }
 
 // ── Subcomponente TweakCard ────────────────────────────────────────────────────
@@ -373,11 +657,19 @@ function TweakCard({
 
           {state.showDetails && (
             <div className={styles.detailsPanel}>
+              <div className={styles.evidenceDetailRow}>
+                <span className={styles.evidenceDetailLabel}>Nível de evidência:</span>
+                <EvidenceBadge level={tweak.evidence_level} />
+                <span className={styles.evidenceDetailDesc}>
+                  — {EVIDENCE_META[tweak.evidence_level].tooltip}
+                </span>
+              </div>
               <pre className={styles.detailsText}>{TECHNICAL_DETAILS[tweak.id]}</pre>
             </div>
           )}
 
           <div className={styles.badgeRow}>
+            <EvidenceBadge level={tweak.evidence_level} />
             <span className={`${styles.riskBadge} ${riskClass}`}>
               {RISK_LABEL[tweak.risk_level]}
             </span>

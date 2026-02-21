@@ -118,62 +118,81 @@ const TWEAKS: TweakMeta[] = [
     description: 'Impede que o Windows distribua atualizações pelo seu disco a terceiros',
     categoryKey: 'optimization',
   },
-  // Saúde — DISM
+  // Gamer
   {
-    id: 'dism_cleanup',
-    name: 'DISM — Limpeza de Componentes',
-    description: 'Remove componentes obsoletos do Windows Component Store',
-    categoryKey: 'health-dism',
+    id: 'enable_hags',
+    name: 'Hardware-Accelerated GPU Scheduling (HAGS)',
+    description: 'Permite que a GPU gerencie sua própria memória, reduzindo latência de frames',
+    categoryKey: 'gamer',
   },
   {
-    id: 'dism_checkhealth',
-    name: 'DISM — CheckHealth',
-    description: 'Verificação rápida de integridade do componente store (sem internet)',
-    categoryKey: 'health-dism',
+    id: 'enable_game_mode',
+    name: 'Windows Game Mode',
+    description: 'Prioriza CPU e GPU para o jogo em execução, reduzindo interferência em background',
+    categoryKey: 'gamer',
   },
   {
-    id: 'dism_scanhealth',
-    name: 'DISM — ScanHealth',
-    description: 'Varredura completa do componente store — mais lento e mais preciso',
-    categoryKey: 'health-dism',
+    id: 'disable_vbs',
+    name: 'Desabilitar VBS (Virtualização Baseada em Segurança)',
+    description: 'Remove overhead de virtualização que pode reduzir FPS em 5–15%',
+    categoryKey: 'gamer',
   },
-  {
-    id: 'dism_restorehealth',
-    name: 'DISM — RestoreHealth',
-    description: 'Repara o componente store baixando arquivos de referência da Microsoft',
-    categoryKey: 'health-dism',
-  },
-  // Saúde — Verificações
-  {
-    id: 'sfc_scannow',
-    name: 'SFC — System File Checker',
-    description: 'Verifica e repara arquivos de sistema protegidos do Windows',
-    categoryKey: 'health-verify',
-  },
-  {
-    id: 'chkdsk',
-    name: 'Check Disk (C:)',
-    description: 'Verifica e agenda reparo de erros lógicos e físicos no disco C:',
-    categoryKey: 'health-verify',
-  },
-  {
-    id: 'ssd_trim',
-    name: 'TRIM de SSDs',
-    description: 'Executa otimização em todos os SSDs conectados para manter performance',
-    categoryKey: 'health-verify',
-  },
-  // Saúde — Manutenção
+  // Manutenção — Limpeza
   {
     id: 'flush_dns',
     name: 'Flush DNS',
     description: 'Limpa o cache de resolução DNS para corrigir problemas de conectividade',
-    categoryKey: 'health-maintain',
+    categoryKey: 'maintenance-clean',
   },
   {
     id: 'temp_cleanup',
     name: 'Limpeza de Arquivos Temporários',
     description: 'Remove arquivos de %TEMP%, Windows\\Temp e SoftwareDistribution\\Download',
-    categoryKey: 'health-maintain',
+    categoryKey: 'maintenance-clean',
+  },
+  // Manutenção — DISM
+  {
+    id: 'dism_checkhealth',
+    name: 'DISM — CheckHealth',
+    description: 'Verificação rápida de integridade do componente store (sem internet)',
+    categoryKey: 'maintenance-dism',
+  },
+  {
+    id: 'dism_scanhealth',
+    name: 'DISM — ScanHealth',
+    description: 'Varredura completa do componente store — mais lento e mais preciso',
+    categoryKey: 'maintenance-dism',
+  },
+  {
+    id: 'dism_restorehealth',
+    name: 'DISM — RestoreHealth',
+    description: 'Repara o componente store baixando arquivos de referência da Microsoft',
+    categoryKey: 'maintenance-dism',
+  },
+  {
+    id: 'dism_cleanup',
+    name: 'DISM — StartComponentCleanup',
+    description: 'Remove componentes obsoletos do Windows Component Store, liberando espaço',
+    categoryKey: 'maintenance-dism',
+  },
+  // Manutenção — Verificação de Disco
+  {
+    id: 'sfc_scannow',
+    name: 'SFC — System File Checker',
+    description: 'Verifica e repara arquivos de sistema protegidos do Windows',
+    categoryKey: 'maintenance-verify',
+  },
+  {
+    id: 'chkdsk',
+    name: 'Check Disk (C:)',
+    description: 'Verifica e agenda reparo de erros lógicos e físicos no disco C:',
+    categoryKey: 'maintenance-verify',
+  },
+  {
+    id: 'ssd_trim',
+    name: 'TRIM de SSDs',
+    description: 'Executa otimização em todos os SSDs conectados para manter performance',
+    categoryKey: 'maintenance-verify',
   },
 ];
 
@@ -182,10 +201,11 @@ const TWEAK_MAP: Record<string, TweakMeta> = Object.fromEntries(
 );
 
 const CATEGORIES = [
-  { key: 'optimization',    label: 'Otimizações'                     },
-  { key: 'health-dism',     label: 'Saúde do Sistema — DISM'         },
-  { key: 'health-verify',   label: 'Saúde do Sistema — Verificações' },
-  { key: 'health-maintain', label: 'Saúde do Sistema — Manutenção'   },
+  { key: 'optimization',       label: 'Otimizações'                        },
+  { key: 'gamer',              label: 'Gamer'                              },
+  { key: 'maintenance-clean',  label: 'Manutenção — Limpeza'               },
+  { key: 'maintenance-dism',   label: 'Manutenção — DISM Component Store'  },
+  { key: 'maintenance-verify', label: 'Manutenção — Verificação de Disco'  },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

@@ -52,6 +52,23 @@ pub enum RiskLevel {
     High,
 }
 
+/// Nível de evidência técnica/científica que sustenta o benefício de um tweak.
+///
+/// Permite ao usuário avaliar o grau de confiança antes de aplicar uma otimização,
+/// diferenciando tweaks comprovados em benchmarks de sugestões populares sem base formal.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EvidenceLevel {
+    /// Benefício confirmado por benchmarks documentados e/ou documentação oficial
+    Proven,
+    /// Raciocínio técnico sólido e mecanismo bem compreendido, mas sem benchmarks
+    /// rigorosos publicados que quantifiquem o ganho de forma reproduzível
+    Plausible,
+    /// Amplamente compartilhado na comunidade gamer, porém sem evidência formal
+    /// — resultados variam ou são negligenciáveis em benchmarks independentes
+    Unproven,
+}
+
 /// Informações completas de um tweak para exibição na UI.
 ///
 /// Combina metadados estáticos (nome, descrição, risco) com o estado dinâmico
@@ -77,6 +94,8 @@ pub struct TweakInfo {
     pub has_backup: bool,
     /// Nível de risco do tweak
     pub risk_level: RiskLevel,
+    /// Grau de evidência técnica que sustenta o benefício declarado do tweak
+    pub evidence_level: EvidenceLevel,
     /// Descrição do valor padrão do Windows para exibição no botão "Restaurar Padrão"
     pub default_value_description: String,
 }
@@ -182,6 +201,7 @@ pub fn get_wallpaper_compression_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Unproven,
         default_value_description: "Padrão Windows: compressão JPEG em 85% (JPEGImportQuality ausente)".to_string(),
     })
 }
@@ -329,6 +349,7 @@ pub fn get_reserved_storage_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Medium,
+        evidence_level: EvidenceLevel::Proven,
         default_value_description: "Padrão Windows: Armazenamento Reservado habilitado (~7 GB)".to_string(),
     })
 }
@@ -487,6 +508,7 @@ pub fn get_delivery_optimization_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
         default_value_description: "Padrão Windows: P2P habilitado (DODownloadMode = 1)".to_string(),
     })
 }
@@ -616,6 +638,7 @@ pub fn get_hags_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
         default_value_description: "Padrão Windows 11: HAGS ativo (HwSchMode = 2)".to_string(),
     })
 }
@@ -670,6 +693,7 @@ pub fn get_game_mode_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Unproven,
         default_value_description: "Padrão Windows: Game Mode ativo (AutoGameModeEnabled = 1)".to_string(),
     })
 }
@@ -727,6 +751,7 @@ pub fn get_vbs_info() -> Result<TweakInfo, String> {
         last_applied,
         has_backup,
         risk_level: RiskLevel::Medium,
+        evidence_level: EvidenceLevel::Proven,
         default_value_description: "Padrão Windows 11: VBS ativa (EnableVirtualizationBasedSecurity = 1)".to_string(),
     })
 }
@@ -806,4 +831,488 @@ pub fn restore_reserved_storage_default(app_handle: tauri::AppHandle) -> Result<
     }
 
     Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLACEHOLDERS — GPU e Display
+//
+// Implementação real prevista para próxima fase de desenvolvimento.
+// get_X_info devolve TweakInfo com is_applied = false (estado não lido).
+// Comandos de aplicar/reverter retornam erro informativo.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn get_game_dvr_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_game_dvr");
+    Ok(TweakInfo {
+        id: "disable_game_dvr".to_string(),
+        name: "Desabilitar Game DVR / Captura Game Bar".to_string(),
+        description: "Desabilita a gravação em segundo plano do Xbox Game Bar, que mantém \
+            um buffer circular de vídeo consumindo GPU encode, RAM e CPU continuamente."
+            .to_string(),
+        category: "gpu_display".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Unproven,
+        default_value_description: "Padrão Windows: Game DVR habilitado".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_game_dvr() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_game_dvr() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_xbox_overlay_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_xbox_overlay");
+    Ok(TweakInfo {
+        id: "disable_xbox_overlay".to_string(),
+        name: "Desabilitar Xbox Game Bar".to_string(),
+        description: "Desabilita completamente o overlay do Xbox Game Bar, liberando recursos \
+            usados pelo processo GameBarPresenceWriter em segundo plano."
+            .to_string(),
+        category: "gpu_display".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Unproven,
+        default_value_description: "Padrão Windows: Xbox Game Bar habilitado".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_xbox_overlay() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_xbox_overlay() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_msi_mode_gpu_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("enable_msi_mode_gpu");
+    Ok(TweakInfo {
+        id: "enable_msi_mode_gpu".to_string(),
+        name: "Ativar MSI Mode para GPU".to_string(),
+        description: "Configura a GPU para usar Message Signaled Interrupts (MSI) em vez de \
+            interrupts baseados em linha, reduzindo latência de interrupção e possíveis \
+            microstutters."
+            .to_string(),
+        category: "gpu_display".to_string(),
+        is_applied: false,
+        requires_restart: true,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Medium,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: MSI Mode desabilitado para GPU".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn enable_msi_mode_gpu() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn disable_msi_mode_gpu() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_mpo_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_mpo");
+    Ok(TweakInfo {
+        id: "disable_mpo".to_string(),
+        name: "Desabilitar Multiplane Overlay (MPO)".to_string(),
+        description: "Desabilita o Multiplane Overlay do DirectX, que pode causar stuttering \
+            e artefatos visuais em alguns sistemas com múltiplos monitores ou janelas sobrepostas."
+            .to_string(),
+        category: "gpu_display".to_string(),
+        is_applied: false,
+        requires_restart: true,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: MPO habilitado".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_mpo() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_mpo() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_nvidia_telemetry_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_nvidia_telemetry");
+    Ok(TweakInfo {
+        id: "disable_nvidia_telemetry".to_string(),
+        name: "Desabilitar Telemetria NVIDIA".to_string(),
+        description: "Desabilita os serviços de telemetria e coleta de dados do driver NVIDIA \
+            que rodam em segundo plano, liberando CPU e memória desnecessariamente consumidos."
+            .to_string(),
+        category: "gpu_display".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Unproven,
+        default_value_description: "Padrão NVIDIA: telemetria habilitada".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_nvidia_telemetry() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_nvidia_telemetry() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLACEHOLDERS — Gaming
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn get_timer_resolution_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("enable_timer_resolution");
+    Ok(TweakInfo {
+        id: "enable_timer_resolution".to_string(),
+        name: "Timer de Alta Resolução (1 ms)".to_string(),
+        description: "Configura o timer do sistema Windows para 1 ms de resolução em vez dos \
+            15,6 ms padrão, reduzindo latência de entrada e melhorando consistência de framerates."
+            .to_string(),
+        category: "gaming".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: timer de 15,6 ms".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn enable_timer_resolution() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn disable_timer_resolution() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_mouse_acceleration_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_mouse_acceleration");
+    Ok(TweakInfo {
+        id: "disable_mouse_acceleration".to_string(),
+        name: "Desabilitar Aceleração do Mouse".to_string(),
+        description: "Remove a curva de aceleração do ponteiro (Enhanced Pointer Precision), \
+            tornando o movimento do mouse linear e previsível — essencial para jogos FPS."
+            .to_string(),
+        category: "gaming".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Proven,
+        default_value_description: "Padrão Windows: Enhanced Pointer Precision habilitado".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_mouse_acceleration() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_mouse_acceleration() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_fullscreen_optimizations_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_fullscreen_optimizations");
+    Ok(TweakInfo {
+        id: "disable_fullscreen_optimizations".to_string(),
+        name: "Desabilitar Otimizações de Tela Cheia".to_string(),
+        description: "Remove as 'Otimizações de Tela Cheia' do Windows, que convertem janelas \
+            exclusivas em borderless window. Em alguns jogos melhora latência; em outros pode \
+            piorar — resultados variam por jogo e GPU."
+            .to_string(),
+        category: "gaming".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: Otimizações de Tela Cheia habilitadas".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_fullscreen_optimizations() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_fullscreen_optimizations() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLACEHOLDERS — Energia e CPU
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn get_ultimate_performance_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("enable_ultimate_performance");
+    Ok(TweakInfo {
+        id: "enable_ultimate_performance".to_string(),
+        name: "Plano de Energia: Desempenho Máximo".to_string(),
+        description: "Ativa o plano de energia 'Desempenho Máximo' oculto do Windows, que \
+            elimina micro-sleep states do processador e prioriza desempenho bruto sobre \
+            eficiência energética."
+            .to_string(),
+        category: "energy_cpu".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: plano Balanceado ou Alto Desempenho".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn enable_ultimate_performance() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_ultimate_performance() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_power_throttling_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_power_throttling");
+    Ok(TweakInfo {
+        id: "disable_power_throttling".to_string(),
+        name: "Desabilitar Power Throttling".to_string(),
+        description: "Desabilita o Power Throttling do Windows, que limita automaticamente \
+            recursos de CPU para processos em segundo plano. Com este tweak, todos os processos \
+            recebem CPU sem limitação artificial."
+            .to_string(),
+        category: "energy_cpu".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: Power Throttling habilitado".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_power_throttling() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_power_throttling() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLACEHOLDERS — Armazenamento
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn get_hibernation_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_hibernation");
+    Ok(TweakInfo {
+        id: "disable_hibernation".to_string(),
+        name: "Desabilitar Hibernação".to_string(),
+        description: "Desabilita a hibernação do Windows, removendo o arquivo hiberfil.sys \
+            (geralmente 40–70% da RAM em tamanho). Libera espaço significativo em SSDs."
+            .to_string(),
+        category: "storage".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Proven,
+        default_value_description: "Padrão Windows: hibernação habilitada (hiberfil.sys presente)".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_hibernation() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn enable_hibernation() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_ntfs_last_access_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_ntfs_last_access");
+    Ok(TweakInfo {
+        id: "disable_ntfs_last_access".to_string(),
+        name: "Desabilitar Timestamp de Último Acesso NTFS".to_string(),
+        description: "Desabilita a atualização automática do timestamp de último acesso em \
+            arquivos NTFS, reduzindo escritas desnecessárias no disco — especialmente benéfico \
+            para SSDs com muitas operações de leitura."
+            .to_string(),
+        category: "storage".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: timestamps de último acesso habilitados".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_ntfs_last_access() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_ntfs_last_access() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLACEHOLDER — Rede
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn get_nagle_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_nagle");
+    Ok(TweakInfo {
+        id: "disable_nagle".to_string(),
+        name: "Desabilitar Algoritmo de Nagle".to_string(),
+        description: "Desabilita o algoritmo de Nagle nas conexões TCP, que agrupa pacotes \
+            pequenos para otimizar largura de banda. Em jogos com protocolo TCP, pode reduzir \
+            latência às custas de maior uso de banda."
+            .to_string(),
+        category: "network".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Medium,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: algoritmo de Nagle habilitado".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_nagle() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_nagle() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLACEHOLDERS — Visual e Experiência
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn get_sticky_keys_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_sticky_keys");
+    Ok(TweakInfo {
+        id: "disable_sticky_keys".to_string(),
+        name: "Desabilitar Teclas de Aderência (Sticky Keys)".to_string(),
+        description: "Desabilita o atalho que ativa Sticky Keys ao pressionar Shift 5 vezes, \
+            eliminando a janela de diálogo que pode interromper sessões de jogo inesperadamente."
+            .to_string(),
+        category: "visual".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Proven,
+        default_value_description: "Padrão Windows: atalho de Sticky Keys habilitado".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_sticky_keys() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_sticky_keys() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn get_bing_search_info() -> Result<TweakInfo, String> {
+    let (has_backup, last_applied) = backup_info("disable_bing_search");
+    Ok(TweakInfo {
+        id: "disable_bing_search".to_string(),
+        name: "Desabilitar Busca Bing no Menu Iniciar".to_string(),
+        description: "Desabilita a integração do Bing no Menu Iniciar, evitando requisições de \
+            rede ao pesquisar localmente e acelerando resultados de busca."
+            .to_string(),
+        category: "visual".to_string(),
+        is_applied: false,
+        requires_restart: false,
+        last_applied,
+        has_backup,
+        risk_level: RiskLevel::Low,
+        evidence_level: EvidenceLevel::Plausible,
+        default_value_description: "Padrão Windows: busca Bing habilitada no Menu Iniciar".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn disable_bing_search() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+}
+
+#[tauri::command]
+pub fn revert_bing_search() -> Result<(), String> {
+    Err("Não implementado — próxima fase de desenvolvimento".to_string())
 }

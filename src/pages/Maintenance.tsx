@@ -1,10 +1,10 @@
-// Página de Saúde do Sistema do FrameGuard.
+// Página de Manutenção do FrameGuard.
 //
-// Define as ações de manutenção e verificação do Windows (DISM, SFC, ChkDsk,
-// TRIM) e delega toda a lógica de execução e renderização aos componentes
-// compartilhados.
+// Unifica as antigas páginas Limpeza e Saúde do Sistema em uma única tela,
+// agrupando as ações em três seções: limpeza rápida, DISM e verificação de disco.
 
 import {
+  Globe, Trash2,
   ShieldCheck, Search, Wrench, Package,
   FileCheck, HardDrive, Zap,
 } from 'lucide-react';
@@ -13,9 +13,14 @@ import { useActionRunner } from '../hooks/useActionRunner';
 import type { ActionMeta, Section } from '../types/health';
 import styles from '../components/ActionCard/ActionCard.module.css';
 
-// ── Metadados estáticos das ações ───────────────────────────────────────────
+// ── Seções ───────────────────────────────────────────────────────────────────
 
 const SECTIONS: Section[] = [
+  {
+    id: 'limpeza',
+    title: 'Limpeza e Manutenção',
+    subtitle: 'Limpeza rápida de cache e arquivos temporários do sistema',
+  },
   {
     id: 'dism',
     title: 'DISM — Component Store',
@@ -28,8 +33,50 @@ const SECTIONS: Section[] = [
   },
 ];
 
+// ── Ações ────────────────────────────────────────────────────────────────────
+
 const ACTIONS: ActionMeta[] = [
-  // ── DISM ──────────────────────────────────────────────────────────────────
+  // ── Limpeza ────────────────────────────────────────────────────────────────
+  {
+    id: 'flush_dns',
+    name: 'Flush DNS',
+    Icon: Globe,
+    description: 'Limpa o cache DNS local. Resolve problemas de conectividade causados por entradas desatualizadas ou corrompidas.',
+    technicalDetails:
+`Executa: ipconfig.exe /flushdns
+
+O cache DNS local armazena resoluções de nomes recentes (ex: "google.com → 142.250.x.x") para acelerar conexões. Pode ficar desatualizado após mudanças de DNS ou conter entradas corrompidas que causam falhas de conexão.
+
+O flush força o Windows a consultar os servidores DNS configurados na próxima requisição, garantindo endereços atualizados.
+
+Útil para: sites que não carregam após mudança de DNS, troca de provedor, ou alterações no arquivo hosts.`,
+    estimatedDuration: '< 1 segundo',
+    eventChannel: 'dns_flush_progress',
+    command: 'flush_dns',
+    category: 'limpeza',
+  },
+  {
+    id: 'temp_cleanup',
+    name: 'Limpeza de Temporários',
+    Icon: Trash2,
+    description: 'Remove arquivos temporários de %TEMP%, Windows\\Temp e do cache do Windows Update. Arquivos em uso são ignorados.',
+    technicalDetails:
+`Remove arquivos de três locais:
+
+• %TEMP%                                   — Temporários do usuário atual (instaladores, extrações, caches)
+• C:\\Windows\\Temp                         — Temporários do sistema e serviços Windows
+• C:\\Windows\\SoftwareDistribution\\Download — Cache do Windows Update (atualizações já instaladas)
+
+Arquivos em uso são pulados silenciosamente. A pasta SoftwareDistribution\\Download é recriada automaticamente pelo Windows Update quando necessário.
+
+O espaço liberado é calculado com precisão comparando o tamanho antes e depois da remoção.`,
+    estimatedDuration: '30 segundos–3 minutos',
+    eventChannel: 'temp_cleanup_progress',
+    command: 'run_temp_cleanup',
+    category: 'limpeza',
+  },
+
+  // ── DISM ───────────────────────────────────────────────────────────────────
   {
     id: 'dism_checkhealth',
     name: 'DISM CheckHealth',
@@ -103,7 +150,7 @@ O Windows 10/11 faz isso automaticamente via agendamento — este comando força
     category: 'dism',
   },
 
-  // ── Verificação ───────────────────────────────────────────────────────────
+  // ── Verificação de Disco ───────────────────────────────────────────────────
   {
     id: 'sfc_scannow',
     name: 'SFC /scannow',
@@ -169,18 +216,18 @@ Apenas SSDs são processados — HDDs são detectados e ignorados automaticament
   },
 ];
 
-// ── Componente ──────────────────────────────────────────────────────────────
+// ── Componente ────────────────────────────────────────────────────────────────
 
-export default function SystemHealth() {
+export default function Maintenance() {
   const { states, handleRun, toggleLog, toggleDetails, isRunning } =
-    useActionRunner(ACTIONS, 'frameguard:health');
+    useActionRunner(ACTIONS, 'frameguard:maintenance');
 
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <h1 className={styles.title}>Saúde do Sistema</h1>
-          <p className={styles.subtitle}>Manutenção e integridade do Windows</p>
+          <h1 className={styles.title}>Manutenção</h1>
+          <p className={styles.subtitle}>Limpeza, integridade e saúde do sistema</p>
         </div>
       </div>
 
