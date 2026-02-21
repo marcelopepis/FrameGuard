@@ -133,21 +133,27 @@ export default function Dashboard() {
         <div className={styles.badges}>
           <StatusBadge
             label="Game Mode"
-            active={info?.game_mode_enabled ?? false}
+            optimized={info?.game_mode_enabled ?? false}
+            goodLabel="Ativo"
+            badLabel="Inativo"
             loading={!info}
             tooltip="Prioriza CPU e GPU para o jogo em execução, reduzindo interferência de processos em segundo plano. Recomendado: Ativo."
           />
           <StatusBadge
             label="HAGS"
-            active={info?.hags_enabled ?? false}
+            optimized={info?.hags_enabled ?? false}
+            goodLabel="Ativo"
+            badLabel="Inativo"
             loading={!info}
             tooltip="Hardware-Accelerated GPU Scheduling: a GPU gerencia sua própria memória, reduzindo latência e carga da CPU. Recomendado: Ativo."
           />
           <StatusBadge
             label="VBS"
-            active={info?.vbs_enabled ?? false}
+            optimized={!(info?.vbs_enabled ?? true)}
+            goodLabel="Desabilitado"
+            badLabel="Habilitado"
             loading={!info}
-            tooltip="Virtualization Based Security protege o Windows via virtualização, mas pode reduzir performance em games em até 10–15%. Recomendado: Inativo para gaming."
+            tooltip="Virtualization Based Security protege o Windows via virtualização, mas pode reduzir performance em games em até 10–15%. Recomendado: Desabilitado para gaming."
           />
         </div>
       </section>
@@ -171,18 +177,20 @@ function AdminTag({ elevated }: { elevated: boolean }) {
 
 interface StatusBadgeProps {
   label: string;
-  active: boolean;
+  optimized: boolean;
+  goodLabel: string;
+  badLabel: string;
   loading?: boolean;
   tooltip?: string;
 }
 
-function StatusBadge({ label, active, loading, tooltip }: StatusBadgeProps) {
+function StatusBadge({ label, optimized, goodLabel, badLabel, loading, tooltip }: StatusBadgeProps) {
   return (
-    <div className={`${styles.badge} ${loading ? '' : active ? styles.badgeOn : styles.badgeOff}`}>
-      <span className={`${styles.dot} ${loading ? '' : active ? styles.dotOn : styles.dotOff}`} />
+    <div className={`${styles.badge} ${loading ? '' : optimized ? styles.badgeOn : styles.badgeOff}`}>
+      <span className={`${styles.dot} ${loading ? '' : optimized ? styles.dotOn : styles.dotOff}`} />
       <span className={styles.badgeLabel}>{label}</span>
       <span className={styles.badgeStatus}>
-        {loading ? '…' : active ? 'Ativo' : 'Inativo'}
+        {loading ? '…' : optimized ? goodLabel : badLabel}
       </span>
       {tooltip && <div className={styles.badgeTooltip}>{tooltip}</div>}
     </div>

@@ -597,6 +597,8 @@ pub fn get_hags_info() -> Result<TweakInfo, String> {
         .map(|v| v == HAGS_ENABLED_VALUE)
         .unwrap_or(true); // padrão Windows 11: HAGS ativo para GPUs compatíveis
 
+    let (has_backup, last_applied) = backup_info("enable_hags");
+
     Ok(TweakInfo {
         id: "enable_hags".to_string(),
         name: "Hardware-Accelerated GPU Scheduling (HAGS)".to_string(),
@@ -606,8 +608,8 @@ pub fn get_hags_info() -> Result<TweakInfo, String> {
         category: "gamer".to_string(),
         is_applied: is_enabled,
         requires_restart: true,
-        last_applied: None,
-        has_backup: true,
+        last_applied,
+        has_backup,
         risk_level: RiskLevel::Low,
     })
 }
@@ -647,6 +649,8 @@ pub fn get_game_mode_info() -> Result<TweakInfo, String> {
         .map(|v| v == GAME_MODE_ENABLED)
         .unwrap_or(true); // padrão: Game Mode ativo desde Windows 10 Creators Update
 
+    let (has_backup, last_applied) = backup_info("enable_game_mode");
+
     Ok(TweakInfo {
         id: "enable_game_mode".to_string(),
         name: "Windows Game Mode".to_string(),
@@ -657,8 +661,8 @@ pub fn get_game_mode_info() -> Result<TweakInfo, String> {
         category: "gamer".to_string(),
         is_applied: is_enabled,
         requires_restart: false,
-        last_applied: None,
-        has_backup: true,
+        last_applied,
+        has_backup,
         risk_level: RiskLevel::Low,
     })
 }
@@ -701,6 +705,8 @@ pub fn get_vbs_info() -> Result<TweakInfo, String> {
         .map(|v| v == VBS_ENABLED)
         .unwrap_or(false); // padrão: VBS inativo em muitos sistemas
 
+    let (has_backup, last_applied) = backup_info("disable_vbs");
+
     Ok(TweakInfo {
         id: "disable_vbs".to_string(),
         name: "Virtualização Baseada em Segurança (VBS)".to_string(),
@@ -711,8 +717,8 @@ pub fn get_vbs_info() -> Result<TweakInfo, String> {
         category: "gamer".to_string(),
         is_applied: !vbs_enabled, // tweak "aplicado" = VBS desabilitada = bom para gaming
         requires_restart: true,
-        last_applied: None,
-        has_backup: true,
+        last_applied,
+        has_backup,
         risk_level: RiskLevel::Medium,
     })
 }
