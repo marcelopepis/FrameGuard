@@ -16,7 +16,8 @@
       "Bash(cargo build:*)",
       "Bash(cargo check:*)",
       "Bash(npx tsc:*)",
-      "Bash(printf:*)"
+      "Bash(printf:*)",
+      "Bash(dir:*)"
     ]
   }
 }
