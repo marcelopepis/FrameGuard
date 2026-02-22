@@ -4,40 +4,16 @@
 // Aplicar/Reverter/Restaurar Padrão com feedback em tempo real e disable global
 // quando qualquer comando de longa duração estiver em execução em outra página.
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import {
-  ChevronDown, ChevronUp, Loader2,
-  XCircle, RotateCcw, Play, RefreshCw,
-  ShieldCheck, ShieldAlert, ShieldQuestion,
-} from 'lucide-react';
+import { Loader2, XCircle, RefreshCw } from 'lucide-react';
 import styles from './Optimizations.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
-
-// ── Tipos ──────────────────────────────────────────────────────────────────────
-
-interface TweakInfo {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  is_applied: boolean;
-  requires_restart: boolean;
-  last_applied: string | null;
-  has_backup: boolean;
-  risk_level: 'low' | 'medium' | 'high';
-  evidence_level: 'proven' | 'plausible' | 'unproven';
-  default_value_description: string;
-}
-
-interface CardState {
-  loading: boolean;
-  loadingAction: 'applying' | 'reverting' | 'restoring' | null;
-  showDetails: boolean;
-  dismLog: string[];
-}
+import {
+  TweakInfo, CardState, TweakCard, makeCardState,
+} from '../components/TweakCard';
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
@@ -160,8 +136,8 @@ const RESTORE_DEFAULT_COMMANDS: Record<string, string> = {
 
 // Tweaks baseados em DISM que emitem progresso via eventos Tauri
 const DISM_EVENT: Record<string, string> = {
-  disable_reserved_storage: 'dism-reserved-storage',
-  restore_reserved_storage_default: 'dism-reserved-storage',
+  disable_reserved_storage:          'dism-reserved-storage',
+  restore_reserved_storage_default:  'dism-reserved-storage',
 };
 
 // Seções da página com IDs dos tweaks pertencentes a cada uma
@@ -428,296 +404,6 @@ Chave:    BingSearchEnabled = 0
 Complementar recomendado: DisableSearchBoxSuggestions = 1 para desabilitar sugestões de busca na web.`,
 };
 
-const RISK_LABEL: Record<string, string> = {
-  low:    'Baixo Risco',
-  medium: 'Risco Médio',
-  high:   'Alto Risco',
-};
-
-const EVIDENCE_META: Record<TweakInfo['evidence_level'], {
-  label: string;
-  tooltip: string;
-  icon: React.ElementType;
-  className: string;
-}> = {
-  proven: {
-    label:     'Comprovado',
-    tooltip:   'Benchmarks documentados confirmam o benefício deste tweak',
-    icon:      ShieldCheck,
-    className: styles.evidenceProven,
-  },
-  plausible: {
-    label:     'Plausível',
-    tooltip:   'Raciocínio técnico sólido, mas sem benchmarks rigorosos publicados',
-    icon:      ShieldQuestion,
-    className: styles.evidencePlausible,
-  },
-  unproven: {
-    label:     'Não comprovado',
-    tooltip:   'Amplamente compartilhado na comunidade, sem evidência formal',
-    icon:      ShieldAlert,
-    className: styles.evidenceUnproven,
-  },
-};
-
-// ── Utilitários ────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-function makeCardState(): CardState {
-  return {
-    loading: false,
-    loadingAction: null,
-    showDetails: false,
-    dismLog: [],
-  };
-}
-
-// ── Subcomponente EvidenceBadge ────────────────────────────────────────────────
-
-function EvidenceBadge({ level }: { level: TweakInfo['evidence_level'] }) {
-  const meta = EVIDENCE_META[level];
-  const Icon = meta.icon;
-  return (
-    <span className={styles.evidenceBadgeWrap}>
-      <span className={`${styles.evidenceBadge} ${meta.className}`}>
-        <Icon size={11} />
-        {meta.label}
-      </span>
-      <span className={styles.evidenceTip}>{meta.tooltip}</span>
-    </span>
-  );
-}
-
-// ── Subcomponente TweakCard ────────────────────────────────────────────────────
-
-interface TweakCardProps {
-  tweak: TweakInfo;
-  state: CardState;
-  onApply: () => void;
-  onRevert: () => void;
-  onRestoreDefault: () => void;
-  onToggleDetails: () => void;
-  globalDisabled?: boolean;
-}
-
-function TweakCard({
-  tweak, state,
-  onApply, onRevert, onRestoreDefault,
-  onToggleDetails,
-  globalDisabled,
-}: TweakCardProps) {
-  const dismLogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (dismLogRef.current) {
-      dismLogRef.current.scrollTop = dismLogRef.current.scrollHeight;
-    }
-  }, [state.dismLog]);
-
-  const riskClass = {
-    low:    styles.riskLow,
-    medium: styles.riskMedium,
-    high:   styles.riskHigh,
-  }[tweak.risk_level];
-
-  // Determina se este tweak pode ficar "aplicado sem backup" (configurado externamente).
-  const isExternal = BACKUP_BASED.has(tweak.id) && tweak.is_applied && !tweak.has_backup;
-
-  // ── Badge de status ──
-  const statusLabel = !tweak.is_applied
-    ? 'Inativo'
-    : tweak.has_backup
-      ? 'Aplicado pelo FrameGuard'
-      : isExternal
-        ? 'Aplicado (externo)'
-        : 'Ativo';
-
-  const statusMod = tweak.is_applied ? styles.statusActive : styles.statusInactive;
-  const dotMod    = tweak.is_applied ? styles.dotActive    : styles.dotInactive;
-
-  // ── Botão de ação ──
-  function ActionButton() {
-    if (state.loading) {
-      return (
-        <div className={styles.loadingState}>
-          <Loader2 size={15} className={styles.spinner} />
-          <span>
-            {state.loadingAction === 'reverting'  ? 'Revertendo...'  :
-             state.loadingAction === 'restoring'  ? 'Restaurando...' :
-             'Aplicando...'}
-          </span>
-        </div>
-      );
-    }
-
-    const disabled = !!globalDisabled;
-
-    // Estado 1: não aplicado → Aplicar
-    if (!tweak.is_applied) {
-      return (
-        <div className={styles.btnWrap}>
-          <button
-            className={styles.btnApply}
-            onClick={!disabled ? onApply : undefined}
-            disabled={disabled}
-          >
-            <Play size={13} />Aplicar
-          </button>
-          {disabled && (
-            <div className={styles.btnTip}>
-              Outro comando em execução.<br />Aguarde a conclusão.
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Estado 2: aplicado com backup → Reverter (usando backup)
-    if (tweak.has_backup) {
-      return (
-        <div className={styles.btnWrap}>
-          <button
-            className={styles.btnRevert}
-            onClick={!disabled ? onRevert : undefined}
-            disabled={disabled}
-          >
-            <RotateCcw size={13} />Reverter
-          </button>
-          {disabled && (
-            <div className={styles.btnTip}>
-              Outro comando em execução.<br />Aguarde a conclusão.
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Estado 3a: aplicado sem backup, tweak com suporte a backup (configurado externamente)
-    // → Restaurar Padrão Windows
-    if (isExternal) {
-      return (
-        <div className={styles.btnWrap}>
-          <button
-            className={styles.btnRestoreDefault}
-            onClick={!disabled ? onRestoreDefault : undefined}
-            disabled={disabled}
-          >
-            <RotateCcw size={13} />Restaurar Padrão
-          </button>
-          {disabled && (
-            <div className={styles.btnTip}>
-              Outro comando em execução.<br />Aguarde a conclusão.
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Estado 3b: aplicado sem backup, tweak gamer (revert não precisa de backup)
-    // → Reverter normalmente
-    return (
-      <div className={styles.btnWrap}>
-        <button
-          className={styles.btnRevert}
-          onClick={!disabled ? onRevert : undefined}
-          disabled={disabled}
-        >
-          <RotateCcw size={13} />Reverter
-        </button>
-        {disabled && (
-          <div className={styles.btnTip}>
-            Outro comando em execução.<br />Aguarde a conclusão.
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`${styles.tweakCard} ${state.loading ? styles.tweakCardBusy : ''}`}>
-
-      {/* ── Layout principal: esquerda + direita ── */}
-      <div className={styles.tweakBody}>
-
-        {/* ── Lado esquerdo ── */}
-        <div className={styles.tweakLeft}>
-          <div className={styles.tweakName}>{tweak.name}</div>
-          <p className={styles.tweakDesc}>{tweak.description}</p>
-
-          <button className={styles.btnDetails} onClick={onToggleDetails}>
-            {state.showDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            {state.showDetails ? 'Menos detalhes' : 'Saiba mais'}
-          </button>
-
-          {state.showDetails && (
-            <div className={styles.detailsPanel}>
-              <div className={styles.evidenceDetailRow}>
-                <span className={styles.evidenceDetailLabel}>Nível de evidência:</span>
-                <EvidenceBadge level={tweak.evidence_level} />
-                <span className={styles.evidenceDetailDesc}>
-                  — {EVIDENCE_META[tweak.evidence_level].tooltip}
-                </span>
-              </div>
-              <pre className={styles.detailsText}>{TECHNICAL_DETAILS[tweak.id]}</pre>
-            </div>
-          )}
-
-          <div className={styles.badgeRow}>
-            <EvidenceBadge level={tweak.evidence_level} />
-            <span className={`${styles.riskBadge} ${riskClass}`}>
-              {RISK_LABEL[tweak.risk_level]}
-            </span>
-            {tweak.requires_restart && (
-              <span className={styles.restartBadge}>
-                Requer reinicialização
-              </span>
-            )}
-          </div>
-
-          <div className={styles.lastApplied}>
-            {tweak.last_applied
-              ? `Última aplicação: ${formatDate(tweak.last_applied)}`
-              : 'Nunca aplicado pelo FrameGuard'}
-          </div>
-
-          {/* Dica de padrão Windows visível quando aplicado externamente */}
-          {isExternal && (
-            <div className={styles.defaultValueHint}>
-              ↩ {tweak.default_value_description}
-            </div>
-          )}
-        </div>
-
-        {/* ── Lado direito ── */}
-        <div className={styles.tweakRight}>
-
-          <div className={`${styles.statusBadge} ${statusMod}`}>
-            <span className={`${styles.statusDot} ${dotMod}`} />
-            {statusLabel}
-          </div>
-
-          <ActionButton />
-        </div>
-      </div>
-
-      {/* ── Log de progresso DISM (streaming) ── */}
-      {state.dismLog.length > 0 && (
-        <div className={styles.dismLog} ref={dismLogRef}>
-          {state.dismLog.map((line, i) => (
-            <div key={i} className={styles.dismLine}>{line}</div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Componente principal ───────────────────────────────────────────────────────
 
 export default function Optimizations() {
@@ -911,6 +597,8 @@ export default function Optimizations() {
                       onRestoreDefault={() => handleRestoreDefault(tweak)}
                       onToggleDetails={() => toggleDetails(tweak.id)}
                       globalDisabled={isRunning && !state.loading}
+                      technicalDetail={TECHNICAL_DETAILS[tweak.id]}
+                      isBackupBased={BACKUP_BASED.has(tweak.id)}
                     />
                   );
                 })}

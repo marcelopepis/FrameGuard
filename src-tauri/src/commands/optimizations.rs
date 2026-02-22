@@ -2182,20 +2182,30 @@ pub fn revert_power_throttling() -> Result<(), String> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PLACEHOLDERS — Armazenamento
 // ═══════════════════════════════════════════════════════════════════════════════
+// Armazenamento — Hibernação
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Verifica se a hibernação está habilitada checando a existência de `hiberfil.sys`.
+/// Retorna `true` se a hibernação estiver ON (arquivo presente no sistema).
+fn get_hibernation_status() -> bool {
+    std::path::Path::new(r"C:\hiberfil.sys").exists()
+}
 
 #[tauri::command]
 pub fn get_hibernation_info() -> Result<TweakInfo, String> {
+    // Tweak aplicado = hibernação desabilitada = arquivo ausente
+    let is_applied = !get_hibernation_status();
     let (has_backup, last_applied) = backup_info("disable_hibernation");
     Ok(TweakInfo {
         id: "disable_hibernation".to_string(),
         name: "Desabilitar Hibernação".to_string(),
-        description: "Desabilita a hibernação do Windows, removendo o arquivo hiberfil.sys \
-            (geralmente 40–70% da RAM em tamanho). Libera espaço significativo em SSDs."
+        description: "Desabilita a hibernação e remove o arquivo hiberfil.sys, liberando \
+            8-16 GB de espaço no disco do sistema. Também desabilita o Fast Startup, que \
+            pode causar problemas de driver e estado do sistema."
             .to_string(),
         category: "storage".to_string(),
-        is_applied: false,
+        is_applied,
         requires_restart: false,
         last_applied,
         has_backup,
@@ -2205,142 +2215,577 @@ pub fn get_hibernation_info() -> Result<TweakInfo, String> {
     })
 }
 
+/// Desabilita a hibernação via `powercfg /h off`.
+///
+/// Remove `hiberfil.sys` e desabilita o Fast Startup automaticamente.
 #[tauri::command]
 pub fn disable_hibernation() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    // Passo 1: Rejeita dupla aplicação
+    if !get_hibernation_status() {
+        return Err(
+            "Tweak 'disable_hibernation' já está aplicado (hibernação já desabilitada)".to_string(),
+        );
+    }
+
+    // Passo 2: Salva backup do estado original antes de qualquer modificação
+    backup_before_apply(
+        "disable_hibernation",
+        TweakCategory::Powershell,
+        "Estado da hibernação do Windows — hiberfil.sys e Fast Startup",
+        OriginalValue {
+            path: "powercfg".to_string(),
+            key: "hibernate_state".to_string(),
+            value: Some(json!("on")),
+            value_type: "STATE".to_string(),
+        },
+        json!("off"),
+    )?;
+
+    // Passo 3: Executa powercfg /h off
+    let result = run_command("powercfg.exe", &["/h", "off"])?;
+    if !result.success {
+        return Err(format!(
+            "powercfg /h off falhou (código {}): {}",
+            result.exit_code, result.stderr
+        ));
+    }
+
+    Ok(())
 }
 
+/// Reverte a hibernação para o estado original (`powercfg /h on`).
 #[tauri::command]
 pub fn enable_hibernation() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    // Recupera o backup e marca como Reverted atomicamente
+    restore_from_backup("disable_hibernation")?;
+
+    let result = run_command("powercfg.exe", &["/h", "on"])?;
+    if !result.success {
+        return Err(format!(
+            "powercfg /h on falhou (código {}): {}",
+            result.exit_code, result.stderr
+        ));
+    }
+
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Armazenamento — NTFS Last Access Timestamp
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Consulta o valor atual de `disablelastaccess` via `fsutil behavior query`.
+/// Retorna o inteiro (0–3) conforme documentação do Windows.
+fn query_ntfs_last_access() -> Result<u32, String> {
+    let result = run_command(
+        "fsutil.exe",
+        &["behavior", "query", "disablelastaccess"],
+    )?;
+
+    if !result.success {
+        return Err(format!(
+            "fsutil behavior query falhou (código {}): {}",
+            result.exit_code, result.stderr
+        ));
+    }
+
+    // Formato esperado: "NtfsDisableLastAccessUpdate = 1  (User Managed, Disabled)"
+    // Parseia o número imediatamente após o sinal "="
+    let output = result.stdout.trim().to_string();
+    let mut iter = output.splitn(2, '=');
+    let _ = iter.next(); // descarta o label antes do "="
+    if let Some(rhs) = iter.next() {
+        if let Some(tok) = rhs.trim().split_whitespace().next() {
+            if let Ok(n) = tok.parse::<u32>() {
+                return Ok(n);
+            }
+        }
+    }
+
+    Err(format!(
+        "Não foi possível parsear saída do fsutil: '{}'",
+        output
+    ))
 }
 
 #[tauri::command]
 pub fn get_ntfs_last_access_info() -> Result<TweakInfo, String> {
+    // Applied = valor 1 (User Managed, Disabled — definido explicitamente pelo usuário)
+    let is_applied = query_ntfs_last_access().map(|v| v == 1).unwrap_or(false);
     let (has_backup, last_applied) = backup_info("disable_ntfs_last_access");
     Ok(TweakInfo {
         id: "disable_ntfs_last_access".to_string(),
         name: "Desabilitar Timestamp de Último Acesso NTFS".to_string(),
-        description: "Desabilita a atualização automática do timestamp de último acesso em \
-            arquivos NTFS, reduzindo escritas desnecessárias no disco — especialmente benéfico \
-            para SSDs com muitas operações de leitura."
+        description: "Impede o NTFS de atualizar o timestamp de último acesso em cada leitura \
+            de arquivo. Reduz operações de escrita no disco. No Windows 11, volumes >128GB já \
+            têm isso desabilitado por padrão, mas este tweak garante a configuração \
+            independente do tamanho."
             .to_string(),
         category: "storage".to_string(),
-        is_applied: false,
+        is_applied,
         requires_restart: false,
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Plausible,
-        default_value_description: "Padrão Windows: timestamps de último acesso habilitados".to_string(),
+        default_value_description:
+            "Padrão Windows: timestamps habilitados (0) ou desabilitados pelo sistema (2) em volumes grandes"
+                .to_string(),
     })
 }
 
+/// Desabilita os timestamps de último acesso NTFS via `fsutil behavior set disablelastaccess 1`.
 #[tauri::command]
 pub fn disable_ntfs_last_access() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    // Passo 1: Rejeita dupla aplicação
+    let current_val = query_ntfs_last_access()?;
+    if current_val == 1 {
+        return Err(
+            "Tweak 'disable_ntfs_last_access' já está aplicado (disablelastaccess = 1)".to_string(),
+        );
+    }
+
+    // Passo 2: Salva backup do valor original
+    backup_before_apply(
+        "disable_ntfs_last_access",
+        TweakCategory::Powershell,
+        "NtfsDisableLastAccessUpdate — controla atualização de timestamps de leitura NTFS",
+        OriginalValue {
+            path: "fsutil behavior".to_string(),
+            key: "disablelastaccess".to_string(),
+            value: Some(json!(current_val)),
+            value_type: "FSUTIL_STATE".to_string(),
+        },
+        json!(1u32),
+    )?;
+
+    // Passo 3: Aplica o tweak
+    let result = run_command(
+        "fsutil.exe",
+        &["behavior", "set", "disablelastaccess", "1"],
+    )?;
+    if !result.success {
+        return Err(format!(
+            "fsutil behavior set falhou (código {}): {}",
+            result.exit_code, result.stderr
+        ));
+    }
+
+    Ok(())
 }
 
+/// Reverte o timestamp de último acesso para o valor original salvo no backup.
 #[tauri::command]
 pub fn revert_ntfs_last_access() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    let original = restore_from_backup("disable_ntfs_last_access")?;
+
+    // Extrai o valor numérico salvo no backup (0, 2 ou 3 tipicamente)
+    let original_val = match original.value {
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(0) as u32,
+        _ => 0, // Fallback: reabilita completamente (valor padrão habilitado)
+    };
+
+    let val_str = original_val.to_string();
+    let result = run_command(
+        "fsutil.exe",
+        &["behavior", "set", "disablelastaccess", val_str.as_str()],
+    )?;
+    if !result.success {
+        return Err(format!(
+            "fsutil behavior set (reversão) falhou (código {}): {}",
+            result.exit_code, result.stderr
+        ));
+    }
+
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PLACEHOLDER — Rede
+// Rede — Algoritmo de Nagle
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/// Caminho base das interfaces TCP no registro (HKLM)
+const NAGLE_INTERFACES_BASE: &str =
+    r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces";
+/// Chave que controla a frequência de ACK — valor 1 = ACK imediato (sem delay)
+const NAGLE_ACK_FREQ_KEY: &str = "TcpAckFrequency";
+/// Chave que desabilita explicitamente o algoritmo de Nagle — valor 1 = sem agrupamento
+const NAGLE_NO_DELAY_KEY: &str = "TCPNoDelay";
+
+struct NagleStatus {
+    is_applied: bool,
+    guid: Option<String>,
+}
+
+/// Obtém o GUID da NIC ativa principal via PowerShell.
+fn get_active_nic_guid() -> Result<String, String> {
+    let result = run_powershell(
+        "(Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1).InterfaceGuid",
+    )?;
+
+    let guid = result.stdout.trim().to_string();
+    if guid.is_empty() {
+        return Err("Nenhum adaptador de rede ativo encontrado".to_string());
+    }
+
+    Ok(guid)
+}
+
+/// Constrói o caminho de registro para as interfaces TCP da NIC informada.
+fn nagle_reg_path(guid: &str) -> String {
+    format!(r"{}\{}", NAGLE_INTERFACES_BASE, guid)
+}
+
+/// Verifica o estado atual do tweak de Nagle na NIC ativa.
+fn get_nagle_status() -> NagleStatus {
+    let guid = match get_active_nic_guid() {
+        Ok(g) => g,
+        Err(_) => return NagleStatus { is_applied: false, guid: None },
+    };
+
+    let path = nagle_reg_path(&guid);
+    let ack_freq = read_dword(Hive::LocalMachine, &path, NAGLE_ACK_FREQ_KEY)
+        .unwrap_or(None)
+        .unwrap_or(0);
+    let no_delay = read_dword(Hive::LocalMachine, &path, NAGLE_NO_DELAY_KEY)
+        .unwrap_or(None)
+        .unwrap_or(0);
+
+    NagleStatus {
+        is_applied: ack_freq == 1 && no_delay == 1,
+        guid: Some(guid),
+    }
+}
 
 #[tauri::command]
 pub fn get_nagle_info() -> Result<TweakInfo, String> {
+    let status = get_nagle_status();
     let (has_backup, last_applied) = backup_info("disable_nagle");
+
     Ok(TweakInfo {
         id: "disable_nagle".to_string(),
         name: "Desabilitar Algoritmo de Nagle".to_string(),
-        description: "Desabilita o algoritmo de Nagle nas conexões TCP, que agrupa pacotes \
-            pequenos para otimizar largura de banda. Em jogos com protocolo TCP, pode reduzir \
-            latência às custas de maior uso de banda."
+        description: "Desabilita o algoritmo de Nagle e força ACK imediato em conexões TCP. \
+            Pode reduzir latência em 10-20ms para jogos que usam TCP (alguns MMOs, League of \
+            Legends). A maioria dos jogos modernos usa UDP, onde este tweak não tem efeito."
             .to_string(),
         category: "network".to_string(),
-        is_applied: false,
+        is_applied: status.is_applied,
         requires_restart: false,
         last_applied,
         has_backup,
-        risk_level: RiskLevel::Medium,
+        risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Plausible,
         default_value_description: "Padrão Windows: algoritmo de Nagle habilitado".to_string(),
     })
 }
 
+/// Desabilita o algoritmo de Nagle na NIC ativa escrevendo `TcpAckFrequency = 1`
+/// e `TCPNoDelay = 1` no caminho de registro da interface detectada dinamicamente.
 #[tauri::command]
 pub fn disable_nagle() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    let status = get_nagle_status();
+
+    // Passo 1: Rejeita dupla aplicação
+    if status.is_applied {
+        return Err("Tweak 'disable_nagle' já está aplicado".to_string());
+    }
+
+    let guid = status
+        .guid
+        .ok_or("Nenhum adaptador de rede ativo encontrado para aplicar o tweak")?;
+    let path = nagle_reg_path(&guid);
+    let hklm_path = format!(r"HKEY_LOCAL_MACHINE\{}", path);
+
+    // Passo 2: Lê os valores originais de ambas as chaves
+    let orig_ack = read_dword(Hive::LocalMachine, &path, NAGLE_ACK_FREQ_KEY)?;
+    let orig_delay = read_dword(Hive::LocalMachine, &path, NAGLE_NO_DELAY_KEY)?;
+
+    let orig_ack_json = orig_ack.map(|v| json!(v)).unwrap_or(Value::Null);
+    let orig_delay_json = orig_delay.map(|v| json!(v)).unwrap_or(Value::Null);
+
+    // Passo 3: Salva backup com padrão MULTI (dois valores na mesma NIC)
+    let backup_entries = json!([
+        {
+            "hive": "HKLM",
+            "path": hklm_path,
+            "key": NAGLE_ACK_FREQ_KEY,
+            "value": orig_ack_json
+        },
+        {
+            "hive": "HKLM",
+            "path": hklm_path,
+            "key": NAGLE_NO_DELAY_KEY,
+            "value": orig_delay_json
+        }
+    ]);
+
+    backup_before_apply(
+        "disable_nagle",
+        TweakCategory::Registry,
+        "TcpAckFrequency e TCPNoDelay na NIC ativa — desabilita algoritmo de Nagle",
+        OriginalValue {
+            path: "MULTI".to_string(),
+            key: "nagle_keys".to_string(),
+            value: Some(backup_entries),
+            value_type: "MULTI_DWORD".to_string(),
+        },
+        json!([1, 1]),
+    )?;
+
+    // Passo 4: Escreve ambas as chaves
+    write_dword(Hive::LocalMachine, &path, NAGLE_ACK_FREQ_KEY, 1)?;
+    write_dword(Hive::LocalMachine, &path, NAGLE_NO_DELAY_KEY, 1)?;
+
+    Ok(())
 }
 
+/// Reverte o algoritmo de Nagle restaurando os valores originais das duas chaves de registro.
 #[tauri::command]
 pub fn revert_nagle() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    let original = restore_from_backup("disable_nagle")?;
+
+    let entries = match original.value {
+        Some(Value::Array(arr)) => arr,
+        _ => return Err("Formato de backup de Nagle inválido — esperado array MULTI".to_string()),
+    };
+
+    for entry in &entries {
+        let path_full = entry["path"]
+            .as_str()
+            .ok_or("Backup Nagle: campo 'path' ausente ou inválido")?;
+        let key = entry["key"]
+            .as_str()
+            .ok_or("Backup Nagle: campo 'key' ausente ou inválido")?;
+
+        // Remove o prefixo "HKEY_LOCAL_MACHINE\" para uso com Hive::LocalMachine
+        let reg_path = path_full
+            .strip_prefix(r"HKEY_LOCAL_MACHINE\")
+            .unwrap_or(path_full);
+
+        match &entry["value"] {
+            Value::Null => {
+                // Chave não existia — remove para restaurar padrão implícito
+                if key_exists(Hive::LocalMachine, reg_path, key)? {
+                    delete_value(Hive::LocalMachine, reg_path, key)?;
+                }
+            }
+            Value::Number(n) => {
+                let v = n.as_u64().unwrap_or(0) as u32;
+                write_dword(Hive::LocalMachine, reg_path, key, v)?;
+            }
+            other => {
+                return Err(format!(
+                    "Tipo inesperado no backup de Nagle para chave '{}': {:?}",
+                    key, other
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PLACEHOLDERS — Visual e Experiência
+// Visual — Sticky Keys (Teclas de Aderência)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/// Caminho do registro de acessibilidade no perfil do usuário atual
+const STICKY_KEYS_PATH: &str = r"Control Panel\Accessibility\StickyKeys";
+/// Nome do valor de flags que controla o comportamento do atalho
+const STICKY_KEYS_FLAGS_KEY: &str = "Flags";
+/// Valor que desabilita o atalho de 5x Shift (bit 1 em 0)
+const STICKY_KEYS_APPLIED_FLAGS: &str = "506";
+
+/// Verifica se o atalho de Sticky Keys está desabilitado (Flags = "506").
+fn get_sticky_keys_status() -> Result<bool, String> {
+    let flags = read_string(Hive::CurrentUser, STICKY_KEYS_PATH, STICKY_KEYS_FLAGS_KEY)?;
+    Ok(flags.as_deref() == Some(STICKY_KEYS_APPLIED_FLAGS))
+}
 
 #[tauri::command]
 pub fn get_sticky_keys_info() -> Result<TweakInfo, String> {
+    let is_applied = get_sticky_keys_status().unwrap_or(false);
     let (has_backup, last_applied) = backup_info("disable_sticky_keys");
+
     Ok(TweakInfo {
         id: "disable_sticky_keys".to_string(),
         name: "Desabilitar Teclas de Aderência (Sticky Keys)".to_string(),
-        description: "Desabilita o atalho que ativa Sticky Keys ao pressionar Shift 5 vezes, \
-            eliminando a janela de diálogo que pode interromper sessões de jogo inesperadamente."
+        description: "Desabilita o atalho de ativação do Sticky Keys (5x Shift), prevenindo \
+            interrupções acidentais durante sessões de jogo."
             .to_string(),
         category: "visual".to_string(),
-        is_applied: false,
+        is_applied,
         requires_restart: false,
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Proven,
-        default_value_description: "Padrão Windows: atalho de Sticky Keys habilitado".to_string(),
+        default_value_description:
+            "Padrão Windows: atalho de Sticky Keys habilitado (Flags = 510)".to_string(),
     })
 }
 
+/// Define `Flags = "506"` em `HKCU\Control Panel\Accessibility\StickyKeys`
+/// para desabilitar o atalho de ativação por 5x Shift.
 #[tauri::command]
 pub fn disable_sticky_keys() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    // Passo 1: Rejeita dupla aplicação
+    if get_sticky_keys_status()? {
+        return Err(
+            "Tweak 'disable_sticky_keys' já está aplicado (Flags = 506)".to_string(),
+        );
+    }
+
+    // Passo 2: Lê o valor original das Flags
+    let original_flags =
+        read_string(Hive::CurrentUser, STICKY_KEYS_PATH, STICKY_KEYS_FLAGS_KEY)?;
+    let original_json = original_flags.as_ref().map(|v| json!(v));
+
+    // Passo 3: Salva backup antes de modificar
+    backup_before_apply(
+        "disable_sticky_keys",
+        TweakCategory::Registry,
+        "Flags em HKCU\\Control Panel\\Accessibility\\StickyKeys — controla atalho 5x Shift",
+        OriginalValue {
+            path: format!("HKEY_CURRENT_USER\\{}", STICKY_KEYS_PATH),
+            key: STICKY_KEYS_FLAGS_KEY.to_string(),
+            value: original_json,
+            value_type: "STRING".to_string(),
+        },
+        json!(STICKY_KEYS_APPLIED_FLAGS),
+    )?;
+
+    // Passo 4: Aplica o tweak — escreve "506" no registro
+    write_string(
+        Hive::CurrentUser,
+        STICKY_KEYS_PATH,
+        STICKY_KEYS_FLAGS_KEY,
+        STICKY_KEYS_APPLIED_FLAGS,
+    )
 }
 
+/// Reverte as Flags do Sticky Keys para o valor original salvo no backup.
 #[tauri::command]
 pub fn revert_sticky_keys() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    let original = restore_from_backup("disable_sticky_keys")?;
+
+    match original.value {
+        None => {
+            // Chave não existia — remove para restaurar comportamento padrão
+            if key_exists(Hive::CurrentUser, STICKY_KEYS_PATH, STICKY_KEYS_FLAGS_KEY)? {
+                delete_value(Hive::CurrentUser, STICKY_KEYS_PATH, STICKY_KEYS_FLAGS_KEY)?;
+            }
+        }
+        Some(Value::String(s)) => {
+            write_string(Hive::CurrentUser, STICKY_KEYS_PATH, STICKY_KEYS_FLAGS_KEY, &s)?;
+        }
+        Some(other) => {
+            return Err(format!(
+                "Tipo inesperado no backup de 'disable_sticky_keys': {:?}",
+                other
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Visual — Busca Bing no Menu Iniciar
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Caminho do registro da configuração de busca do Windows (HKCU)
+const BING_SEARCH_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Search";
+/// Chave que controla a integração Bing na pesquisa do Menu Iniciar
+const BING_SEARCH_KEY: &str = "BingSearchEnabled";
+
+/// Verifica se o Bing está desabilitado no Menu Iniciar (BingSearchEnabled = 0).
+fn get_bing_search_status() -> Result<bool, String> {
+    let val = read_dword(Hive::CurrentUser, BING_SEARCH_PATH, BING_SEARCH_KEY)?;
+    // Applied = 0 (desabilitado); None = chave ausente (Bing habilitado por padrão)
+    Ok(val == Some(0))
 }
 
 #[tauri::command]
 pub fn get_bing_search_info() -> Result<TweakInfo, String> {
+    let is_applied = get_bing_search_status().unwrap_or(false);
     let (has_backup, last_applied) = backup_info("disable_bing_search");
+
     Ok(TweakInfo {
         id: "disable_bing_search".to_string(),
         name: "Desabilitar Busca Bing no Menu Iniciar".to_string(),
-        description: "Desabilita a integração do Bing no Menu Iniciar, evitando requisições de \
-            rede ao pesquisar localmente e acelerando resultados de busca."
+        description: "Remove a integração do Bing no menu Iniciar do Windows. Buscas ficam \
+            apenas locais, mais rápidas e sem envio de dados para a Microsoft."
             .to_string(),
         category: "visual".to_string(),
-        is_applied: false,
+        is_applied,
         requires_restart: false,
         last_applied,
         has_backup,
         risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Plausible,
-        default_value_description: "Padrão Windows: busca Bing habilitada no Menu Iniciar".to_string(),
+        evidence_level: EvidenceLevel::Proven,
+        default_value_description:
+            "Padrão Windows: busca Bing habilitada no Menu Iniciar (chave ausente ou = 1)"
+                .to_string(),
     })
 }
 
+/// Define `BingSearchEnabled = 0` em `HKCU\...\Search` para remover integração Bing.
 #[tauri::command]
 pub fn disable_bing_search() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    // Passo 1: Rejeita dupla aplicação
+    if get_bing_search_status()? {
+        return Err(
+            "Tweak 'disable_bing_search' já está aplicado (BingSearchEnabled = 0)".to_string(),
+        );
+    }
+
+    // Passo 2: Lê o valor original
+    let original_val = read_dword(Hive::CurrentUser, BING_SEARCH_PATH, BING_SEARCH_KEY)?;
+    let original_json = original_val.map(|v| json!(v));
+
+    // Passo 3: Salva backup
+    backup_before_apply(
+        "disable_bing_search",
+        TweakCategory::Registry,
+        "BingSearchEnabled em HKCU\\...\\Search — controla integração Bing no Menu Iniciar",
+        OriginalValue {
+            path: format!("HKEY_CURRENT_USER\\{}", BING_SEARCH_PATH),
+            key: BING_SEARCH_KEY.to_string(),
+            value: original_json,
+            value_type: "DWORD".to_string(),
+        },
+        json!(0u32),
+    )?;
+
+    // Passo 4: Desabilita o Bing no Menu Iniciar
+    write_dword(Hive::CurrentUser, BING_SEARCH_PATH, BING_SEARCH_KEY, 0)
 }
 
+/// Reverte o Bing no Menu Iniciar para o estado original salvo no backup.
 #[tauri::command]
 pub fn revert_bing_search() -> Result<(), String> {
-    Err("Não implementado — próxima fase de desenvolvimento".to_string())
+    let original = restore_from_backup("disable_bing_search")?;
+
+    match original.value {
+        // Chave não existia — remove (Bing volta habilitado pelo comportamento padrão)
+        None => {
+            if key_exists(Hive::CurrentUser, BING_SEARCH_PATH, BING_SEARCH_KEY)? {
+                delete_value(Hive::CurrentUser, BING_SEARCH_PATH, BING_SEARCH_KEY)?;
+            }
+        }
+        Some(Value::Number(n)) => {
+            let v = n.as_u64().unwrap_or(1) as u32;
+            write_dword(Hive::CurrentUser, BING_SEARCH_PATH, BING_SEARCH_KEY, v)?;
+        }
+        Some(other) => {
+            return Err(format!(
+                "Tipo inesperado no backup de 'disable_bing_search': {:?}",
+                other
+            ));
+        }
+    }
+
+    Ok(())
 }
