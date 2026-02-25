@@ -166,13 +166,10 @@ export default function Dashboard() {
             />
           </div>
           <div className={styles.badges}>
-            <StatusBadge
-              label="Power Plan"
-              optimized={info?.ultimate_performance ?? false}
-              goodLabel="Ultimate"
-              badLabel="Outro plano"
+            <PowerPlanBadge
+              tier={info?.power_plan_tier ?? 'other'}
+              name={info?.power_plan_name ?? ''}
               loading={!info}
-              tooltip="O plano Ultimate Performance mantém o processador em frequência máxima, eliminando latência de boost. Recomendado: Ultimate Performance."
             />
             <StatusBadge
               label="Timer Res"
@@ -221,6 +218,51 @@ function StatusBadge({ label, optimized, goodLabel, badLabel, loading, tooltip }
         {loading ? '…' : optimized ? goodLabel : badLabel}
       </span>
       {tooltip && <div className={styles.badgeTooltip}>{tooltip}</div>}
+    </div>
+  );
+}
+
+// ─── PowerPlanBadge (3 tiers) ─────────────────────────────
+
+interface PowerPlanBadgeProps {
+  tier: string;
+  name: string;
+  loading?: boolean;
+}
+
+function PowerPlanBadge({ tier, name, loading }: PowerPlanBadgeProps) {
+  const tooltip = "O plano Ultimate Performance mantém o processador em frequência máxima, eliminando latência de boost. Recomendado: Ultimate Performance.";
+
+  const badgeStyle = loading
+    ? ''
+    : tier === 'ultimate'
+      ? styles.badgeOn
+      : tier === 'high'
+        ? styles.badgeOff
+        : styles.badgeError;
+
+  const dotStyle = loading
+    ? ''
+    : tier === 'ultimate'
+      ? styles.dotOn
+      : tier === 'high'
+        ? styles.dotOff
+        : styles.dotError;
+
+  const statusText = loading
+    ? '…'
+    : tier === 'ultimate'
+      ? name
+      : tier === 'high'
+        ? `${name} (bom, mas Ultimate é melhor)`
+        : name;
+
+  return (
+    <div className={`${styles.badge} ${badgeStyle}`}>
+      <span className={`${styles.dot} ${dotStyle}`} />
+      <span className={styles.badgeLabel}>Power Plan</span>
+      <span className={styles.badgeStatus}>{statusText}</span>
+      <div className={styles.badgeTooltip}>{tooltip}</div>
     </div>
   );
 }

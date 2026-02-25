@@ -31,8 +31,10 @@ pub struct SystemInfo {
     pub vbs_enabled: bool,
     /// `true` se o Game DVR está desabilitado (otimizado para gaming)
     pub game_dvr_disabled: bool,
-    /// `true` se o plano Ultimate Performance está ativo
-    pub ultimate_performance: bool,
+    /// Nome do plano de energia ativo (ex: "Desempenho Máximo", "Alto Desempenho")
+    pub power_plan_name: String,
+    /// Tier do plano: "ultimate", "high" ou "other"
+    pub power_plan_tier: String,
     /// `true` se o timer de alta resolução (1 ms) está ativo
     pub timer_resolution_optimized: bool,
 }
@@ -152,29 +154,55 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
             .map(|v| v != 0)
             .unwrap_or(false);
 
-        // Game DVR: desabilitado = otimizado (3 chaves devem ser 0)
-        let dvr1 = hkcu
+        // Game DVR: desabilitado = otimizado
+        // Chave principal — se 0, o usuário desabilitou via Settings
+        let dvr_main = hkcu
             .open_subkey(r"System\GameConfigStore")
             .ok()
             .and_then(|k| k.get_value::<u32, _>("GameDVR_Enabled").ok())
             .unwrap_or(1);
-        let dvr2 = hklm
+        // Group Policy — só existe em domínios ou se criada manualmente
+        let policy_dvr: Option<u32> = hklm
             .open_subkey(r"SOFTWARE\Policies\Microsoft\Windows\GameDVR")
             .ok()
-            .and_then(|k| k.get_value::<u32, _>("AllowGameDVR").ok())
-            .unwrap_or(1);
-        let dvr3 = hkcu
+            .and_then(|k| k.get_value::<u32, _>("AllowGameDVR").ok());
+        // Complementar — confirmação extra, não deve invalidar dvr_main
+        let app_capture: Option<u32> = hkcu
             .open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR")
             .ok()
-            .and_then(|k| k.get_value::<u32, _>("AppCaptureEnabled").ok())
-            .unwrap_or(1);
-        let game_dvr_disabled = dvr1 == 0 && dvr2 == 0 && dvr3 == 0;
+            .and_then(|k| k.get_value::<u32, _>("AppCaptureEnabled").ok());
 
-        // Ultimate Performance: powercfg /getactivescheme contém "ultimate"
-        let ultimate_performance = run_powershell("powercfg /getactivescheme")
+        let game_dvr_disabled = dvr_main == 0
+            || policy_dvr == Some(0)
+            || (dvr_main != 0 && policy_dvr.is_none() && app_capture == Some(0));
+
+        // Power Plan: detecção por GUID (independente de idioma do Windows)
+        // Ultimate Performance: e9a42b02-d5df-448d-aa00-03f14749eb61
+        // Alto Desempenho:      8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+        let powercfg_output = run_powershell("powercfg /getactivescheme")
             .ok()
-            .map(|o| o.stdout.to_lowercase().contains("ultimate"))
-            .unwrap_or(false);
+            .map(|o| o.stdout.clone())
+            .unwrap_or_default();
+        let powercfg_lower = powercfg_output.to_lowercase();
+
+        let power_plan_tier = if powercfg_lower.contains("e9a42b02-d5df-448d-aa00-03f14749eb61") {
+            "ultimate"
+        } else if powercfg_lower.contains("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c") {
+            "high"
+        } else {
+            "other"
+        }
+        .to_string();
+
+        // Extrai nome do plano entre parênteses: "... (Nome do Plano)"
+        let power_plan_name = powercfg_output
+            .rfind('(')
+            .and_then(|start| {
+                powercfg_output[start + 1..]
+                    .find(')')
+                    .map(|end| powercfg_output[start + 1..start + 1 + end].trim().to_string())
+            })
+            .unwrap_or_else(|| "Desconhecido".to_string());
 
         // Timer Resolution: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel
         let timer_resolution_optimized = hklm
@@ -197,7 +225,8 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
             hags_enabled,
             vbs_enabled,
             game_dvr_disabled,
-            ultimate_performance,
+            power_plan_name,
+            power_plan_tier,
             timer_resolution_optimized,
         })
     })

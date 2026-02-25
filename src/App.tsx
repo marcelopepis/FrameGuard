@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { BrowserRouter, useLocation, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import { Dashboard, Optimizations, Privacy, Maintenance, Services, Plans, Settings } from './pages';
@@ -21,9 +22,15 @@ const ROUTES = [
 function Pages() {
   const { pathname } = useLocation();
   const isKnown = ROUTES.some(r => r.path === pathname);
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Reseta o scroll do <main> ao trocar de página
+  useEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+  }, [pathname]);
 
   return (
-    <Layout>
+    <Layout mainRef={mainRef}>
       {!isKnown && <Navigate to="/" replace />}
       {ROUTES.map(({ path, Page }) => (
         <div key={path} style={{ display: pathname === path ? 'contents' : 'none' }}>

@@ -21,7 +21,8 @@ export interface SystemInfo {
   hags_enabled: boolean;
   vbs_enabled: boolean;
   game_dvr_disabled: boolean;
-  ultimate_performance: boolean;
+  power_plan_name: string;
+  power_plan_tier: string;
   timer_resolution_optimized: boolean;
 }
 
