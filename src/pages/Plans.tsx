@@ -6,88 +6,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import {
   Plus, Play, Pencil, Trash2, GripVertical,
   CheckCircle2, XCircle, Clock, MinusCircle,
   Loader2, X, ChevronDown, ChevronUp,
   ClipboardList, Shield, Copy,
+  BookOpen, HeartPulse, Gamepad2, Wrench, Lock, ArrowRight, Info,
 } from 'lucide-react';
 import styles from './Plans.module.css';
 import { useToast } from '../contexts/ToastContext';
-
-// ── Tipos ──────────────────────────────────────────────────────────────────────
-
-interface PlanItem {
-  tweak_id: string;
-  order: number;
-  enabled: boolean;
-}
-
-interface Plan {
-  id: string;
-  name: string;
-  description: string;
-  created_at: string;
-  last_executed: string | null;
-  items: PlanItem[];
-}
-
-interface HealthCheckData {
-  id: string;
-  name: string;
-  status: 'success' | 'warning' | 'error';
-  message: string;
-  details?: string;
-  duration_seconds: number;
-  space_freed_mb?: number;
-}
-
-interface ItemResult {
-  tweak_id: string;
-  status: 'completed' | 'failed' | 'skipped';
-  error: string | null;
-  result_data: HealthCheckData | null;
-}
-
-interface PlanProgress {
-  plan_id: string;
-  current_item: string;
-  current_item_index: number;
-  total_items: number;
-  item_status: 'running' | 'completed' | 'failed' | 'skipped';
-  item_result: ItemResult | null;
-  overall_progress_percent: number;
-}
-
-interface PlanExecutionSummary {
-  plan_id: string;
-  plan_name: string;
-  duration_seconds: number;
-  total_items: number;
-  completed_count: number;
-  failed_count: number;
-  skipped_count: number;
-  results: ItemResult[];
-}
-
-type ItemStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
-
-interface ItemExecState {
-  status: ItemStatus;
-  message?: string;
-  details?: string;
-  error?: string;
-  hcStatus?: 'success' | 'warning' | 'error';
-}
-
-interface ExecState {
-  running: boolean;
-  items: Record<string, ItemExecState>;
-  progress: number;
-  summary: PlanExecutionSummary | null;
-  fatalError: string | null;
-}
+import { usePlanExecution } from '../hooks';
+import type { Plan, PlanItem, ExecState, ItemStatus } from '../hooks';
 
 // ── Catálogo de tweaks disponíveis ────────────────────────────────────────────
 
@@ -368,20 +297,29 @@ export default function Plans() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { showToast } = useToast();
+  const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
+
+  // Guia colapsável
+  const [guideOpen, setGuideOpen] = useState(() => {
+    try { return localStorage.getItem('fg_planGuideOpen') !== 'false'; }
+    catch { return true; }
+  });
+
+  function toggleGuide() {
+    setGuideOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem('fg_planGuideOpen', String(next)); } catch {}
+      return next;
+    });
+  }
 
   // Modal de visualização
   const [viewingPlan, setViewingPlan] = useState<Plan | null>(null);
 
-  // Modal de execução
-  const [executingPlan, setExecutingPlan] = useState<Plan | null>(null);
-  const [execState, setExecState] = useState<ExecState | null>(null);
-  const unlistenRef = useRef<(() => void) | null>(null);
-
   useEffect(() => {
     loadPlans();
-    // Limpa listener se o componente desmontar durante uma execução
-    return () => { unlistenRef.current?.(); };
-  }, []);
+    return () => { cleanup(); };
+  }, [cleanup]);
 
   async function loadPlans() {
     try {
@@ -445,64 +383,22 @@ export default function Plans() {
     }
   }
 
-  async function handleExecutePlan(plan: Plan) {
-    // Inicializa estado: todos os itens como 'pending'
-    const initialItems: Record<string, ItemExecState> = {};
-    plan.items.forEach(item => {
-      initialItems[item.tweak_id] = { status: 'pending' };
-    });
-
-    setExecutingPlan(plan);
-    setExecState({ running: true, items: initialItems, progress: 0, summary: null, fatalError: null });
-
-    // Registra listener ANTES do invoke (para não perder eventos iniciais)
-    const unlisten = await listen<PlanProgress>('plan_progress', (event) => {
-      const p = event.payload;
-
-      const newItemState: ItemExecState = { status: p.item_status };
-
-      if (p.item_result?.error) {
-        newItemState.error = p.item_result.error;
-      }
-      if (p.item_result?.result_data) {
-        const rd = p.item_result.result_data;
-        newItemState.message = rd.message;
-        newItemState.details = rd.details;
-        newItemState.hcStatus = rd.status;
-      }
-
-      setExecState(prev => prev ? {
-        ...prev,
-        progress: p.overall_progress_percent,
-        items: { ...prev.items, [p.current_item]: newItemState },
-      } : prev);
-    });
-
-    unlistenRef.current = unlisten;
-
+  async function handleDuplicatePlan(planId: string) {
     try {
-      const summary = await invoke<PlanExecutionSummary>('execute_plan', { planId: plan.id });
-      setExecState(prev => prev
-        ? { ...prev, running: false, summary, progress: 100 }
-        : prev,
-      );
-      // Atualiza lista para refletir o novo last_executed
+      const duplicated = await invoke<Plan>('duplicate_plan', { planId });
       await loadPlans();
+      showToast('success', 'Plano duplicado', duplicated.name);
+      // Abre o editor com o plano duplicado para personalização
+      setEditingPlan(duplicated);
+      setView('edit');
     } catch (err) {
-      setExecState(prev => prev
-        ? { ...prev, running: false, fatalError: String(err) }
-        : prev,
-      );
-    } finally {
-      unlisten();
-      unlistenRef.current = null;
+      showToast('error', 'Erro ao duplicar plano', String(err));
+      console.error('[Plans] Erro ao duplicar plano:', err);
     }
   }
 
-  function handleCloseModal() {
-    if (execState?.running) return;
-    setExecutingPlan(null);
-    setExecState(null);
+  async function handleExecutePlan(plan: Plan) {
+    execute(plan, () => loadPlans());
   }
 
   if (view === 'edit') {
@@ -529,6 +425,9 @@ export default function Plans() {
         </button>
       </header>
 
+      {/* Guia de planos */}
+      <PlanGuide open={guideOpen} onToggle={toggleGuide} />
+
       {/* Lista de planos */}
       {loading ? (
         <p className={styles.loading}>Carregando planos…</p>
@@ -546,6 +445,7 @@ export default function Plans() {
               onDelete={() => handleDeletePlan(plan.id)}
               onDeleteCancel={() => setConfirmDeleteId(null)}
               onRun={() => handleExecutePlan(plan)}
+              onDuplicate={() => handleDuplicatePlan(plan.id)}
             />
           ))}
         </div>
@@ -557,6 +457,7 @@ export default function Plans() {
           plan={viewingPlan}
           onClose={() => setViewingPlan(null)}
           onRun={() => { setViewingPlan(null); handleExecutePlan(viewingPlan); }}
+          onDuplicate={() => { setViewingPlan(null); handleDuplicatePlan(viewingPlan.id); }}
         />
       )}
 
@@ -565,8 +466,92 @@ export default function Plans() {
         <ExecutionModal
           plan={executingPlan}
           state={execState}
-          onClose={handleCloseModal}
+          onClose={closeModal}
         />
+      )}
+    </div>
+  );
+}
+
+// ── PlanGuide ──────────────────────────────────────────────────────────────────
+
+const GUIDE_PLANS = [
+  {
+    Icon: HeartPulse,
+    name: 'Saúde Completa',
+    freq: '1x por mês ou quando o Windows parecer instável',
+    desc: 'Verifica a integridade do sistema, repara arquivos corrompidos e limpa componentes obsoletos.',
+    time: '5–15 min',
+  },
+  {
+    Icon: Gamepad2,
+    name: 'Otimização Gaming',
+    freq: '1x após instalar ou reinstalar o Windows',
+    desc: 'Configura GPU, CPU, rede e timers para máximo desempenho em jogos. Reinicie após executar.',
+    time: '1–2 min',
+  },
+  {
+    Icon: Wrench,
+    name: 'Manutenção Básica',
+    freq: 'Semanalmente ou quando notar lentidão',
+    desc: 'Limpeza rápida de temporários e flush de DNS para manter o sistema leve.',
+    time: '1–2 min',
+  },
+  {
+    Icon: Lock,
+    name: 'Privacidade e Debloat',
+    freq: '1x após instalar o Windows; re-executar após grandes updates',
+    desc: 'Remove telemetria, Copilot, Cortana, bloatware e apps em background indesejados.',
+    time: '1–2 min',
+  },
+];
+
+function PlanGuide({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <div className={`${styles.guide} ${open ? styles.guideOpen : ''}`}>
+      <button className={styles.guideToggle} onClick={onToggle}>
+        <BookOpen size={15} strokeWidth={2} className={styles.guideIcon} />
+        <span className={styles.guideTitle}>Como usar os Planos</span>
+        <ChevronDown
+          size={14}
+          strokeWidth={2}
+          className={`${styles.guideChevron} ${open ? styles.guideChevronOpen : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className={styles.guideContent}>
+          <div className={styles.guidePlans}>
+            {GUIDE_PLANS.map(({ Icon, name, freq, desc, time }) => (
+              <div key={name} className={styles.guidePlan}>
+                <div className={styles.guidePlanIcon}>
+                  <Icon size={15} strokeWidth={2} />
+                </div>
+                <div className={styles.guidePlanBody}>
+                  <div className={styles.guidePlanHeader}>
+                    <span className={styles.guidePlanName}>{name}</span>
+                    <span className={styles.guidePlanTime}>
+                      <Clock size={10} strokeWidth={2} />
+                      {time}
+                    </span>
+                  </div>
+                  <p className={styles.guidePlanDesc}>{desc}</p>
+                  <p className={styles.guidePlanFreq}>{freq}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className={styles.guideTip}>
+            <Info size={13} strokeWidth={2} className={styles.guideTipIcon} />
+            <p>
+              <strong>Ordem recomendada:</strong>{' '}
+              Manutenção Básica <ArrowRight size={10} strokeWidth={2.5} className={styles.guideTipArrow} />{' '}
+              Saúde Completa <ArrowRight size={10} strokeWidth={2.5} className={styles.guideTipArrow} />{' '}
+              Gaming / Privacidade
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -601,16 +586,26 @@ interface PlanCardProps {
   onDelete: () => void;
   onDeleteCancel: () => void;
   onRun: () => void;
+  onDuplicate: () => void;
 }
 
-function PlanCard({ plan, confirmDeleteId, onView, onEdit, onDelete, onDeleteCancel, onRun }: PlanCardProps) {
+function PlanCard({ plan, confirmDeleteId, onView, onEdit, onDelete, onDeleteCancel, onRun, onDuplicate }: PlanCardProps) {
   const isConfirmingDelete = confirmDeleteId === plan.id;
   const enabledCount = plan.items.filter(i => i.enabled).length;
+  const isBuiltin = plan.builtin;
 
   return (
     <div className={styles.planCard}>
       <div className={styles.cardBody} onClick={onView} role="button" tabIndex={0}>
-        <h3 className={styles.planName}>{plan.name}</h3>
+        <div className={styles.cardTitleRow}>
+          <h3 className={styles.planName}>{plan.name}</h3>
+          {isBuiltin && (
+            <span className={styles.builtinBadgeCard}>
+              <Shield size={11} strokeWidth={2.5} />
+              Oficial
+            </span>
+          )}
+        </div>
         {plan.description && (
           <p className={styles.planDesc}>{plan.description}</p>
         )}
@@ -637,22 +632,31 @@ function PlanCard({ plan, confirmDeleteId, onView, onEdit, onDelete, onDeleteCan
           <Play size={13} strokeWidth={2.5} fill="currentColor" />
           Executar
         </button>
-        <button className={styles.btnIcon} onClick={onEdit} title="Editar plano">
-          <Pencil size={14} strokeWidth={2} />
-        </button>
-        {isConfirmingDelete ? (
-          <>
-            <button className={styles.btnDanger} onClick={onDelete}>
-              Confirmar
-            </button>
-            <button className={styles.btnGhost} onClick={onDeleteCancel}>
-              Cancelar
-            </button>
-          </>
-        ) : (
-          <button className={styles.btnIcon} onClick={onDelete} title="Excluir plano">
-            <Trash2 size={14} strokeWidth={2} />
+        {isBuiltin ? (
+          <button className={styles.btnDuplicate} onClick={onDuplicate} title="Duplicar e personalizar">
+            <Copy size={13} strokeWidth={2} />
+            Duplicar
           </button>
+        ) : (
+          <>
+            <button className={styles.btnIcon} onClick={onEdit} title="Editar plano">
+              <Pencil size={14} strokeWidth={2} />
+            </button>
+            {isConfirmingDelete ? (
+              <>
+                <button className={styles.btnDanger} onClick={onDelete}>
+                  Confirmar
+                </button>
+                <button className={styles.btnGhost} onClick={onDeleteCancel}>
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <button className={styles.btnIcon} onClick={onDelete} title="Excluir plano">
+                <Trash2 size={14} strokeWidth={2} />
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -885,10 +889,11 @@ interface PlanViewModalProps {
   plan: Plan;
   onClose: () => void;
   onRun: () => void;
+  onDuplicate: () => void;
 }
 
-function PlanViewModal({ plan, onClose, onRun }: PlanViewModalProps) {
-  const isBuiltin = plan.id.startsWith('builtin_');
+function PlanViewModal({ plan, onClose, onRun, onDuplicate }: PlanViewModalProps) {
+  const isBuiltin = plan.builtin;
   const sortedItems = [...plan.items].sort((a, b) => a.order - b.order);
   const enabledCount = plan.items.filter(i => i.enabled).length;
 
@@ -944,7 +949,7 @@ function PlanViewModal({ plan, onClose, onRun }: PlanViewModalProps) {
           </span>
           <div className={styles.viewActions}>
             {isBuiltin && (
-              <button className={styles.btnSecondary} disabled title="Em breve">
+              <button className={styles.btnDuplicate} onClick={onDuplicate} title="Duplicar e personalizar">
                 <Copy size={13} strokeWidth={2} />
                 Duplicar e personalizar
               </button>

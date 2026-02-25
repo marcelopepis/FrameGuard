@@ -43,6 +43,14 @@ pub struct Plan {
     pub last_executed: Option<String>,
     /// Lista de itens ordenados por `order` ascendente
     pub items: Vec<PlanItem>,
+    /// `true` para planos oficiais do FrameGuard (não editáveis/removíveis pelo usuário)
+    #[serde(default)]
+    pub builtin: bool,
+    /// Versão do plano built-in; `None` para planos do usuário.
+    /// Usado para atualizar planos oficiais em atualizações do app sem exigir
+    /// que o usuário delete o `plans.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub builtin_version: Option<u32>,
 }
 
 /// Estrutura raiz de `plans.json` — envolve todos os planos com metadados de versão.
@@ -90,8 +98,23 @@ const BUILTIN_SAUDE_COMPLETA: &str = "builtin_saude_completa";
 const BUILTIN_OTIMIZACAO_GAMING: &str = "builtin_otimizacao_gaming";
 const BUILTIN_PRIVACIDADE_DEBLOAT: &str = "builtin_privacidade_debloat";
 
-/// Injeta planos built-in que ainda não existam no estado.
-/// Chamada na inicialização para garantir que o usuário sempre tenha os planos padrão.
+/// Versão atual das definições de planos built-in.
+///
+/// Incrementar sempre que a definição de qualquer plano built-in mudar
+/// (ordem de itens, adição/remoção de tweaks, nome, descrição).
+/// Na inicialização, planos com `builtin_version < CURRENT_BUILTIN_VERSION`
+/// são atualizados automaticamente (preservando `last_executed`).
+///
+/// Histórico:
+///   1 — versão inicial (planos criados sem campo builtin_version)
+///   2 — reordenação do Saúde Completa (limpeza antes de scans)
+const CURRENT_BUILTIN_VERSION: u32 = 2;
+
+/// Injeta planos built-in que ainda não existam no estado, e atualiza
+/// planos com versão inferior à `CURRENT_BUILTIN_VERSION`.
+///
+/// Na atualização, `last_executed` é preservado para que o usuário
+/// mantenha o histórico de quando executou o plano.
 fn seed_builtin_plans(state: &mut PlansFile) {
     let now = now_utc();
     let mut modified = false;
@@ -108,94 +131,115 @@ fn seed_builtin_plans(state: &mut PlansFile) {
             .collect()
     }
 
-    // Manutenção Básica
-    if !state.plans.contains_key(BUILTIN_MANUTENCAO_BASICA) {
-        state.plans.insert(
-            BUILTIN_MANUTENCAO_BASICA.to_string(),
-            Plan {
-                id: BUILTIN_MANUTENCAO_BASICA.to_string(),
-                name: "Manutenção Básica".to_string(),
-                description: "Limpeza rápida: flush DNS, temporários e TRIM de SSDs".to_string(),
-                created_at: now.clone(),
-                last_executed: None,
-                items: items(&["flush_dns", "temp_cleanup", "ssd_trim"]),
-            },
-        );
-        modified = true;
+    /// Definição canônica de um plano built-in para inserção/atualização.
+    struct BuiltinDef {
+        id: &'static str,
+        name: &'static str,
+        description: &'static str,
+        tweak_ids: &'static [&'static str],
     }
 
-    // Saúde Completa
-    if !state.plans.contains_key(BUILTIN_SAUDE_COMPLETA) {
-        state.plans.insert(
-            BUILTIN_SAUDE_COMPLETA.to_string(),
-            Plan {
-                id: BUILTIN_SAUDE_COMPLETA.to_string(),
-                name: "Saúde Completa".to_string(),
-                description: "Verificação completa: DISM, SFC, Check Disk, TRIM e limpeza"
-                    .to_string(),
-                created_at: now.clone(),
-                last_executed: None,
-                items: items(&[
-                    "dism_checkhealth",
-                    "dism_scanhealth",
-                    "dism_restorehealth",
-                    "dism_cleanup",
-                    "sfc_scannow",
-                    "chkdsk",
-                    "ssd_trim",
-                    "flush_dns",
-                    "temp_cleanup",
-                ]),
-            },
-        );
-        modified = true;
+    let definitions = [
+        BuiltinDef {
+            id: BUILTIN_MANUTENCAO_BASICA,
+            name: "Manutenção Básica",
+            description: "Limpeza rápida: flush DNS, temporários e TRIM de SSDs",
+            tweak_ids: &["flush_dns", "temp_cleanup", "ssd_trim"],
+        },
+        BuiltinDef {
+            id: BUILTIN_SAUDE_COMPLETA,
+            name: "Saúde Completa",
+            description: "Limpeza + verificação completa: DISM, SFC, Check Disk e TRIM",
+            tweak_ids: &[
+                // Limpeza primeiro — menos arquivos = scans mais rápidos
+                "temp_cleanup",
+                "flush_dns",
+                "ssd_trim",
+                // Verificação e reparo
+                "dism_checkhealth",
+                "dism_scanhealth",
+                "dism_restorehealth",
+                "dism_cleanup",
+                "sfc_scannow",
+                "chkdsk",
+            ],
+        },
+        BuiltinDef {
+            id: BUILTIN_OTIMIZACAO_GAMING,
+            name: "Otimização Gaming",
+            description: "Tweaks essenciais para máximo desempenho em jogos",
+            tweak_ids: &[
+                "enable_hags",
+                "enable_game_mode",
+                "disable_vbs",
+                "disable_game_dvr",
+                "enable_timer_resolution",
+                "disable_mouse_acceleration",
+                "enable_ultimate_performance",
+            ],
+        },
+        BuiltinDef {
+            id: BUILTIN_PRIVACIDADE_DEBLOAT,
+            name: "Privacidade e Debloat",
+            description: "Remove telemetria, bloatware e integração com serviços Microsoft",
+            tweak_ids: &[
+                "disable_telemetry_registry",
+                "disable_copilot",
+                "disable_content_delivery",
+                "disable_background_apps",
+                "disable_bing_search",
+            ],
+        },
+    ];
+
+    for def in &definitions {
+        let needs_update = match state.plans.get(def.id) {
+            // Plano não existe — precisa inserir
+            None => true,
+            // Plano existe mas com versão antiga (ou sem versão = v1) — precisa atualizar
+            Some(existing) => {
+                existing.builtin_version.unwrap_or(1) < CURRENT_BUILTIN_VERSION
+            }
+        };
+
+        if needs_update {
+            // Preserva last_executed do plano anterior (se existia)
+            let last_executed = state
+                .plans
+                .get(def.id)
+                .and_then(|p| p.last_executed.clone());
+
+            // Preserva created_at original (se existia), senão usa agora
+            let created_at = state
+                .plans
+                .get(def.id)
+                .map(|p| p.created_at.clone())
+                .unwrap_or_else(|| now.clone());
+
+            state.plans.insert(
+                def.id.to_string(),
+                Plan {
+                    id: def.id.to_string(),
+                    name: def.name.to_string(),
+                    description: def.description.to_string(),
+                    created_at,
+                    last_executed,
+                    items: items(def.tweak_ids),
+                    builtin: true,
+                    builtin_version: Some(CURRENT_BUILTIN_VERSION),
+                },
+            );
+            modified = true;
+        }
     }
 
-    // Otimização Gaming
-    if !state.plans.contains_key(BUILTIN_OTIMIZACAO_GAMING) {
-        state.plans.insert(
-            BUILTIN_OTIMIZACAO_GAMING.to_string(),
-            Plan {
-                id: BUILTIN_OTIMIZACAO_GAMING.to_string(),
-                name: "Otimização Gaming".to_string(),
-                description: "Tweaks essenciais para máximo desempenho em jogos".to_string(),
-                created_at: now.clone(),
-                last_executed: None,
-                items: items(&[
-                    "enable_hags",
-                    "enable_game_mode",
-                    "disable_vbs",
-                    "disable_game_dvr",
-                    "enable_timer_resolution",
-                    "disable_mouse_acceleration",
-                    "enable_ultimate_performance",
-                ]),
-            },
-        );
-        modified = true;
-    }
-
-    // Privacidade e Debloat
-    if !state.plans.contains_key(BUILTIN_PRIVACIDADE_DEBLOAT) {
-        state.plans.insert(
-            BUILTIN_PRIVACIDADE_DEBLOAT.to_string(),
-            Plan {
-                id: BUILTIN_PRIVACIDADE_DEBLOAT.to_string(),
-                name: "Privacidade e Debloat".to_string(),
-                description: "Remove telemetria, bloatware e integração com serviços Microsoft"
-                    .to_string(),
-                created_at: now.clone(),
-                last_executed: None,
-                items: items(&[
-                    "disable_telemetry_registry",
-                    "disable_copilot",
-                    "disable_content_delivery",
-                    "disable_background_apps",
-                    "disable_bing_search",
-                ]),
-            },
-        );
-        modified = true;
+    // Migração: garante que planos com IDs builtin_ tenham `builtin: true`
+    // (para plans.json salvos antes da introdução do campo)
+    for plan in state.plans.values_mut() {
+        if plan.id.starts_with("builtin_") && !plan.builtin {
+            plan.builtin = true;
+            modified = true;
+        }
     }
 
     if modified {
@@ -279,6 +323,8 @@ pub fn create_plan(
         created_at: now_utc(),
         last_executed: None,
         items,
+        builtin: false,
+        builtin_version: None,
     };
 
     state.plans.insert(plan.id.clone(), plan.clone());
@@ -290,6 +336,8 @@ pub fn create_plan(
 
 /// Atualiza nome, descrição e itens de um plano existente.
 ///
+/// Planos oficiais (`builtin == true`) não podem ser editados — retorna erro
+/// instruindo o usuário a duplicar o plano.
 /// Preserva `created_at`, `last_executed` e o `id` original.
 /// Retorna erro se o `plan_id` não existir.
 pub fn update_plan(
@@ -307,6 +355,12 @@ pub fn update_plan(
         .get_mut(plan_id)
         .ok_or_else(|| format!("Plano '{}' não encontrado", plan_id))?;
 
+    if plan.builtin {
+        return Err(
+            "Planos oficiais não podem ser editados. Use 'Duplicar e personalizar' para criar uma versão customizada.".to_string()
+        );
+    }
+
     plan.name = name.to_string();
     plan.description = description.to_string();
     plan.items = items;
@@ -321,11 +375,19 @@ pub fn update_plan(
 
 /// Remove permanentemente um plano do arquivo.
 ///
+/// Planos oficiais (`builtin == true`) não podem ser removidos.
 /// Retorna erro se o `plan_id` não existir.
 pub fn delete_plan(plan_id: &str) -> Result<(), String> {
     let mut state = get_state()
         .lock()
         .map_err(|_| "Falha ao adquirir lock no estado de planos".to_string())?;
+
+    // Verifica se é builtin antes de remover
+    if let Some(plan) = state.plans.get(plan_id) {
+        if plan.builtin {
+            return Err("Planos oficiais não podem ser removidos.".to_string());
+        }
+    }
 
     state
         .plans
@@ -334,6 +396,39 @@ pub fn delete_plan(plan_id: &str) -> Result<(), String> {
 
     state.last_modified = now_utc();
     save_to_disk(&state)
+}
+
+/// Duplica um plano existente com novo UUID, `builtin: false` e nome com sufixo " (Cópia)".
+///
+/// Permite ao usuário personalizar planos oficiais sem alterar o original.
+/// Retorna o plano duplicado já persistido em disco.
+pub fn duplicate_plan(plan_id: &str) -> Result<Plan, String> {
+    let mut state = get_state()
+        .lock()
+        .map_err(|_| "Falha ao adquirir lock no estado de planos".to_string())?;
+
+    let source = state
+        .plans
+        .get(plan_id)
+        .ok_or_else(|| format!("Plano '{}' não encontrado para duplicação", plan_id))?
+        .clone();
+
+    let duplicate = Plan {
+        id: Uuid::new_v4().to_string(),
+        name: format!("{} (Cópia)", source.name),
+        description: source.description,
+        created_at: now_utc(),
+        last_executed: None,
+        items: source.items,
+        builtin: false,
+        builtin_version: None,
+    };
+
+    state.plans.insert(duplicate.id.clone(), duplicate.clone());
+    state.last_modified = now_utc();
+    save_to_disk(&state)?;
+
+    Ok(duplicate)
 }
 
 /// Retorna uma cópia de um plano específico pelo seu ID.

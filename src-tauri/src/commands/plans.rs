@@ -19,6 +19,7 @@ use serde::Serialize;
 use serde_json::json;
 use tauri::Emitter;
 
+use crate::utils::activity_log;
 use crate::utils::plan_manager::{self, PlanItem};
 
 // ─── Tipos de evento e resultado ─────────────────────────────────────────────
@@ -320,6 +321,14 @@ pub fn delete_plan(plan_id: String) -> Result<(), String> {
     plan_manager::delete_plan(&plan_id)
 }
 
+/// Duplica um plano existente com novo UUID, nome com sufixo " (Cópia)" e `builtin: false`.
+///
+/// Permite ao usuário criar uma versão editável de planos oficiais sem alterar o original.
+#[tauri::command]
+pub fn duplicate_plan(plan_id: String) -> Result<plan_manager::Plan, String> {
+    plan_manager::duplicate_plan(&plan_id)
+}
+
 /// Retorna os dados completos de um plano específico pelo seu ID.
 ///
 /// Retorna erro se o `plan_id` não existir.
@@ -455,6 +464,18 @@ pub async fn execute_plan(
     }
 
     let duration_seconds = start_instant.elapsed().as_secs();
+
+    // Registra no log de atividade recente — erro não crítico
+    let log_entry = activity_log::plan_execution_entry(
+        &plan.name,
+        duration_seconds,
+        completed_count,
+        failed_count,
+        skipped_count,
+    );
+    if let Err(e) = activity_log::log_activity(log_entry) {
+        eprintln!("[FrameGuard] Aviso: falha ao registrar atividade do plano: {}", e);
+    }
 
     Ok(PlanExecutionSummary {
         plan_id: plan.id,

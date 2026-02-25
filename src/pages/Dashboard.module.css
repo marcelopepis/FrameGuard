@@ -312,3 +312,482 @@
   color: var(--color-text-primary);
   font-weight: 600;
 }
+
+/* ─── Planos Rápidos ───────────────────────────────────── */
+
+.quickPlansSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quickPlansGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.quickPlanCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--transition-normal),
+    transform var(--transition-normal),
+    box-shadow var(--transition-normal);
+}
+
+.quickPlanCard:hover {
+  border-color: var(--color-border-hover);
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(34, 211, 238, 0.05);
+}
+
+.quickPlanIcon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent-subtle);
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.quickPlanInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quickPlanName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.quickPlanCount {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.quickPlanRun {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  color: var(--color-accent);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
+  cursor: pointer;
+}
+
+.quickPlanRun:hover:not(:disabled) {
+  background: rgba(34, 211, 238, 0.2);
+  border-color: rgba(34, 211, 238, 0.4);
+  transform: scale(1.06);
+}
+
+.quickPlanRun:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ─── Modal de execução (Planos Rápidos) ──────────────── */
+
+.execOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(6, 9, 20, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.execModal {
+  background: #0d1220;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 580px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(34, 211, 238, 0.06);
+  overflow: hidden;
+}
+
+.execHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.execTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.execTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.2px;
+}
+
+.execSubtitle {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.execClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.execClose:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+}
+
+.execClose:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Barra de progresso */
+.execProgress {
+  height: 3px;
+  background: rgba(148, 163, 184, 0.08);
+  flex-shrink: 0;
+}
+
+.execProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-accent), rgba(34, 211, 238, 0.55));
+  transition: width 0.4s ease;
+}
+
+.execProgressDone {
+  background: linear-gradient(90deg, var(--color-success), rgba(52, 211, 153, 0.55));
+}
+
+/* Lista de itens */
+.execItemList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.execItemRow {
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  overflow: hidden;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.execSt_pending  { background: transparent; }
+.execSt_running  { background: rgba(34, 211, 238, 0.06); border-color: rgba(34, 211, 238, 0.18); }
+.execSt_completed { background: rgba(52, 211, 153, 0.05); border-color: rgba(52, 211, 153, 0.1); }
+.execSt_failed   { background: rgba(248, 113, 113, 0.06); border-color: rgba(248, 113, 113, 0.15); }
+.execSt_skipped  { opacity: 0.45; }
+
+.execItemMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+}
+
+.execItemText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.execItemName {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.execItemMsg {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.execExpandBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.execExpandBtn:hover {
+  color: var(--color-text-secondary);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.execItemDetails {
+  padding: 0 12px 10px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.execError {
+  font-size: 11.5px;
+  color: var(--color-error);
+  line-height: 1.5;
+}
+
+.execMsg {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.execLog {
+  font-size: 10px;
+  font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  color: #7dd3fc;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 140px;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+
+/* Rodapé de execução */
+.execFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.execStats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.execStatSuccess,
+.execStatFailed,
+.execStatSkipped {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.execStatSuccess {
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.22);
+  color: var(--color-success);
+}
+
+.execStatFailed {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.2);
+  color: var(--color-error);
+}
+
+.execStatSkipped {
+  background: rgba(100, 116, 139, 0.06);
+  border-color: rgba(100, 116, 139, 0.18);
+  color: var(--color-text-muted);
+}
+
+.execCloseBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  background: var(--color-accent);
+  color: #0a0e17;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.execCloseBtn:hover {
+  background: var(--color-accent-hover);
+  transform: translateY(-1px);
+}
+
+/* Ícones de status (execução) */
+.stPending   { color: var(--color-text-muted);  flex-shrink: 0; }
+.stRunning   { color: var(--color-accent);       flex-shrink: 0; animation: spin 0.9s linear infinite; }
+.stCompleted { color: var(--color-success);      flex-shrink: 0; }
+.stWarning   { color: var(--color-warning);      flex-shrink: 0; }
+.stFailed    { color: var(--color-error);        flex-shrink: 0; }
+.stSkipped   { color: var(--color-text-muted);   flex-shrink: 0; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ─── Atividade Recente ─────────────────────────────────── */
+
+.activitySection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activityList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.activityItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+.activityItem:hover {
+  border-color: var(--color-border-hover);
+}
+
+.activityInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activityNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.activityTypeIcon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.activityName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activityDetail {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  padding-left: 18px;
+}
+
+.activityTime {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Ícones de resultado */
+.actResultSuccess { color: var(--color-success); flex-shrink: 0; }
+.actResultPartial { color: var(--color-warning); flex-shrink: 0; }
+.actResultFailed  { color: var(--color-error);   flex-shrink: 0; }
+
+/* Estado vazio */
+.activityEmpty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 14px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-style: italic;
+}

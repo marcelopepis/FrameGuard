@@ -2,7 +2,7 @@
 mod commands;
 mod utils;
 
-use commands::{cleanup, export_import, health_check, optimizations, plans, privacy, services, system_info};
+use commands::{activity, cleanup, export_import, health_check, optimizations, plans, privacy, services, system_info};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -132,6 +132,7 @@ pub fn run() {
             plans::create_plan,
             plans::update_plan,
             plans::delete_plan,
+            plans::duplicate_plan,
             plans::get_plan,
             plans::get_all_plans,
             plans::execute_plan,
@@ -139,6 +140,9 @@ pub fn run() {
             export_import::export_config,
             export_import::import_config,
             export_import::validate_fg_file,
+            // Atividade Recente
+            activity::log_tweak_activity,
+            activity::get_recent_activity,
             // Serviços e Tarefas Agendadas
             services::get_services_status,
             services::disable_services,

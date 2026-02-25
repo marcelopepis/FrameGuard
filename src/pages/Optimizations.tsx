@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { Loader2, XCircle, RefreshCw } from 'lucide-react';
+import { Loader2, XCircle, RefreshCw, ChevronDown, ShieldAlert, AlertTriangle, Skull, Ban } from 'lucide-react';
 import styles from './Optimizations.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
@@ -468,12 +468,14 @@ export default function Optimizations() {
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
       showToast('success', 'Tweak aplicado!', tweak.name);
+      invoke('log_tweak_activity', { name: tweak.name, applied: true, success: true }).catch(() => {});
       if (tweak.requires_restart) {
         showToast('warning', 'Reinicialização necessária',
           `"${tweak.name}" só terá efeito após reiniciar o Windows.`, 0);
       }
     } catch (e) {
       showToast('error', 'Erro ao aplicar tweak', String(e));
+      invoke('log_tweak_activity', { name: tweak.name, applied: true, success: false }).catch(() => {});
     } finally {
       unlisten?.();
       updateCard(tweak.id, { loading: false, loadingAction: null });
@@ -489,8 +491,10 @@ export default function Optimizations() {
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
       showToast('success', 'Tweak revertido!', tweak.name);
+      invoke('log_tweak_activity', { name: tweak.name, applied: false, success: true }).catch(() => {});
     } catch (e) {
       showToast('error', 'Erro ao reverter tweak', String(e));
+      invoke('log_tweak_activity', { name: tweak.name, applied: false, success: false }).catch(() => {});
     } finally {
       unlisten?.();
       updateCard(tweak.id, { loading: false, loadingAction: null });
@@ -603,6 +607,140 @@ export default function Optimizations() {
                   );
                 })}
               </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Mitos de Otimização ── */}
+      <MythBuster />
+    </div>
+  );
+}
+
+// ── Mitos de Otimização ────────────────────────────────────────────────────────
+
+type Verdict = 'false' | 'depends' | 'dangerous';
+
+interface Myth {
+  title: string;
+  verdict: Verdict;
+  verdictLabel: string;
+  paragraphs: string[];
+}
+
+const VERDICT_CONFIG: Record<Verdict, { Icon: typeof Ban; className: string }> = {
+  false:     { Icon: Ban,           className: 'mythVerdictFalse' },
+  depends:   { Icon: AlertTriangle, className: 'mythVerdictDepends' },
+  dangerous: { Icon: Skull,         className: 'mythVerdictDangerous' },
+};
+
+const MYTHS: Myth[] = [
+  {
+    title: '"Desabilitar efeitos visuais do Windows melhora FPS em jogos"',
+    verdict: 'false',
+    verdictLabel: 'Não funciona — pode piorar',
+    paragraphs: [
+      'Desde o Windows Vista, o Desktop Window Manager (DWM) usa aceleração de hardware (GPU) para renderizar todos os efeitos visuais. Desabilitar animações via "Ajustar para melhor desempenho" força o sistema a fazer renderização por software na CPU — o oposto do desejado.',
+      'Raymond Chen, engenheiro sênior da Microsoft, documentou isso no blog "The Old New Thing": desabilitar composição de desktop pode aumentar carga da CPU. Testes independentes mostram diferença de <1 FPS entre configurações.',
+      'Em PCs com GPU dedicada (que é o público-alvo de otimização gaming), o impacto é literalmente zero. A exceção teórica seria PCs com GPU integrada muito fraca e <4 GB RAM — que não servem para gaming de qualquer forma.',
+    ],
+  },
+  {
+    title: '"Desabilitar Windows Update melhora performance"',
+    verdict: 'dangerous',
+    verdictLabel: 'Perigoso',
+    paragraphs: [
+      'Desabilitar o Windows Update deixa o PC vulnerável a exploits conhecidos, remove patches de segurança do driver de GPU e pode impedir o funcionamento de anti-cheats (que exigem patches recentes do Windows).',
+      'Componentes como .NET e Visual C++ Redistributables não são atualizados, quebrando jogos que dependem de versões recentes. Drivers de GPU sem patches podem conter bugs de estabilidade e vulnerabilidades.',
+      'O que o FrameGuard faz de diferente: permite pausar updates temporariamente quando necessário. Nunca desabilita permanentemente — a atualização contínua é essencial para segurança e compatibilidade com jogos modernos.',
+    ],
+  },
+  {
+    title: '"O Windows reserva 20% da sua banda — altere QoS"',
+    verdict: 'false',
+    verdictLabel: 'Mito urbano',
+    paragraphs: [
+      'A chave NonBestEffortLimit do QoS Packet Scheduler controla priorização de pacotes, não reserva fixa de banda. O Windows NÃO reserva 20% da sua conexão — isso é um mito que circula desde o Windows XP.',
+      'A largura de banda só é "reservada" quando um aplicativo solicita explicitamente via API QoS, e mesmo assim a banda ociosa fica 100% disponível para outros processos. Nenhum jogo ou aplicativo comum faz essa solicitação.',
+      'Alterar a chave no registro não produz nenhuma diferença mensurável em velocidade de download, upload ou latência. Todos os testes de bandwidth mostram resultados idênticos antes e depois da alteração.',
+    ],
+  },
+  {
+    title: '"Desabilitar Prefetch/Superfetch (SysMain) em SSD"',
+    verdict: 'depends',
+    verdictLabel: 'Raramente útil',
+    paragraphs: [
+      'O SysMain (antigo Superfetch) pré-carrega aplicativos frequentes na RAM ociosa. Em PCs com 16 GB+ de RAM, o serviço é inteligente e utiliza apenas memória que não está sendo usada — sem impacto negativo.',
+      'Desabilitar o serviço pode aumentar o tempo de carga de aplicativos frequentes, já que eles não estarão pré-carregados na memória. O impacto no desgaste do SSD é insignificante considerando a vida útil de SSDs modernos (centenas de TBW).',
+      'Só faz sentido desabilitar em PCs com menos de 8 GB de RAM e problemas específicos de uso excessivo de memória. Para a maioria dos gamers com 16-32 GB, manter ativo é a melhor escolha.',
+    ],
+  },
+  {
+    title: '"Desabilitar transparência e sombras do cursor melhora FPS"',
+    verdict: 'false',
+    verdictLabel: 'Impacto zero',
+    paragraphs: [
+      'Efeitos de transparência e sombras de cursor são renderizados pelo DWM com aceleração de hardware, consumindo frações de milissegundo de tempo de GPU — custo completamente imperceptível.',
+      'Em jogos rodando em fullscreen exclusivo (a maioria dos títulos competitivos), o DWM nem está compondo a interface do Windows. Os efeitos simplesmente não existem durante o jogo.',
+      'Este é o mesmo princípio do Mito 1: o DWM usa GPU para composição visual. Desabilitar sombras e transparências não libera recursos significativos — a GPU já dedicaria poder de processamento muito maior ao jogo em si.',
+    ],
+  },
+];
+
+function MythBuster() {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  function toggle(idx: number) {
+    setExpanded(prev => {
+      const s = new Set(prev);
+      if (s.has(idx)) s.delete(idx); else s.add(idx);
+      return s;
+    });
+  }
+
+  return (
+    <div className={styles.mythSection}>
+      <div className={styles.mythHeader}>
+        <ShieldAlert size={16} strokeWidth={2} className={styles.mythHeaderIcon} />
+        <div>
+          <h2 className={styles.mythTitle}>Mitos de Otimização</h2>
+          <p className={styles.mythSubtitle}>
+            Tweaks populares que NÃO incluímos — e por que o FrameGuard é diferente
+          </p>
+        </div>
+      </div>
+
+      <div className={styles.mythList}>
+        {MYTHS.map((myth, idx) => {
+          const isOpen = expanded.has(idx);
+          const cfg = VERDICT_CONFIG[myth.verdict];
+          const VIcon = cfg.Icon;
+
+          return (
+            <div key={idx} className={`${styles.mythCard} ${isOpen ? styles.mythCardOpen : ''}`}>
+              <button className={styles.mythToggle} onClick={() => toggle(idx)}>
+                <div className={styles.mythToggleLeft}>
+                  <span className={`${styles.mythVerdict} ${styles[cfg.className]}`}>
+                    <VIcon size={11} strokeWidth={2.5} />
+                    {myth.verdictLabel}
+                  </span>
+                  <span className={styles.mythName}>{myth.title}</span>
+                </div>
+                <ChevronDown
+                  size={14}
+                  strokeWidth={2}
+                  className={`${styles.mythChevron} ${isOpen ? styles.mythChevronOpen : ''}`}
+                />
+              </button>
+
+              {isOpen && (
+                <div className={styles.mythContent}>
+                  {myth.paragraphs.map((p, i) => (
+                    <p key={i} className={styles.mythParagraph}>{p}</p>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}

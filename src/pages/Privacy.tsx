@@ -200,12 +200,14 @@ export default function Privacy() {
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
       showToast('success', 'Tweak aplicado!', tweak.name);
+      invoke('log_tweak_activity', { name: tweak.name, applied: true, success: true }).catch(() => {});
       if (tweak.requires_restart) {
         showToast('warning', 'Reinicialização necessária',
           `"${tweak.name}" só terá efeito após reiniciar o Windows.`, 0);
       }
     } catch (e) {
       showToast('error', 'Erro ao aplicar tweak', String(e));
+      invoke('log_tweak_activity', { name: tweak.name, applied: true, success: false }).catch(() => {});
     } finally {
       updateCard(tweak.id, { loading: false, loadingAction: null });
     }
@@ -219,8 +221,10 @@ export default function Privacy() {
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
       showToast('success', 'Tweak revertido!', tweak.name);
+      invoke('log_tweak_activity', { name: tweak.name, applied: false, success: true }).catch(() => {});
     } catch (e) {
       showToast('error', 'Erro ao reverter tweak', String(e));
+      invoke('log_tweak_activity', { name: tweak.name, applied: false, success: false }).catch(() => {});
     } finally {
       updateCard(tweak.id, { loading: false, loadingAction: null });
     }
