@@ -2,7 +2,7 @@
 mod commands;
 mod utils;
 
-use commands::{cleanup, export_import, health_check, optimizations, plans, system_info};
+use commands::{cleanup, export_import, health_check, optimizations, plans, privacy, services, system_info};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -96,6 +96,22 @@ pub fn run() {
             optimizations::get_bing_search_info,
             optimizations::disable_bing_search,
             optimizations::revert_bing_search,
+            // Privacidade — Telemetria
+            privacy::get_telemetry_registry_info,
+            privacy::disable_telemetry_registry,
+            privacy::revert_telemetry_registry,
+            // Privacidade — Copilot e Cortana
+            privacy::get_copilot_info,
+            privacy::disable_copilot,
+            privacy::revert_copilot,
+            // Privacidade — Content Delivery Manager
+            privacy::get_content_delivery_info,
+            privacy::disable_content_delivery,
+            privacy::revert_content_delivery,
+            // Privacidade — Background Apps
+            privacy::get_background_apps_info,
+            privacy::disable_background_apps,
+            privacy::revert_background_apps,
             // Limpeza
             cleanup::analyze_cleanup,
             cleanup::run_cleanup,
@@ -122,6 +138,13 @@ pub fn run() {
             export_import::export_config,
             export_import::import_config,
             export_import::validate_fg_file,
+            // Serviços e Tarefas Agendadas
+            services::get_services_status,
+            services::disable_services,
+            services::restore_services,
+            services::get_tasks_status,
+            services::disable_tasks,
+            services::restore_tasks,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o FrameGuard");

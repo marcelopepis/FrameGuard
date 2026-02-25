@@ -239,7 +239,7 @@ pub struct DeliveryOptimizationStatus {
 ///
 /// - `has_backup`: `true` quando há entrada com status `Applied` (backup utilizável)
 /// - `last_applied`: timestamp `backed_up_at` quando aplicado; `None` caso contrário
-fn backup_info(tweak_id: &str) -> (bool, Option<String>) {
+pub fn backup_info(tweak_id: &str) -> (bool, Option<String>) {
     match get_all_backups() {
         Ok(backups) => match backups.get(tweak_id) {
             Some(entry) if entry.status == BackupStatus::Applied => {

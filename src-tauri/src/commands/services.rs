@@ -1,0 +1,742 @@
+// Comandos Tauri para gerenciamento de serviços e tarefas agendadas do Windows.
+//
+// Contém lista curada de serviços e tarefas seguros para desabilitar em PCs de gaming.
+// Operações em batch com backup automático para restauração.
+
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+
+use crate::utils::backup::{
+    backup_before_apply, get_all_backups, restore_from_backup,
+    BackupStatus, OriginalValue, TweakCategory,
+};
+use crate::utils::command_runner::run_powershell;
+
+// ── Tipos serializáveis (retornados ao frontend) ─────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct ServiceItem {
+    pub id: String,
+    pub display_name: String,
+    pub description: String,
+    pub category: String,
+    pub status: String,
+    pub startup_type: String,
+    pub is_conditional: bool,
+    pub conditional_note: Option<String>,
+    pub has_backup: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TaskItem {
+    pub id: String,
+    pub display_name: String,
+    pub description: String,
+    pub category: String,
+    pub state: String,
+    pub task_path: String,
+    pub task_name: String,
+    pub has_backup: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BatchResult {
+    pub succeeded: Vec<String>,
+    pub failed: Vec<BatchError>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BatchError {
+    pub id: String,
+    pub error: String,
+}
+
+// ── Tipos de deserialização (saída PowerShell JSON) ──────────────────────────
+
+#[derive(Deserialize)]
+struct PsServiceInfo {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "Status")]
+    status: String,
+    #[serde(rename = "StartType")]
+    start_type: String,
+}
+
+#[derive(Deserialize)]
+struct PsTaskInfo {
+    #[serde(rename = "Path")]
+    path: String,
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "State")]
+    state: String,
+}
+
+// ── Definição interna da lista curada ────────────────────────────────────────
+
+struct CuratedService {
+    name: &'static str,
+    display_name: &'static str,
+    description: &'static str,
+    category: &'static str,
+    is_conditional: bool,
+    conditional_note: Option<&'static str>,
+}
+
+struct CuratedTask {
+    path: &'static str,
+    name: &'static str,
+    display_name: &'static str,
+    description: &'static str,
+    category: &'static str,
+}
+
+// ── Lista curada de serviços seguros para desabilitar em PCs de gaming ───────
+
+const CURATED_SERVICES: &[CuratedService] = &[
+    // ── Telemetria e Diagnósticos ──
+    CuratedService {
+        name: "DiagTrack",
+        display_name: "Connected User Experiences and Telemetry",
+        description: "Coleta e envia dados de diagnóstico e uso para a Microsoft. Principal canal de telemetria do Windows.",
+        category: "telemetry",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    CuratedService {
+        name: "dmwappushservice",
+        display_name: "WAP Push Message Routing",
+        description: "Serviço auxiliar de telemetria que roteia mensagens WAP Push. Trabalha em conjunto com o DiagTrack.",
+        category: "telemetry",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    CuratedService {
+        name: "diagnosticshub.standardcollector.service",
+        display_name: "Diagnostics Hub Standard Collector",
+        description: "Coleta dados de diagnóstico em tempo real para ferramentas de depuração da Microsoft.",
+        category: "telemetry",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    // ── Hardware não utilizado ──
+    CuratedService {
+        name: "BTAGService",
+        display_name: "Bluetooth Audio Gateway",
+        description: "Suporte a perfil de áudio Bluetooth (chamadas via fone BT). Desnecessário se não usa Bluetooth para áudio.",
+        category: "hardware",
+        is_conditional: true,
+        conditional_note: Some("Necessário se você usa fones Bluetooth para chamadas de voz"),
+    },
+    CuratedService {
+        name: "bthserv",
+        display_name: "Bluetooth Support Service",
+        description: "Gerencia descoberta e associação de dispositivos Bluetooth. Desabilitar impede qualquer conexão BT.",
+        category: "hardware",
+        is_conditional: true,
+        conditional_note: Some("Necessário se você usa qualquer dispositivo Bluetooth (mouse, teclado, fone)"),
+    },
+    CuratedService {
+        name: "WbioSrvc",
+        display_name: "Windows Biometric Service",
+        description: "Captura, compara e gerencia dados biométricos (impressão digital, reconhecimento facial).",
+        category: "hardware",
+        is_conditional: true,
+        conditional_note: Some("Necessário se você usa Windows Hello (impressão digital ou reconhecimento facial)"),
+    },
+    CuratedService {
+        name: "Fax",
+        display_name: "Fax",
+        description: "Permite enviar e receber faxes. Praticamente obsoleto em PCs modernos.",
+        category: "hardware",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    // ── Acesso remoto ──
+    CuratedService {
+        name: "RemoteRegistry",
+        display_name: "Remote Registry",
+        description: "Permite usuários remotos modificarem o registro do Windows. Risco de segurança se habilitado.",
+        category: "remote",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    CuratedService {
+        name: "RemoteAccess",
+        display_name: "Routing and Remote Access",
+        description: "Oferece serviços de roteamento para redes locais e remotas. Desnecessário para uso doméstico.",
+        category: "remote",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    // ── Enterprise / Não utilizado ──
+    CuratedService {
+        name: "MapsBroker",
+        display_name: "Downloaded Maps Manager",
+        description: "Gerencia mapas offline do Windows. Consome recursos para manter mapas atualizados em background.",
+        category: "enterprise",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    CuratedService {
+        name: "lfsvc",
+        display_name: "Geolocation Service",
+        description: "Monitora localização geográfica do sistema. Desnecessário em desktops de gaming.",
+        category: "enterprise",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    CuratedService {
+        name: "RetailDemo",
+        display_name: "Retail Demo Service",
+        description: "Modo de demonstração para lojas de varejo. Completamente desnecessário em PCs pessoais.",
+        category: "enterprise",
+        is_conditional: false,
+        conditional_note: None,
+    },
+    CuratedService {
+        name: "wisvc",
+        display_name: "Windows Insider Service",
+        description: "Infraestrutura do programa Windows Insider (builds de preview). Desnecessário se não participa do programa.",
+        category: "enterprise",
+        is_conditional: false,
+        conditional_note: None,
+    },
+];
+
+// ── Lista curada de tarefas agendadas ────────────────────────────────────────
+
+const CURATED_TASKS: &[CuratedTask] = &[
+    // ── Telemetria ──
+    CuratedTask {
+        path: "\\Microsoft\\Windows\\Application Experience\\",
+        name: "Microsoft Compatibility Appraiser",
+        display_name: "Compatibility Appraiser",
+        description: "Coleta dados de compatibilidade de programas e envia para a Microsoft via CEIP.",
+        category: "telemetry",
+    },
+    CuratedTask {
+        path: "\\Microsoft\\Windows\\Application Experience\\",
+        name: "ProgramDataUpdater",
+        display_name: "Program Data Updater",
+        description: "Atualiza cache de dados de telemetria de compatibilidade de aplicações.",
+        category: "telemetry",
+    },
+    // ── CEIP ──
+    CuratedTask {
+        path: "\\Microsoft\\Windows\\Customer Experience Improvement Program\\",
+        name: "Consolidator",
+        display_name: "CEIP Consolidator",
+        description: "Consolida e envia dados do Customer Experience Improvement Program.",
+        category: "ceip",
+    },
+    CuratedTask {
+        path: "\\Microsoft\\Windows\\Customer Experience Improvement Program\\",
+        name: "UsbCeip",
+        display_name: "USB CEIP",
+        description: "Coleta dados de uso de dispositivos USB para o programa CEIP.",
+        category: "ceip",
+    },
+    CuratedTask {
+        path: "\\Microsoft\\Windows\\Customer Experience Improvement Program\\",
+        name: "KernelCeipTask",
+        display_name: "Kernel CEIP",
+        description: "Coleta dados de telemetria do kernel para o programa CEIP.",
+        category: "ceip",
+    },
+    // ── Diagnósticos ──
+    CuratedTask {
+        path: "\\Microsoft\\Windows\\DiskDiagnostic\\",
+        name: "Microsoft-Windows-DiskDiagnosticDataCollector",
+        display_name: "Disk Diagnostic Data Collector",
+        description: "Coleta dados de diagnóstico de disco para envio à Microsoft.",
+        category: "diagnostics",
+    },
+    CuratedTask {
+        path: "\\Microsoft\\Windows\\Feedback\\Siuf\\",
+        name: "DmClient",
+        display_name: "Feedback DM Client",
+        description: "Cliente de dispositivo para o sistema de feedback do Windows.",
+        category: "diagnostics",
+    },
+    CuratedTask {
+        path: "\\Microsoft\\Windows\\Feedback\\Siuf\\",
+        name: "DmClientOnScenarioDownload",
+        display_name: "Feedback Scenario Download",
+        description: "Download de cenários para coleta de feedback do Windows.",
+        category: "diagnostics",
+    },
+];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+fn svc_backup_id(name: &str) -> String {
+    format!("svc_{}", name)
+}
+
+fn task_backup_id(name: &str) -> String {
+    format!("task_{}", name)
+}
+
+fn has_applied_backup(backup_id: &str) -> bool {
+    match get_all_backups() {
+        Ok(backups) => matches!(
+            backups.get(backup_id).map(|e| &e.status),
+            Some(BackupStatus::Applied)
+        ),
+        Err(_) => false,
+    }
+}
+
+/// Constrói script PowerShell para consultar todos os serviços curados de uma vez.
+fn build_services_query_script() -> String {
+    let names: Vec<String> = CURATED_SERVICES
+        .iter()
+        .map(|s| format!("'{}'", s.name))
+        .collect();
+
+    let mut ps = String::with_capacity(512);
+    ps.push_str("$names = @(");
+    ps.push_str(&names.join(","));
+    ps.push_str("); $r = @(); foreach($n in $names) { try { ");
+    ps.push_str("$s = Get-Service -Name $n -EA Stop; ");
+    ps.push_str("$r += [PSCustomObject]@{Name=$n;Status=$s.Status.ToString();StartType=$s.StartType.ToString()} ");
+    ps.push_str("} catch { ");
+    ps.push_str("$r += [PSCustomObject]@{Name=$n;Status='NotFound';StartType='NotFound'} ");
+    ps.push_str("} }; ConvertTo-Json @($r) -Compress");
+    ps
+}
+
+/// Constrói script PowerShell para consultar todas as tarefas curadas de uma vez.
+fn build_tasks_query_script() -> String {
+    let mut ps = String::with_capacity(1024);
+    ps.push_str("$tasks = @(");
+
+    for (i, t) in CURATED_TASKS.iter().enumerate() {
+        if i > 0 {
+            ps.push(',');
+        }
+        // PowerShell hashtable: @{P='path';N='name'}
+        ps.push_str(&format!("@{{P='{}';N='{}'}}", t.path, t.name));
+    }
+
+    ps.push_str("); $r = @(); foreach($t in $tasks) { try { ");
+    ps.push_str("$st = Get-ScheduledTask -TaskPath $t.P -TaskName $t.N -EA Stop; ");
+    ps.push_str("$r += [PSCustomObject]@{Path=$t.P;Name=$t.N;State=$st.State.ToString()} ");
+    ps.push_str("} catch { ");
+    ps.push_str("$r += [PSCustomObject]@{Path=$t.P;Name=$t.N;State='NotFound'} ");
+    ps.push_str("} }; ConvertTo-Json @($r) -Compress");
+    ps
+}
+
+/// Tenta parsear saída JSON como array; se for objeto único, encapsula em Vec.
+fn parse_json_array<T: for<'de> Deserialize<'de>>(json_str: &str) -> Result<Vec<T>, String> {
+    let trimmed = json_str.trim();
+    if trimmed.starts_with('[') {
+        serde_json::from_str(trimmed).map_err(|e| format!("Erro ao parsear JSON: {}", e))
+    } else if trimmed.starts_with('{') {
+        let single: T =
+            serde_json::from_str(trimmed).map_err(|e| format!("Erro ao parsear JSON: {}", e))?;
+        Ok(vec![single])
+    } else {
+        Err(format!("Saída inesperada do PowerShell: {}", trimmed))
+    }
+}
+
+// ── Comandos: Serviços ──────────────────────────────────────────────────────
+
+/// Retorna status atual de todos os serviços curados.
+#[tauri::command]
+pub fn get_services_status() -> Result<Vec<ServiceItem>, String> {
+    let script = build_services_query_script();
+    let output = run_powershell(&script)?;
+
+    if !output.success {
+        return Err(format!("Erro ao consultar serviços: {}", output.stderr));
+    }
+
+    let ps_items: Vec<PsServiceInfo> = parse_json_array(&output.stdout)?;
+
+    let mut items = Vec::with_capacity(CURATED_SERVICES.len());
+    for curated in CURATED_SERVICES {
+        let ps = ps_items.iter().find(|p| p.name == curated.name);
+        let (status, startup_type) = match ps {
+            Some(p) => (p.status.clone(), p.start_type.clone()),
+            None => ("NotFound".into(), "NotFound".into()),
+        };
+
+        let bid = svc_backup_id(curated.name);
+        items.push(ServiceItem {
+            id: curated.name.to_string(),
+            display_name: curated.display_name.to_string(),
+            description: curated.description.to_string(),
+            category: curated.category.to_string(),
+            status,
+            startup_type,
+            is_conditional: curated.is_conditional,
+            conditional_note: curated.conditional_note.map(String::from),
+            has_backup: has_applied_backup(&bid),
+        });
+    }
+
+    Ok(items)
+}
+
+/// Desabilita os serviços selecionados (com backup do tipo de startup original).
+#[tauri::command]
+pub fn disable_services(ids: Vec<String>) -> Result<BatchResult, String> {
+    let mut result = BatchResult {
+        succeeded: Vec::new(),
+        failed: Vec::new(),
+    };
+
+    for id in &ids {
+        // Verifica se é um serviço curado
+        if !CURATED_SERVICES.iter().any(|s| s.name == id.as_str()) {
+            result.failed.push(BatchError {
+                id: id.clone(),
+                error: "Serviço não está na lista curada".into(),
+            });
+            continue;
+        }
+
+        // Consulta estado atual
+        let query = format!(
+            "try {{ $s = Get-Service -Name '{}' -EA Stop; \
+             [PSCustomObject]@{{Status=$s.Status.ToString();StartType=$s.StartType.ToString()}} \
+             | ConvertTo-Json -Compress }} catch {{ Write-Error $_.Exception.Message }}",
+            id
+        );
+        let query_out = match run_powershell(&query) {
+            Ok(o) => o,
+            Err(e) => {
+                result.failed.push(BatchError {
+                    id: id.clone(),
+                    error: format!("Erro ao consultar: {}", e),
+                });
+                continue;
+            }
+        };
+
+        if !query_out.success {
+            result.failed.push(BatchError {
+                id: id.clone(),
+                error: format!("Serviço não encontrado: {}", query_out.stderr.trim()),
+            });
+            continue;
+        }
+
+        let data: Value = match serde_json::from_str(query_out.stdout.trim()) {
+            Ok(v) => v,
+            Err(e) => {
+                result.failed.push(BatchError {
+                    id: id.clone(),
+                    error: format!("Erro ao parsear: {}", e),
+                });
+                continue;
+            }
+        };
+
+        let original_type = data["StartType"]
+            .as_str()
+            .unwrap_or("Manual")
+            .to_string();
+
+        // Já está desabilitado? Sucesso sem ação.
+        if original_type == "Disabled" {
+            result.succeeded.push(id.clone());
+            continue;
+        }
+
+        // Backup do tipo de startup original
+        let bid = svc_backup_id(id);
+        if let Err(e) = backup_before_apply(
+            &bid,
+            TweakCategory::Powershell,
+            &format!("Serviço {} desabilitado (era {})", id, original_type),
+            OriginalValue {
+                path: format!("Service:{}", id),
+                key: "StartType".to_string(),
+                value: Some(json!(original_type)),
+                value_type: "STRING".to_string(),
+            },
+            json!("Disabled"),
+        ) {
+            // Se já tem backup Applied, o serviço já foi gerenciado por nós
+            if has_applied_backup(&bid) {
+                result.succeeded.push(id.clone());
+                continue;
+            }
+            result.failed.push(BatchError {
+                id: id.clone(),
+                error: format!("Erro no backup: {}", e),
+            });
+            continue;
+        }
+
+        // Desabilita e para o serviço
+        let disable = format!(
+            "Set-Service -Name '{}' -StartupType Disabled -EA Stop; \
+             Stop-Service -Name '{}' -Force -EA SilentlyContinue",
+            id, id
+        );
+        match run_powershell(&disable) {
+            Ok(o) if o.success => result.succeeded.push(id.clone()),
+            Ok(o) => result.failed.push(BatchError {
+                id: id.clone(),
+                error: format!("Falha ao desabilitar: {}", o.stderr.trim()),
+            }),
+            Err(e) => result.failed.push(BatchError {
+                id: id.clone(),
+                error: e,
+            }),
+        }
+    }
+
+    Ok(result)
+}
+
+/// Restaura serviços selecionados ao tipo de startup original (do backup).
+#[tauri::command]
+pub fn restore_services(ids: Vec<String>) -> Result<BatchResult, String> {
+    let mut result = BatchResult {
+        succeeded: Vec::new(),
+        failed: Vec::new(),
+    };
+
+    for id in &ids {
+        let bid = svc_backup_id(id);
+
+        // Recupera backup e marca como Reverted
+        let original = match restore_from_backup(&bid) {
+            Ok(o) => o,
+            Err(e) => {
+                result.failed.push(BatchError {
+                    id: id.clone(),
+                    error: format!("Sem backup: {}", e),
+                });
+                continue;
+            }
+        };
+
+        let original_type = match &original.value {
+            Some(Value::String(s)) => s.clone(),
+            _ => "Manual".to_string(),
+        };
+
+        // Restaura tipo de startup original
+        let restore = format!(
+            "Set-Service -Name '{}' -StartupType {} -EA Stop",
+            id, original_type
+        );
+        match run_powershell(&restore) {
+            Ok(o) if o.success => result.succeeded.push(id.clone()),
+            Ok(o) => result.failed.push(BatchError {
+                id: id.clone(),
+                error: format!("Falha ao restaurar: {}", o.stderr.trim()),
+            }),
+            Err(e) => result.failed.push(BatchError {
+                id: id.clone(),
+                error: e,
+            }),
+        }
+    }
+
+    Ok(result)
+}
+
+// ── Comandos: Tarefas Agendadas ─────────────────────────────────────────────
+
+/// Retorna status atual de todas as tarefas agendadas curadas.
+#[tauri::command]
+pub fn get_tasks_status() -> Result<Vec<TaskItem>, String> {
+    let script = build_tasks_query_script();
+    let output = run_powershell(&script)?;
+
+    if !output.success {
+        return Err(format!(
+            "Erro ao consultar tarefas agendadas: {}",
+            output.stderr
+        ));
+    }
+
+    let ps_items: Vec<PsTaskInfo> = parse_json_array(&output.stdout)?;
+
+    let mut items = Vec::with_capacity(CURATED_TASKS.len());
+    for curated in CURATED_TASKS {
+        let ps = ps_items
+            .iter()
+            .find(|p| p.path == curated.path && p.name == curated.name);
+        let state = match ps {
+            Some(p) => p.state.clone(),
+            None => "NotFound".into(),
+        };
+
+        let bid = task_backup_id(curated.name);
+        items.push(TaskItem {
+            id: curated.name.to_string(),
+            display_name: curated.display_name.to_string(),
+            description: curated.description.to_string(),
+            category: curated.category.to_string(),
+            state,
+            task_path: curated.path.to_string(),
+            task_name: curated.name.to_string(),
+            has_backup: has_applied_backup(&bid),
+        });
+    }
+
+    Ok(items)
+}
+
+/// Desabilita as tarefas agendadas selecionadas (com backup).
+#[tauri::command]
+pub fn disable_tasks(ids: Vec<String>) -> Result<BatchResult, String> {
+    let mut result = BatchResult {
+        succeeded: Vec::new(),
+        failed: Vec::new(),
+    };
+
+    for id in &ids {
+        // Encontra a tarefa curada pelo nome
+        let curated = match CURATED_TASKS.iter().find(|t| t.name == id.as_str()) {
+            Some(t) => t,
+            None => {
+                result.failed.push(BatchError {
+                    id: id.clone(),
+                    error: "Tarefa não está na lista curada".into(),
+                });
+                continue;
+            }
+        };
+
+        // Consulta estado atual
+        let query = format!(
+            "try {{ $t = Get-ScheduledTask -TaskPath '{}' -TaskName '{}' -EA Stop; \
+             $t.State.ToString() }} catch {{ 'NotFound' }}",
+            curated.path, curated.name
+        );
+        let query_out = match run_powershell(&query) {
+            Ok(o) => o,
+            Err(e) => {
+                result.failed.push(BatchError {
+                    id: id.clone(),
+                    error: format!("Erro ao consultar: {}", e),
+                });
+                continue;
+            }
+        };
+
+        let current_state = query_out.stdout.trim().to_string();
+
+        // Já desabilitada?
+        if current_state == "Disabled" {
+            result.succeeded.push(id.clone());
+            continue;
+        }
+
+        if current_state == "NotFound" {
+            result.failed.push(BatchError {
+                id: id.clone(),
+                error: "Tarefa não encontrada no sistema".into(),
+            });
+            continue;
+        }
+
+        // Backup
+        let bid = task_backup_id(curated.name);
+        if let Err(e) = backup_before_apply(
+            &bid,
+            TweakCategory::Powershell,
+            &format!("Tarefa {} desabilitada", curated.display_name),
+            OriginalValue {
+                path: format!("Task:{}", curated.path),
+                key: curated.name.to_string(),
+                value: Some(json!(current_state)),
+                value_type: "STRING".to_string(),
+            },
+            json!("Disabled"),
+        ) {
+            if has_applied_backup(&bid) {
+                result.succeeded.push(id.clone());
+                continue;
+            }
+            result.failed.push(BatchError {
+                id: id.clone(),
+                error: format!("Erro no backup: {}", e),
+            });
+            continue;
+        }
+
+        // Desabilita a tarefa
+        let disable = format!(
+            "Disable-ScheduledTask -TaskPath '{}' -TaskName '{}' -EA Stop | Out-Null",
+            curated.path, curated.name
+        );
+        match run_powershell(&disable) {
+            Ok(o) if o.success => result.succeeded.push(id.clone()),
+            Ok(o) => result.failed.push(BatchError {
+                id: id.clone(),
+                error: format!("Falha ao desabilitar: {}", o.stderr.trim()),
+            }),
+            Err(e) => result.failed.push(BatchError {
+                id: id.clone(),
+                error: e,
+            }),
+        }
+    }
+
+    Ok(result)
+}
+
+/// Restaura as tarefas agendadas selecionadas (reabilita).
+#[tauri::command]
+pub fn restore_tasks(ids: Vec<String>) -> Result<BatchResult, String> {
+    let mut result = BatchResult {
+        succeeded: Vec::new(),
+        failed: Vec::new(),
+    };
+
+    for id in &ids {
+        let curated = match CURATED_TASKS.iter().find(|t| t.name == id.as_str()) {
+            Some(t) => t,
+            None => {
+                result.failed.push(BatchError {
+                    id: id.clone(),
+                    error: "Tarefa não encontrada na lista curada".into(),
+                });
+                continue;
+            }
+        };
+
+        let bid = task_backup_id(curated.name);
+
+        // Marca backup como Reverted
+        if let Err(e) = restore_from_backup(&bid) {
+            result.failed.push(BatchError {
+                id: id.clone(),
+                error: format!("Sem backup: {}", e),
+            });
+            continue;
+        }
+
+        // Reabilita a tarefa
+        let enable = format!(
+            "Enable-ScheduledTask -TaskPath '{}' -TaskName '{}' -EA Stop | Out-Null",
+            curated.path, curated.name
+        );
+        match run_powershell(&enable) {
+            Ok(o) if o.success => result.succeeded.push(id.clone()),
+            Ok(o) => result.failed.push(BatchError {
+                id: id.clone(),
+                error: format!("Falha ao restaurar: {}", o.stderr.trim()),
+            }),
+            Err(e) => result.failed.push(BatchError {
+                id: id.clone(),
+                error: e,
+            }),
+        }
+    }
+
+    Ok(result)
+}
