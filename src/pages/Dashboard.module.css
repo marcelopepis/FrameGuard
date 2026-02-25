@@ -137,12 +137,24 @@
   color: var(--color-text-muted);
 }
 
-/* Placeholder enquanto o invoke está carregando */
-.loading {
-  color: var(--color-text-muted);
-  font-style: italic;
-  font-weight: 400;
-  font-size: 13px;
+/* ─── Skeleton shimmer (loading placeholder) ─────────────── */
+
+.skeleton {
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.08) 25%,
+    rgba(148, 163, 184, 0.16) 50%,
+    rgba(148, 163, 184, 0.08) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* ─── Admin tag (card Sistema) ───────────────────────────── */

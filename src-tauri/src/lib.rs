@@ -11,7 +11,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             // Informações do sistema
-            system_info::get_system_info,
+            system_info::get_static_hw_info,
+            system_info::get_system_status,
             system_info::get_system_usage,
             system_info::get_system_summary,
             // Otimizações — Compressão de Wallpaper

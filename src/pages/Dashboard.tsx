@@ -1,38 +1,43 @@
 import { useState, useEffect } from 'react';
 import { Cpu, Layers, Database, Globe, ShieldCheck, ShieldOff } from 'lucide-react';
-import { getSystemInfo, getSystemSummary, getSystemUsage } from '../services/systemInfo';
-import type { SystemInfo, SystemSummary } from '../services/systemInfo';
+import { getStaticHwInfo, getSystemStatus, getSystemSummary, getSystemUsage } from '../services/systemInfo';
+import type { StaticHwInfo, SystemStatus, SystemSummary } from '../services/systemInfo';
 import styles from './Dashboard.module.css';
 
 export default function Dashboard() {
-  const [info, setInfo] = useState<SystemInfo | null>(null);
+  const [hw, setHw] = useState<StaticHwInfo | null>(null);
+  const [status, setStatus] = useState<SystemStatus | null>(null);
   const [summary, setSummary] = useState<SystemSummary | null>(null);
+  const [cpuPercent, setCpuPercent] = useState<number | null>(null);
+  const [ramPercent, setRamPercent] = useState<number | null>(null);
+  const [ramUsedGb, setRamUsedGb] = useState<number | null>(null);
 
+  // Fetch paralelo: hardware + status + summary
   useEffect(() => {
-    getSystemInfo()
-      .then(setInfo)
-      .catch((err) => console.error('[FrameGuard] get_system_info falhou:', err));
-
-    getSystemSummary()
-      .then(setSummary)
-      .catch((err) => console.error('[FrameGuard] get_system_summary falhou:', err));
+    Promise.all([
+      getStaticHwInfo(),
+      getSystemStatus(),
+      getSystemSummary(),
+    ]).then(([hwInfo, sysStatus, sysSummary]) => {
+      setHw(hwInfo);
+      setStatus(sysStatus);
+      setSummary(sysSummary);
+    }).catch((err) => console.error('[FrameGuard] dashboard init falhou:', err));
   }, []);
 
   // Polling de CPU e RAM a cada 2 segundos
   useEffect(() => {
     const id = setInterval(() => {
       getSystemUsage().then(u => {
-        setInfo(prev => {
-          if (!prev) return prev;
-          const ram_used_gb = Math.round(u.ram_usage_percent / 100 * prev.ram_total_gb * 10) / 10;
-          return { ...prev, cpu_usage_percent: u.cpu_usage_percent, ram_usage_percent: u.ram_usage_percent, ram_used_gb };
-        });
+        setCpuPercent(u.cpu_usage_percent);
+        setRamPercent(u.ram_usage_percent);
+        if (hw) {
+          setRamUsedGb(Math.round(u.ram_usage_percent / 100 * hw.ram_total_gb * 10) / 10);
+        }
       }).catch(() => {});
     }, 2000);
     return () => clearInterval(id);
-  }, []);
-
-  const loading = <span className={styles.loading}>Carregando…</span>;
+  }, [hw]);
 
   return (
     <div className={styles.page}>
@@ -52,20 +57,22 @@ export default function Dashboard() {
             </div>
             <span className={styles.cardLabel}>Processador</span>
           </div>
-          <p className={styles.cardValue}>{info ? info.cpu_name : loading}</p>
-          <p className={styles.cardDetail}>
-            {info ? (
-              <>
-                <span className={styles.highlight}>{info.cpu_usage_percent.toFixed(0)}%</span>
+          {hw ? (
+            <>
+              <p className={styles.cardValue}>{hw.cpu_name}</p>
+              <p className={styles.cardDetail}>
+                <span className={styles.highlight}>
+                  {cpuPercent !== null ? `${cpuPercent.toFixed(0)}%` : '—'}
+                </span>
                 {' '}de uso atual
-              </>
-            ) : (
-              <>
-                <span className={styles.highlight}>—</span>
-                {' '}de uso atual
-              </>
-            )}
-          </p>
+              </p>
+            </>
+          ) : (
+            <>
+              <div className={styles.skeleton} style={{ width: '75%' }} />
+              <div className={styles.skeleton} style={{ width: '40%', height: 14 }} />
+            </>
+          )}
         </div>
 
         {/* Placa de Vídeo */}
@@ -76,14 +83,21 @@ export default function Dashboard() {
             </div>
             <span className={styles.cardLabel}>Placa de Vídeo</span>
           </div>
-          <p className={styles.cardValue}>{info ? info.gpu_name : loading}</p>
-          <p className={styles.cardDetail}>
-            {info ? (
-              <span className={styles.highlight}>
-                {info.gpu_vram_gb > 0 ? `${info.gpu_vram_gb} GB VRAM` : 'GPU dedicada'}
-              </span>
-            ) : '—'}
-          </p>
+          {hw ? (
+            <>
+              <p className={styles.cardValue}>{hw.gpu_name}</p>
+              <p className={styles.cardDetail}>
+                <span className={styles.highlight}>
+                  {hw.gpu_vram_gb > 0 ? `${hw.gpu_vram_gb} GB VRAM` : 'GPU dedicada'}
+                </span>
+              </p>
+            </>
+          ) : (
+            <>
+              <div className={styles.skeleton} style={{ width: '65%' }} />
+              <div className={styles.skeleton} style={{ width: '35%', height: 14 }} />
+            </>
+          )}
         </div>
 
         {/* Memória RAM */}
@@ -94,20 +108,30 @@ export default function Dashboard() {
             </div>
             <span className={styles.cardLabel}>Memória RAM</span>
           </div>
-          <p className={styles.cardValue}>{info ? `${info.ram_used_gb} GB` : loading}</p>
-          <p className={styles.cardDetail}>de {info ? info.ram_total_gb : '—'} GB total</p>
-          <div className={styles.progressTrack}>
-            <div
-              className={styles.progressFill}
-              style={{ width: `${info ? info.ram_usage_percent : 0}%` }}
-            />
-          </div>
-          <p className={styles.progressLabel}>
-            {info ? `${info.ram_usage_percent.toFixed(0)}% em uso` : '—'}
-          </p>
+          {hw ? (
+            <>
+              <p className={styles.cardValue}>{ramUsedGb !== null ? `${ramUsedGb} GB` : '— GB'}</p>
+              <p className={styles.cardDetail}>de {hw.ram_total_gb} GB total</p>
+              <div className={styles.progressTrack}>
+                <div
+                  className={styles.progressFill}
+                  style={{ width: `${ramPercent ?? 0}%` }}
+                />
+              </div>
+              <p className={styles.progressLabel}>
+                {ramPercent !== null ? `${ramPercent.toFixed(0)}% em uso` : '—'}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className={styles.skeleton} style={{ width: '30%' }} />
+              <div className={styles.skeleton} style={{ width: '50%', height: 14 }} />
+              <div className={styles.skeleton} style={{ width: '100%', height: 4, marginTop: 6 }} />
+            </>
+          )}
         </div>
 
-        {/* Sistema — dados reais via Tauri */}
+        {/* Sistema */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
             <div className={styles.iconWrap}>
@@ -115,14 +139,17 @@ export default function Dashboard() {
             </div>
             <span className={styles.cardLabel}>Sistema</span>
           </div>
-          <p className={styles.cardValue}>
-            {summary ? summary.os_version : loading}
-          </p>
-          <p className={styles.cardDetail}>
-            {summary ? summary.hostname : '—'}
-          </p>
-          {summary && (
-            <AdminTag elevated={summary.is_elevated} />
+          {summary ? (
+            <>
+              <p className={styles.cardValue}>{summary.os_version}</p>
+              <p className={styles.cardDetail}>{summary.hostname}</p>
+              <AdminTag elevated={summary.is_elevated} />
+            </>
+          ) : (
+            <>
+              <div className={styles.skeleton} style={{ width: '60%' }} />
+              <div className={styles.skeleton} style={{ width: '35%', height: 14 }} />
+            </>
           )}
         </div>
       </div>
@@ -134,49 +161,49 @@ export default function Dashboard() {
           <div className={styles.badges}>
             <StatusBadge
               label="Game Mode"
-              optimized={info?.game_mode_enabled ?? false}
+              optimized={status?.game_mode_enabled ?? false}
               goodLabel="Ativo"
               badLabel="Inativo"
-              loading={!info}
+              loading={!status}
               tooltip="Prioriza CPU e GPU para o jogo em execução, reduzindo interferência de processos em segundo plano. Recomendado: Ativo."
             />
             <StatusBadge
               label="HAGS"
-              optimized={info?.hags_enabled ?? false}
+              optimized={status?.hags_enabled ?? false}
               goodLabel="Ativo"
               badLabel="Inativo"
-              loading={!info}
+              loading={!status}
               tooltip="Hardware-Accelerated GPU Scheduling: a GPU gerencia sua própria memória, reduzindo latência e carga da CPU. Recomendado: Ativo."
             />
             <StatusBadge
               label="VBS"
-              optimized={!(info?.vbs_enabled ?? true)}
+              optimized={!(status?.vbs_enabled ?? true)}
               goodLabel="Desabilitado"
               badLabel="Habilitado"
-              loading={!info}
+              loading={!status}
               tooltip="Virtualization Based Security protege o Windows via virtualização, mas pode reduzir performance em games em até 10–15%. Recomendado: Desabilitado para gaming."
             />
             <StatusBadge
               label="Game DVR"
-              optimized={info?.game_dvr_disabled ?? false}
+              optimized={status?.game_dvr_disabled ?? false}
               goodLabel="Desabilitado"
               badLabel="Habilitado"
-              loading={!info}
+              loading={!status}
               tooltip="Gravação em segundo plano do Game DVR consome GPU (encoder) e CPU mesmo quando você não está gravando. Recomendado: Desabilitado."
             />
           </div>
           <div className={styles.badges}>
             <PowerPlanBadge
-              tier={info?.power_plan_tier ?? 'other'}
-              name={info?.power_plan_name ?? ''}
-              loading={!info}
+              tier={status?.power_plan_tier ?? 'other'}
+              name={status?.power_plan_name ?? ''}
+              loading={!status}
             />
             <StatusBadge
               label="Timer Res"
-              optimized={info?.timer_resolution_optimized ?? false}
+              optimized={status?.timer_resolution_optimized ?? false}
               goodLabel="1 ms"
               badLabel="Padrão"
-              loading={!info}
+              loading={!status}
               tooltip="Timer resolution de 1 ms (vs 15,6 ms padrão) melhora frame pacing e reduz input lag em monitores 144Hz+. Recomendado: Otimizado."
             />
           </div>

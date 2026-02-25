@@ -33,7 +33,7 @@ function Pages() {
     <Layout mainRef={mainRef}>
       {!isKnown && <Navigate to="/" replace />}
       {ROUTES.map(({ path, Page }) => (
-        <div key={path} style={{ display: pathname === path ? 'contents' : 'none' }}>
+        <div key={path} style={pathname === path ? { display: 'block', height: '100%' } : { display: 'none' }}>
           <Page />
         </div>
       ))}

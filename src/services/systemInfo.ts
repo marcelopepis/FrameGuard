@@ -7,16 +7,17 @@ export interface SystemSummary {
   is_elevated: boolean;
 }
 
-// Espelha SystemInfo do Rust
-export interface SystemInfo {
+// Espelha StaticHwInfo do Rust — dados que não mudam durante a sessão
+export interface StaticHwInfo {
   cpu_name: string;
   cpu_cores: number;
-  cpu_usage_percent: number;
   ram_total_gb: number;
-  ram_used_gb: number;
-  ram_usage_percent: number;
   gpu_name: string;
   gpu_vram_gb: number;
+}
+
+// Espelha SystemStatus do Rust — lido fresco do registro a cada chamada
+export interface SystemStatus {
   game_mode_enabled: boolean;
   hags_enabled: boolean;
   vbs_enabled: boolean;
@@ -36,9 +37,14 @@ export async function getSystemSummary(): Promise<SystemSummary> {
   return invoke<SystemSummary>('get_system_summary');
 }
 
-/** Coleta informações completas de hardware e status (uso CPU+RAM com delta de 200 ms). */
-export async function getSystemInfo(): Promise<SystemInfo> {
-  return invoke<SystemInfo>('get_system_info');
+/** Hardware estático (CPU, GPU, RAM total). Cacheado no backend — primeira chamada lenta, demais instantâneas. */
+export async function getStaticHwInfo(): Promise<StaticHwInfo> {
+  return invoke<StaticHwInfo>('get_static_hw_info');
+}
+
+/** Status de configurações do Windows (Game Mode, HAGS, VBS, DVR, Power Plan, Timer). Sempre fresco. */
+export async function getSystemStatus(): Promise<SystemStatus> {
+  return invoke<SystemStatus>('get_system_status');
 }
 
 /** Retorna uso atual de CPU e RAM (para polling periódico). */

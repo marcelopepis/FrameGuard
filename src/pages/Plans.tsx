@@ -11,7 +11,7 @@ import {
   Plus, Play, Pencil, Trash2, GripVertical,
   CheckCircle2, XCircle, Clock, MinusCircle,
   Loader2, X, ChevronDown, ChevronUp,
-  ClipboardList,
+  ClipboardList, Shield, Copy,
 } from 'lucide-react';
 import styles from './Plans.module.css';
 import { useToast } from '../contexts/ToastContext';
@@ -369,6 +369,9 @@ export default function Plans() {
 
   const { showToast } = useToast();
 
+  // Modal de visualização
+  const [viewingPlan, setViewingPlan] = useState<Plan | null>(null);
+
   // Modal de execução
   const [executingPlan, setExecutingPlan] = useState<Plan | null>(null);
   const [execState, setExecState] = useState<ExecState | null>(null);
@@ -538,6 +541,7 @@ export default function Plans() {
               key={plan.id}
               plan={plan}
               confirmDeleteId={confirmDeleteId}
+              onView={() => setViewingPlan(plan)}
               onEdit={() => handleEditPlan(plan)}
               onDelete={() => handleDeletePlan(plan.id)}
               onDeleteCancel={() => setConfirmDeleteId(null)}
@@ -545,6 +549,15 @@ export default function Plans() {
             />
           ))}
         </div>
+      )}
+
+      {/* Modal de visualização */}
+      {viewingPlan && (
+        <PlanViewModal
+          plan={viewingPlan}
+          onClose={() => setViewingPlan(null)}
+          onRun={() => { setViewingPlan(null); handleExecutePlan(viewingPlan); }}
+        />
       )}
 
       {/* Modal de execução */}
@@ -583,19 +596,20 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 interface PlanCardProps {
   plan: Plan;
   confirmDeleteId: string | null;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onDeleteCancel: () => void;
   onRun: () => void;
 }
 
-function PlanCard({ plan, confirmDeleteId, onEdit, onDelete, onDeleteCancel, onRun }: PlanCardProps) {
+function PlanCard({ plan, confirmDeleteId, onView, onEdit, onDelete, onDeleteCancel, onRun }: PlanCardProps) {
   const isConfirmingDelete = confirmDeleteId === plan.id;
   const enabledCount = plan.items.filter(i => i.enabled).length;
 
   return (
     <div className={styles.planCard}>
-      <div className={styles.cardBody}>
+      <div className={styles.cardBody} onClick={onView} role="button" tabIndex={0}>
         <h3 className={styles.planName}>{plan.name}</h3>
         {plan.description && (
           <p className={styles.planDesc}>{plan.description}</p>
@@ -857,6 +871,91 @@ function PlanEditor({ initial, onSave, onCancel }: PlanEditorProps) {
             </button>
             <button className={styles.btnSecondary} onClick={onCancel} disabled={saving}>
               Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PlanViewModal ─────────────────────────────────────────────────────────────
+
+interface PlanViewModalProps {
+  plan: Plan;
+  onClose: () => void;
+  onRun: () => void;
+}
+
+function PlanViewModal({ plan, onClose, onRun }: PlanViewModalProps) {
+  const isBuiltin = plan.id.startsWith('builtin_');
+  const sortedItems = [...plan.items].sort((a, b) => a.order - b.order);
+  const enabledCount = plan.items.filter(i => i.enabled).length;
+
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+
+        {/* Cabeçalho */}
+        <div className={styles.modalHeader}>
+          <div className={styles.modalTitleGroup}>
+            <div className={styles.viewTitleRow}>
+              <h2 className={styles.modalTitle}>{plan.name}</h2>
+              {isBuiltin && (
+                <span className={styles.builtinBadge}>
+                  <Shield size={11} strokeWidth={2.5} />
+                  Plano oficial
+                </span>
+              )}
+            </div>
+            {plan.description && (
+              <p className={styles.modalSubtitle}>{plan.description}</p>
+            )}
+          </div>
+          <button className={styles.modalClose} onClick={onClose} title="Fechar">
+            <X size={16} strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* Lista de tarefas */}
+        <div className={styles.viewList}>
+          {sortedItems.map((item, idx) => {
+            const tweak = TWEAK_MAP[item.tweak_id];
+            return (
+              <div key={item.tweak_id} className={styles.viewItem}>
+                <span className={styles.viewNum}>{idx + 1}</span>
+                <div className={styles.viewItemInfo}>
+                  <span className={styles.viewItemName}>{tweak?.name ?? item.tweak_id}</span>
+                  {tweak?.description && (
+                    <span className={styles.viewItemDesc}>{tweak.description}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Rodapé */}
+        <div className={styles.viewFooter}>
+          <span className={styles.viewMeta}>
+            {plan.last_executed
+              ? `Última execução: ${formatDate(plan.last_executed)}`
+              : 'Nunca executado'}
+          </span>
+          <div className={styles.viewActions}>
+            {isBuiltin && (
+              <button className={styles.btnSecondary} disabled title="Em breve">
+                <Copy size={13} strokeWidth={2} />
+                Duplicar e personalizar
+              </button>
+            )}
+            <button
+              className={styles.btnRun}
+              onClick={onRun}
+              disabled={enabledCount === 0}
+            >
+              <Play size={13} strokeWidth={2.5} fill="currentColor" />
+              Executar
             </button>
           </div>
         </div>
