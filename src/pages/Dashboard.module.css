@@ -189,6 +189,12 @@
   color: var(--color-text-muted);
 }
 
+.badgeRows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .badges {
   display: flex;
   gap: 10px;

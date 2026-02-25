@@ -2,7 +2,7 @@
 use serde::Serialize;
 use sysinfo::System;
 
-use crate::utils::command_runner::run_command;
+use crate::utils::command_runner::{run_command, run_powershell};
 
 /// Informações completas de hardware e status do sistema para o dashboard.
 #[derive(Debug, Serialize)]
@@ -29,6 +29,12 @@ pub struct SystemInfo {
     pub hags_enabled: bool,
     /// `true` se VBS (Virtualization Based Security) está ativo
     pub vbs_enabled: bool,
+    /// `true` se o Game DVR está desabilitado (otimizado para gaming)
+    pub game_dvr_disabled: bool,
+    /// `true` se o plano Ultimate Performance está ativo
+    pub ultimate_performance: bool,
+    /// `true` se o timer de alta resolução (1 ms) está ativo
+    pub timer_resolution_optimized: bool,
 }
 
 /// Coleta todas as informações de hardware e status do sistema.
@@ -146,6 +152,38 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
             .map(|v| v != 0)
             .unwrap_or(false);
 
+        // Game DVR: desabilitado = otimizado (3 chaves devem ser 0)
+        let dvr1 = hkcu
+            .open_subkey(r"System\GameConfigStore")
+            .ok()
+            .and_then(|k| k.get_value::<u32, _>("GameDVR_Enabled").ok())
+            .unwrap_or(1);
+        let dvr2 = hklm
+            .open_subkey(r"SOFTWARE\Policies\Microsoft\Windows\GameDVR")
+            .ok()
+            .and_then(|k| k.get_value::<u32, _>("AllowGameDVR").ok())
+            .unwrap_or(1);
+        let dvr3 = hkcu
+            .open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR")
+            .ok()
+            .and_then(|k| k.get_value::<u32, _>("AppCaptureEnabled").ok())
+            .unwrap_or(1);
+        let game_dvr_disabled = dvr1 == 0 && dvr2 == 0 && dvr3 == 0;
+
+        // Ultimate Performance: powercfg /getactivescheme contém "ultimate"
+        let ultimate_performance = run_powershell("powercfg /getactivescheme")
+            .ok()
+            .map(|o| o.stdout.to_lowercase().contains("ultimate"))
+            .unwrap_or(false);
+
+        // Timer Resolution: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel
+        let timer_resolution_optimized = hklm
+            .open_subkey(r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel")
+            .ok()
+            .and_then(|k| k.get_value::<u32, _>("GlobalTimerResolutionRequests").ok())
+            .map(|v| v == 1)
+            .unwrap_or(false);
+
         Ok::<SystemInfo, String>(SystemInfo {
             cpu_name,
             cpu_cores,
@@ -158,6 +196,9 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
             game_mode_enabled,
             hags_enabled,
             vbs_enabled,
+            game_dvr_disabled,
+            ultimate_performance,
+            timer_resolution_optimized,
         })
     })
     .await

@@ -20,6 +20,9 @@ export interface SystemInfo {
   game_mode_enabled: boolean;
   hags_enabled: boolean;
   vbs_enabled: boolean;
+  game_dvr_disabled: boolean;
+  ultimate_performance: boolean;
+  timer_resolution_optimized: boolean;
 }
 
 // Espelha SystemUsage do Rust

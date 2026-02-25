@@ -130,31 +130,59 @@ export default function Dashboard() {
       {/* Status Rápido */}
       <section className={styles.statusSection}>
         <h2 className={styles.sectionTitle}>Status Rápido</h2>
-        <div className={styles.badges}>
-          <StatusBadge
-            label="Game Mode"
-            optimized={info?.game_mode_enabled ?? false}
-            goodLabel="Ativo"
-            badLabel="Inativo"
-            loading={!info}
-            tooltip="Prioriza CPU e GPU para o jogo em execução, reduzindo interferência de processos em segundo plano. Recomendado: Ativo."
-          />
-          <StatusBadge
-            label="HAGS"
-            optimized={info?.hags_enabled ?? false}
-            goodLabel="Ativo"
-            badLabel="Inativo"
-            loading={!info}
-            tooltip="Hardware-Accelerated GPU Scheduling: a GPU gerencia sua própria memória, reduzindo latência e carga da CPU. Recomendado: Ativo."
-          />
-          <StatusBadge
-            label="VBS"
-            optimized={!(info?.vbs_enabled ?? true)}
-            goodLabel="Desabilitado"
-            badLabel="Habilitado"
-            loading={!info}
-            tooltip="Virtualization Based Security protege o Windows via virtualização, mas pode reduzir performance em games em até 10–15%. Recomendado: Desabilitado para gaming."
-          />
+        <div className={styles.badgeRows}>
+          <div className={styles.badges}>
+            <StatusBadge
+              label="Game Mode"
+              optimized={info?.game_mode_enabled ?? false}
+              goodLabel="Ativo"
+              badLabel="Inativo"
+              loading={!info}
+              tooltip="Prioriza CPU e GPU para o jogo em execução, reduzindo interferência de processos em segundo plano. Recomendado: Ativo."
+            />
+            <StatusBadge
+              label="HAGS"
+              optimized={info?.hags_enabled ?? false}
+              goodLabel="Ativo"
+              badLabel="Inativo"
+              loading={!info}
+              tooltip="Hardware-Accelerated GPU Scheduling: a GPU gerencia sua própria memória, reduzindo latência e carga da CPU. Recomendado: Ativo."
+            />
+            <StatusBadge
+              label="VBS"
+              optimized={!(info?.vbs_enabled ?? true)}
+              goodLabel="Desabilitado"
+              badLabel="Habilitado"
+              loading={!info}
+              tooltip="Virtualization Based Security protege o Windows via virtualização, mas pode reduzir performance em games em até 10–15%. Recomendado: Desabilitado para gaming."
+            />
+            <StatusBadge
+              label="Game DVR"
+              optimized={info?.game_dvr_disabled ?? false}
+              goodLabel="Desabilitado"
+              badLabel="Habilitado"
+              loading={!info}
+              tooltip="Gravação em segundo plano do Game DVR consome GPU (encoder) e CPU mesmo quando você não está gravando. Recomendado: Desabilitado."
+            />
+          </div>
+          <div className={styles.badges}>
+            <StatusBadge
+              label="Power Plan"
+              optimized={info?.ultimate_performance ?? false}
+              goodLabel="Ultimate"
+              badLabel="Outro plano"
+              loading={!info}
+              tooltip="O plano Ultimate Performance mantém o processador em frequência máxima, eliminando latência de boost. Recomendado: Ultimate Performance."
+            />
+            <StatusBadge
+              label="Timer Res"
+              optimized={info?.timer_resolution_optimized ?? false}
+              goodLabel="1 ms"
+              badLabel="Padrão"
+              loading={!info}
+              tooltip="Timer resolution de 1 ms (vs 15,6 ms padrão) melhora frame pacing e reduz input lag em monitores 144Hz+. Recomendado: Otimizado."
+            />
+          </div>
         </div>
       </section>
     </div>
