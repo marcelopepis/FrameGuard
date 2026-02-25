@@ -137,6 +137,127 @@ const TWEAKS: TweakMeta[] = [
     description: 'Remove overhead de virtualização que pode reduzir FPS em 5–15%',
     categoryKey: 'gamer',
   },
+  // GPU & Display
+  {
+    id: 'disable_game_dvr',
+    name: 'Desabilitar Game DVR',
+    description: 'Desabilita gravação em segundo plano, liberando GPU (encoder) e CPU',
+    categoryKey: 'gpu_display',
+  },
+  {
+    id: 'disable_xbox_overlay',
+    name: 'Desabilitar Xbox Game Bar Overlay',
+    description: 'Remove overlay da Xbox Game Bar (Win+G) que pode interferir em jogos',
+    categoryKey: 'gpu_display',
+  },
+  {
+    id: 'enable_msi_mode_gpu',
+    name: 'Habilitar MSI Mode para GPU',
+    description: 'Message Signaled Interrupts reduz latência de DPC — benefício maior em GPUs RTX 30 e anteriores',
+    categoryKey: 'gpu_display',
+  },
+  {
+    id: 'disable_mpo',
+    name: 'Desabilitar Multiplane Overlay (MPO)',
+    description: 'Remove stuttering/flickering em setups multi-monitor com refresh rates diferentes',
+    categoryKey: 'gpu_display',
+  },
+  {
+    id: 'disable_nvidia_telemetry',
+    name: 'Desabilitar Telemetria NVIDIA',
+    description: 'Remove coleta de telemetria do driver NVIDIA sem afetar funcionalidade',
+    categoryKey: 'gpu_display',
+  },
+  // Gaming
+  {
+    id: 'enable_timer_resolution',
+    name: 'Timer de Alta Resolução (1 ms)',
+    description: 'Timer resolution de 1 ms melhora frame pacing e reduz input lag em monitores 144Hz+',
+    categoryKey: 'gaming',
+  },
+  {
+    id: 'disable_mouse_acceleration',
+    name: 'Desabilitar Aceleração do Mouse',
+    description: 'Remove curva não-linear do mouse — essencial para mira 1:1 em jogos FPS',
+    categoryKey: 'gaming',
+  },
+  {
+    id: 'disable_fullscreen_optimizations',
+    name: 'Desabilitar Fullscreen Optimizations',
+    description: 'Força fullscreen exclusivo em vez do modo otimizado — beneficia jogos DX9/DX11',
+    categoryKey: 'gaming',
+  },
+  // Energia & CPU
+  {
+    id: 'enable_ultimate_performance',
+    name: 'Plano Ultimate Performance',
+    description: 'Mantém o processador em frequência máxima, eliminando latência de boost',
+    categoryKey: 'energy_cpu',
+  },
+  {
+    id: 'disable_power_throttling',
+    name: 'Desabilitar Power Throttling',
+    description: 'Impede redução de frequência de CPU para processos em background',
+    categoryKey: 'energy_cpu',
+  },
+  // Armazenamento
+  {
+    id: 'disable_hibernation',
+    name: 'Desabilitar Hibernação',
+    description: 'Remove hiberfil.sys liberando 8-16 GB e desabilita Fast Startup',
+    categoryKey: 'storage',
+  },
+  {
+    id: 'disable_ntfs_last_access',
+    name: 'Desabilitar Timestamp de Último Acesso NTFS',
+    description: 'Reduz operações de escrita no disco ao não atualizar timestamps de acesso',
+    categoryKey: 'storage',
+  },
+  // Rede
+  {
+    id: 'disable_nagle',
+    name: 'Desabilitar Algoritmo de Nagle',
+    description: 'Reduz latência TCP em 10-20 ms — beneficia jogos que usam TCP (MMOs, LoL)',
+    categoryKey: 'network',
+  },
+  // Visual & Experiência
+  {
+    id: 'disable_sticky_keys',
+    name: 'Desabilitar Teclas de Aderência',
+    description: 'Remove atalho 5x Shift que interrompe sessões de jogo acidentalmente',
+    categoryKey: 'visual',
+  },
+  {
+    id: 'disable_bing_search',
+    name: 'Desabilitar Busca Bing no Menu Iniciar',
+    description: 'Buscas ficam apenas locais — mais rápidas e sem envio de dados',
+    categoryKey: 'visual',
+  },
+  // Privacidade
+  {
+    id: 'disable_telemetry_registry',
+    name: 'Desabilitar Telemetria do Windows',
+    description: 'Bloqueia coleta e envio de dados de diagnóstico e uso para a Microsoft',
+    categoryKey: 'privacy',
+  },
+  {
+    id: 'disable_copilot',
+    name: 'Desabilitar Copilot / Cortana',
+    description: 'Remove integração do Copilot e Cortana do Windows',
+    categoryKey: 'privacy',
+  },
+  {
+    id: 'disable_content_delivery',
+    name: 'Desabilitar Content Delivery Manager',
+    description: 'Remove sugestões de apps e instalações automáticas de bloatware',
+    categoryKey: 'privacy',
+  },
+  {
+    id: 'disable_background_apps',
+    name: 'Desabilitar Apps em Background',
+    description: 'Impede apps da Microsoft Store de rodarem em segundo plano',
+    categoryKey: 'privacy',
+  },
   // Manutenção — Limpeza
   {
     id: 'flush_dns',
@@ -203,6 +324,13 @@ const TWEAK_MAP: Record<string, TweakMeta> = Object.fromEntries(
 const CATEGORIES = [
   { key: 'optimization',       label: 'Otimizações'                        },
   { key: 'gamer',              label: 'Gamer'                              },
+  { key: 'gpu_display',        label: 'GPU & Display'                      },
+  { key: 'gaming',             label: 'Gaming'                             },
+  { key: 'energy_cpu',         label: 'Energia & CPU'                      },
+  { key: 'storage',            label: 'Armazenamento'                      },
+  { key: 'network',            label: 'Rede'                               },
+  { key: 'visual',             label: 'Visual & Experiência'               },
+  { key: 'privacy',            label: 'Privacidade'                        },
   { key: 'maintenance-clean',  label: 'Manutenção — Limpeza'               },
   { key: 'maintenance-dism',   label: 'Manutenção — DISM Component Store'  },
   { key: 'maintenance-verify', label: 'Manutenção — Verificação de Disco'  },

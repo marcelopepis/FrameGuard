@@ -32,7 +32,7 @@ use std::{fs, path::Path};
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
-use crate::utils::backup::{self, BackupEntry, BackupFile};
+use crate::utils::backup::{self, BackupEntry, BackupFile, BackupStatus};
 use crate::utils::plan_manager::{self, Plan, PlansFile};
 
 // ─── Tipos públicos ───────────────────────────────────────────────────────────
@@ -68,6 +68,12 @@ pub struct FgExportFile {
     pub plans: Value,
     /// Preferências do usuário — reservado para uso futuro
     pub settings: Value,
+    /// IDs de serviços desabilitados pelo FrameGuard (ex: `["DiagTrack", "dmwappushservice"]`)
+    #[serde(default)]
+    pub services_disabled: Vec<String>,
+    /// IDs de tarefas agendadas desabilitadas pelo FrameGuard (ex: `["Consolidator"]`)
+    #[serde(default)]
+    pub tasks_disabled: Vec<String>,
 }
 
 /// Resultado de uma exportação bem-sucedida.
@@ -81,6 +87,10 @@ pub struct ExportResult {
     pub backup_count: usize,
     /// Quantidade de planos incluídos
     pub plan_count: usize,
+    /// Quantidade de serviços desabilitados incluídos
+    pub services_count: usize,
+    /// Quantidade de tarefas desabilitadas incluídas
+    pub tasks_count: usize,
     /// Timestamp ISO 8601 UTC da exportação
     pub exported_at: String,
 }
@@ -103,6 +113,10 @@ pub struct FgFileInfo {
     pub backup_count: usize,
     /// Quantidade de planos no arquivo
     pub plan_count: usize,
+    /// IDs de serviços que serão desabilitados na importação
+    pub services_disabled: Vec<String>,
+    /// IDs de tarefas que serão desabilitadas na importação
+    pub tasks_disabled: Vec<String>,
 }
 
 /// Resumo do resultado de uma importação concluída.
@@ -114,6 +128,10 @@ pub struct ImportResult {
     pub backups_imported: usize,
     /// Quantidade de planos importados/adicionados
     pub plans_imported: usize,
+    /// Quantidade de serviços desabilitados com sucesso
+    pub services_disabled: usize,
+    /// Quantidade de tarefas desabilitadas com sucesso
+    pub tasks_disabled: usize,
     /// Avisos não críticos ocorridos durante a importação (ex: seções inválidas ignoradas)
     pub warnings: Vec<String>,
 }
@@ -181,6 +199,26 @@ fn count_plans(v: &Value) -> usize {
         .and_then(|p| p.as_object())
         .map(|m| m.len())
         .unwrap_or(0)
+}
+
+/// Extrai IDs de serviços com backup Applied (prefixo `svc_`).
+fn extract_applied_service_ids() -> Vec<String> {
+    backup::get_all_backups()
+        .unwrap_or_default()
+        .iter()
+        .filter(|(k, e)| k.starts_with("svc_") && matches!(e.status, BackupStatus::Applied))
+        .map(|(k, _)| k.strip_prefix("svc_").unwrap_or(k).to_string())
+        .collect()
+}
+
+/// Extrai IDs de tarefas com backup Applied (prefixo `task_`).
+fn extract_applied_task_ids() -> Vec<String> {
+    backup::get_all_backups()
+        .unwrap_or_default()
+        .iter()
+        .filter(|(k, e)| k.starts_with("task_") && matches!(e.status, BackupStatus::Applied))
+        .map(|(k, _)| k.strip_prefix("task_").unwrap_or(k).to_string())
+        .collect()
 }
 
 /// Lê e valida um arquivo `.fg` no caminho fornecido.
@@ -256,6 +294,12 @@ pub fn export_config(app_handle: AppHandle) -> Result<ExportResult, String> {
     let backup_count = count_backups(&backups_value);
     let plan_count = count_plans(&plans_value);
 
+    // Extrai serviços e tarefas atualmente desabilitados pelo FrameGuard
+    let services_disabled = extract_applied_service_ids();
+    let tasks_disabled = extract_applied_task_ids();
+    let services_count = services_disabled.len();
+    let tasks_count = tasks_disabled.len();
+
     // Constrói o arquivo de exportação
     let export_file = FgExportFile {
         frameguard_export: true,
@@ -266,6 +310,8 @@ pub fn export_config(app_handle: AppHandle) -> Result<ExportResult, String> {
         backups: backups_value,
         plans: plans_value,
         settings: json!({}),
+        services_disabled,
+        tasks_disabled,
     };
 
     let json = serde_json::to_string_pretty(&export_file)
@@ -283,6 +329,8 @@ pub fn export_config(app_handle: AppHandle) -> Result<ExportResult, String> {
         file_size_bytes,
         backup_count,
         plan_count,
+        services_count,
+        tasks_count,
         exported_at,
     })
 }
@@ -390,10 +438,40 @@ pub fn import_config(
         plans_imported = plan_manager::merge_plans(new_plans)?;
     }
 
+    // ── Reaplicar serviços e tarefas desabilitados ──────────────────────────
+    let mut svc_disabled_count: usize = 0;
+    let mut task_disabled_count: usize = 0;
+
+    if !fg_file.services_disabled.is_empty() {
+        match super::services::disable_services(fg_file.services_disabled.clone()) {
+            Ok(result) => {
+                svc_disabled_count = result.succeeded.len();
+                for fail in &result.failed {
+                    warnings.push(format!("Serviço '{}': {}", fail.id, fail.error));
+                }
+            }
+            Err(e) => warnings.push(format!("Erro ao desabilitar serviços: {}", e)),
+        }
+    }
+
+    if !fg_file.tasks_disabled.is_empty() {
+        match super::services::disable_tasks(fg_file.tasks_disabled.clone()) {
+            Ok(result) => {
+                task_disabled_count = result.succeeded.len();
+                for fail in &result.failed {
+                    warnings.push(format!("Tarefa '{}': {}", fail.id, fail.error));
+                }
+            }
+            Err(e) => warnings.push(format!("Erro ao desabilitar tarefas: {}", e)),
+        }
+    }
+
     Ok(ImportResult {
         mode,
         backups_imported,
         plans_imported,
+        services_disabled: svc_disabled_count,
+        tasks_disabled: task_disabled_count,
         warnings,
     })
 }
@@ -434,5 +512,7 @@ pub fn validate_fg_file(file_path: String) -> Result<FgFileInfo, String> {
         machine_info: fg_file.machine_info,
         backup_count: count_backups(&fg_file.backups),
         plan_count: count_plans(&fg_file.plans),
+        services_disabled: fg_file.services_disabled,
+        tasks_disabled: fg_file.tasks_disabled,
     })
 }

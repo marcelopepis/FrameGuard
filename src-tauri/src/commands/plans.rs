@@ -107,7 +107,7 @@ fn now_utc() -> String {
 /// - `"disable_reserved_storage"`, `"enable_reserved_storage"`
 /// - `"disable_delivery_optimization"`, `"revert_delivery_optimization"`
 async fn execute_single_tweak(app: tauri::AppHandle, tweak_id: &str) -> ItemResult {
-    use super::{health_check, optimizations};
+    use super::{health_check, optimizations, privacy};
 
     // Tenta executar o tweak e converte o resultado para Option<serde_json::Value>
     // Ok(Some(json)) = sucesso com dados retornados (ex: HealthCheckResult)
@@ -164,6 +164,80 @@ async fn execute_single_tweak(app: tauri::AppHandle, tweak_id: &str) -> ItemResu
             .map(|_| None),
 
         "revert_delivery_optimization" => optimizations::revert_delivery_optimization()
+            .map(|_| None),
+
+        // ── Gamer ────────────────────────────────────────────────────────────
+        "enable_hags" => optimizations::enable_hags()
+            .map(|_| None),
+
+        "enable_game_mode" => optimizations::enable_game_mode()
+            .map(|_| None),
+
+        "disable_vbs" => optimizations::disable_vbs()
+            .map(|_| None),
+
+        // ── GPU & Display ────────────────────────────────────────────────────
+        "disable_game_dvr" => optimizations::disable_game_dvr()
+            .map(|_| None),
+
+        "disable_xbox_overlay" => optimizations::disable_xbox_overlay()
+            .map(|_| None),
+
+        "enable_msi_mode_gpu" => optimizations::enable_msi_mode_gpu()
+            .map(|_| None),
+
+        "disable_mpo" => optimizations::disable_mpo()
+            .map(|_| None),
+
+        "disable_nvidia_telemetry" => optimizations::disable_nvidia_telemetry()
+            .map(|_| None),
+
+        // ── Gaming ───────────────────────────────────────────────────────────
+        "enable_timer_resolution" => optimizations::enable_timer_resolution()
+            .map(|_| None),
+
+        "disable_mouse_acceleration" => optimizations::disable_mouse_acceleration()
+            .map(|_| None),
+
+        "disable_fullscreen_optimizations" => optimizations::disable_fullscreen_optimizations()
+            .map(|_| None),
+
+        // ── Energia & CPU ────────────────────────────────────────────────────
+        "enable_ultimate_performance" => optimizations::enable_ultimate_performance()
+            .map(|_| None),
+
+        "disable_power_throttling" => optimizations::disable_power_throttling()
+            .map(|_| None),
+
+        // ── Armazenamento ────────────────────────────────────────────────────
+        "disable_hibernation" => optimizations::disable_hibernation()
+            .map(|_| None),
+
+        "disable_ntfs_last_access" => optimizations::disable_ntfs_last_access()
+            .map(|_| None),
+
+        // ── Rede ─────────────────────────────────────────────────────────────
+        "disable_nagle" => optimizations::disable_nagle()
+            .map(|_| None),
+
+        // ── Visual & Experiência ─────────────────────────────────────────────
+        "disable_sticky_keys" => optimizations::disable_sticky_keys()
+            .map(|_| None),
+
+        "disable_bing_search" => optimizations::disable_bing_search()
+            .map(|_| None),
+
+        // ── Privacidade ──────────────────────────────────────────────────────
+        "disable_telemetry_registry" => privacy::disable_telemetry_registry()
+            .map(|_| None),
+
+        "disable_copilot" => privacy::disable_copilot()
+            .map(|_| None),
+
+        "disable_content_delivery" => privacy::disable_content_delivery()
+            .map(|_| None),
+
+        "disable_background_apps" => privacy::disable_background_apps()
             .map(|_| None),
 
         // ── Desconhecido ─────────────────────────────────────────────────────

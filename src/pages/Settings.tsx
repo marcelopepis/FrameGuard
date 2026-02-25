@@ -23,6 +23,8 @@ interface ExportResult {
   file_size_bytes: number;
   backup_count: number;
   plan_count: number;
+  services_count: number;
+  tasks_count: number;
   exported_at: string;
 }
 
@@ -33,12 +35,16 @@ interface FgFileInfo {
   machine_info: { hostname: string; os_version: string };
   backup_count: number;
   plan_count: number;
+  services_disabled: string[];
+  tasks_disabled: string[];
 }
 
 interface ImportResult {
   mode: string;
   backups_imported: number;
   plans_imported: number;
+  services_disabled: number;
+  tasks_disabled: number;
   warnings: string[];
 }
 
@@ -179,8 +185,11 @@ export default function Settings() {
     setExportLoading(true);
     try {
       const result = await invoke<ExportResult>('export_config');
-      showToast('success', 'Exportado com sucesso!',
-        `${result.backup_count} backup(s) · ${result.plan_count} plano(s) · ${formatBytes(result.file_size_bytes)}`);
+      const parts = [`${result.backup_count} backup(s)`, `${result.plan_count} plano(s)`];
+      if (result.services_count > 0) parts.push(`${result.services_count} serviço(s)`);
+      if (result.tasks_count > 0) parts.push(`${result.tasks_count} tarefa(s)`);
+      parts.push(formatBytes(result.file_size_bytes));
+      showToast('success', 'Exportado com sucesso!', parts.join(' · '));
     } catch (e) {
       const msg = String(e);
       if (msg.toLowerCase().includes('cancelad')) return;
@@ -217,8 +226,11 @@ export default function Settings() {
     setImportStep('importing');
     try {
       const result = await invoke<ImportResult>('import_config', { mode: importMode });
-      const detail = `${result.backups_imported} backup(s) · ${result.plans_imported} plano(s) · modo: ${result.mode}`;
-      showToast('success', 'Importação concluída!', detail);
+      const parts = [`${result.backups_imported} backup(s)`, `${result.plans_imported} plano(s)`];
+      if (result.services_disabled > 0) parts.push(`${result.services_disabled} serviço(s)`);
+      if (result.tasks_disabled > 0) parts.push(`${result.tasks_disabled} tarefa(s)`);
+      parts.push(`modo: ${result.mode}`);
+      showToast('success', 'Importação concluída!', parts.join(' · '));
       if (result.warnings.length > 0) {
         showToast('warning', 'Avisos na importação', result.warnings.join('; '));
       }
@@ -414,6 +426,22 @@ export default function Settings() {
                       formato v{importInfo.version} · app {importInfo.app_version}
                     </span>
                   </div>
+                  {importInfo.services_disabled.length > 0 && (
+                    <div className={styles.previewField}>
+                      <span className={styles.previewLabel}>Serviços desabilitados</span>
+                      <span className={styles.previewValue}>
+                        {importInfo.services_disabled.join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {importInfo.tasks_disabled.length > 0 && (
+                    <div className={styles.previewField}>
+                      <span className={styles.previewLabel}>Tarefas desabilitadas</span>
+                      <span className={styles.previewValue}>
+                        {importInfo.tasks_disabled.join(', ')}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className={styles.modeSection}>

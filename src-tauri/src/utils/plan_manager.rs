@@ -73,11 +73,136 @@ impl PlansFile {
 static STATE: OnceLock<Mutex<PlansFile>> = OnceLock::new();
 
 /// Retorna referência ao Mutex global, carregando o arquivo do disco se necessário.
+/// Na primeira inicialização, injeta planos built-in que ainda não existam.
 fn get_state() -> &'static Mutex<PlansFile> {
     STATE.get_or_init(|| {
-        let data = load_from_disk().unwrap_or_else(|_| PlansFile::new());
+        let mut data = load_from_disk().unwrap_or_else(|_| PlansFile::new());
+        seed_builtin_plans(&mut data);
         Mutex::new(data)
     })
+}
+
+// ─── Planos built-in ─────────────────────────────────────────────────────────
+
+/// IDs determinísticos para planos built-in (permite detectar se já existem).
+const BUILTIN_MANUTENCAO_BASICA: &str = "builtin_manutencao_basica";
+const BUILTIN_SAUDE_COMPLETA: &str = "builtin_saude_completa";
+const BUILTIN_OTIMIZACAO_GAMING: &str = "builtin_otimizacao_gaming";
+const BUILTIN_PRIVACIDADE_DEBLOAT: &str = "builtin_privacidade_debloat";
+
+/// Injeta planos built-in que ainda não existam no estado.
+/// Chamada na inicialização para garantir que o usuário sempre tenha os planos padrão.
+fn seed_builtin_plans(state: &mut PlansFile) {
+    let now = now_utc();
+    let mut modified = false;
+
+    // Helper: cria PlanItem com order sequencial
+    fn items(ids: &[&str]) -> Vec<PlanItem> {
+        ids.iter()
+            .enumerate()
+            .map(|(i, id)| PlanItem {
+                tweak_id: id.to_string(),
+                order: i as u32,
+                enabled: true,
+            })
+            .collect()
+    }
+
+    // Manutenção Básica
+    if !state.plans.contains_key(BUILTIN_MANUTENCAO_BASICA) {
+        state.plans.insert(
+            BUILTIN_MANUTENCAO_BASICA.to_string(),
+            Plan {
+                id: BUILTIN_MANUTENCAO_BASICA.to_string(),
+                name: "Manutenção Básica".to_string(),
+                description: "Limpeza rápida: flush DNS, temporários e TRIM de SSDs".to_string(),
+                created_at: now.clone(),
+                last_executed: None,
+                items: items(&["flush_dns", "temp_cleanup", "ssd_trim"]),
+            },
+        );
+        modified = true;
+    }
+
+    // Saúde Completa
+    if !state.plans.contains_key(BUILTIN_SAUDE_COMPLETA) {
+        state.plans.insert(
+            BUILTIN_SAUDE_COMPLETA.to_string(),
+            Plan {
+                id: BUILTIN_SAUDE_COMPLETA.to_string(),
+                name: "Saúde Completa".to_string(),
+                description: "Verificação completa: DISM, SFC, Check Disk, TRIM e limpeza"
+                    .to_string(),
+                created_at: now.clone(),
+                last_executed: None,
+                items: items(&[
+                    "dism_checkhealth",
+                    "dism_scanhealth",
+                    "dism_restorehealth",
+                    "dism_cleanup",
+                    "sfc_scannow",
+                    "chkdsk",
+                    "ssd_trim",
+                    "flush_dns",
+                    "temp_cleanup",
+                ]),
+            },
+        );
+        modified = true;
+    }
+
+    // Otimização Gaming
+    if !state.plans.contains_key(BUILTIN_OTIMIZACAO_GAMING) {
+        state.plans.insert(
+            BUILTIN_OTIMIZACAO_GAMING.to_string(),
+            Plan {
+                id: BUILTIN_OTIMIZACAO_GAMING.to_string(),
+                name: "Otimização Gaming".to_string(),
+                description: "Tweaks essenciais para máximo desempenho em jogos".to_string(),
+                created_at: now.clone(),
+                last_executed: None,
+                items: items(&[
+                    "enable_hags",
+                    "enable_game_mode",
+                    "disable_vbs",
+                    "disable_game_dvr",
+                    "enable_timer_resolution",
+                    "disable_mouse_acceleration",
+                    "enable_ultimate_performance",
+                ]),
+            },
+        );
+        modified = true;
+    }
+
+    // Privacidade e Debloat
+    if !state.plans.contains_key(BUILTIN_PRIVACIDADE_DEBLOAT) {
+        state.plans.insert(
+            BUILTIN_PRIVACIDADE_DEBLOAT.to_string(),
+            Plan {
+                id: BUILTIN_PRIVACIDADE_DEBLOAT.to_string(),
+                name: "Privacidade e Debloat".to_string(),
+                description: "Remove telemetria, bloatware e integração com serviços Microsoft"
+                    .to_string(),
+                created_at: now.clone(),
+                last_executed: None,
+                items: items(&[
+                    "disable_telemetry_registry",
+                    "disable_copilot",
+                    "disable_content_delivery",
+                    "disable_background_apps",
+                    "disable_bing_search",
+                ]),
+            },
+        );
+        modified = true;
+    }
+
+    if modified {
+        state.last_modified = now;
+        // Persiste no disco — erro é silenciado (planos ficam em memória de qualquer forma)
+        let _ = save_to_disk(state);
+    }
 }
 
 // ─── I/O de arquivo ───────────────────────────────────────────────────────────
