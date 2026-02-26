@@ -31,6 +31,7 @@ use std::time::Instant;
 use tauri::Emitter;
 
 use crate::utils::command_runner::{run_command_with_progress, CommandEvent};
+use crate::utils::file_locks;
 
 /// Suprime janela de console ao lançar subprocessos — duplicado de command_runner (privado lá).
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -47,6 +48,17 @@ pub enum CheckStatus {
     Warning,
     /// Operação falhou ou encontrou erros irrecuperáveis
     Error,
+}
+
+/// Informação sobre um processo que está travando arquivos durante a limpeza.
+#[derive(Debug, Clone, Serialize)]
+pub struct LockingProcessInfo {
+    /// PID do processo
+    pub pid: u32,
+    /// Nome do processo (ex: "chrome", "explorer")
+    pub name: String,
+    /// Quantidade de arquivos travados por este processo
+    pub file_count: usize,
 }
 
 /// Resultado completo de uma ação de saúde, retornado ao frontend.
@@ -68,6 +80,10 @@ pub struct HealthCheckResult {
     pub space_freed_mb: Option<u64>,
     /// Timestamp ISO 8601 UTC do momento de execução
     pub timestamp: String,
+    /// Processos que estão travando arquivos (apenas para temp_cleanup).
+    /// Agrupados por processo com contagem de arquivos.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locking_processes: Option<Vec<LockingProcessInfo>>,
 }
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
@@ -108,23 +124,33 @@ fn dir_size_bytes(path: &Path) -> u64 {
         .sum()
 }
 
+/// Resultado da tentativa de remoção de um diretório — erros + caminhos travados.
+struct DeleteResult {
+    /// Mensagens de erro formatadas para exibição no log.
+    errors: Vec<String>,
+    /// Caminhos completos dos arquivos que falharam por estarem em uso (os error 5 ou 32).
+    locked_paths: Vec<String>,
+}
+
 /// Remove todos os itens dentro de `path` sem remover o diretório raiz em si.
 ///
 /// Continua após erros individuais (arquivos em uso, sem permissão) para maximizar
-/// a limpeza. Acumula os bytes efetivamente liberados em `freed` e retorna a lista
-/// de erros encontrados (usados no campo `details` do resultado).
-fn delete_dir_contents(path: &Path, freed: &mut u64) -> Vec<String> {
+/// a limpeza. Acumula os bytes efetivamente liberados em `freed`.
+/// Para arquivos travados (os error 5/32), detecta qual processo está usando via
+/// Restart Manager API e inclui a informação na mensagem de erro.
+fn delete_dir_contents(path: &Path, freed: &mut u64) -> DeleteResult {
     let mut errors: Vec<String> = Vec::new();
+    let mut locked_paths: Vec<String> = Vec::new();
 
     if !path.exists() {
-        return errors;
+        return DeleteResult { errors, locked_paths };
     }
 
     let entries = match std::fs::read_dir(path) {
         Ok(e) => e,
         Err(e) => {
             errors.push(format!("Erro ao abrir {}: {}", path.display(), e));
-            return errors;
+            return DeleteResult { errors, locked_paths };
         }
     };
 
@@ -142,16 +168,46 @@ fn delete_dir_contents(path: &Path, freed: &mut u64) -> Vec<String> {
 
         match result {
             Ok(()) => *freed += size,
-            // Arquivo em uso (ex: lock do Windows Update) ou sem permissão — pula e continua
-            Err(e) => errors.push(format!(
-                "{}: {}",
-                entry_path.file_name().unwrap_or_default().to_string_lossy(),
-                e
-            )),
+            // Arquivo em uso ou sem permissão — detecta processo e continua
+            Err(e) => {
+                let raw_err = e.raw_os_error();
+                let is_locked = raw_err == Some(32) || raw_err == Some(5);
+
+                // Tenta identificar o processo que trava o arquivo
+                let lock_info = if is_locked && entry_path.is_file() {
+                    let full_path = entry_path.to_string_lossy().to_string();
+                    let procs = file_locks::get_locking_processes(&full_path);
+                    if !procs.is_empty() {
+                        locked_paths.push(full_path);
+                        let names: Vec<String> = procs
+                            .iter()
+                            .map(|p| format!("{} (PID {})", p.name, p.pid))
+                            .collect();
+                        format!(" [travado por: {}]", names.join(", "))
+                    } else {
+                        if is_locked {
+                            locked_paths.push(entry_path.to_string_lossy().to_string());
+                        }
+                        String::new()
+                    }
+                } else {
+                    if is_locked {
+                        locked_paths.push(entry_path.to_string_lossy().to_string());
+                    }
+                    String::new()
+                };
+
+                errors.push(format!(
+                    "{}: {}{}",
+                    entry_path.file_name().unwrap_or_default().to_string_lossy(),
+                    e,
+                    lock_info
+                ));
+            }
         }
     }
 
-    errors
+    DeleteResult { errors, locked_paths }
 }
 
 /// Mensagem interna do canal entre as threads de leitura do chkdsk e o loop principal.
@@ -380,6 +436,7 @@ pub async fn run_dism_cleanup(app_handle: tauri::AppHandle) -> Result<HealthChec
             duration_seconds: duration,
             space_freed_mb: None,
             timestamp: ts,
+            locking_processes: None,
         })
     })
     .await
@@ -457,6 +514,7 @@ pub async fn run_dism_checkhealth(
             duration_seconds: duration,
             space_freed_mb: None,
             timestamp: ts,
+            locking_processes: None,
         })
     })
     .await
@@ -534,6 +592,7 @@ pub async fn run_dism_scanhealth(
             duration_seconds: duration,
             space_freed_mb: None,
             timestamp: ts,
+            locking_processes: None,
         })
     })
     .await
@@ -610,6 +669,7 @@ pub async fn run_dism_restorehealth(
             duration_seconds: duration,
             space_freed_mb: None,
             timestamp: ts,
+            locking_processes: None,
         })
     })
     .await
@@ -704,6 +764,7 @@ pub async fn run_sfc(app_handle: tauri::AppHandle) -> Result<HealthCheckResult, 
             duration_seconds: duration,
             space_freed_mb: None,
             timestamp: ts,
+            locking_processes: None,
         })
     })
     .await
@@ -786,6 +847,7 @@ pub async fn run_chkdsk(
             duration_seconds: duration_secs,
             space_freed_mb: None,
             timestamp: start_ts,
+            locking_processes: None,
         })
     })
     .await
@@ -883,6 +945,7 @@ Write-Output "TRIM concluido em $trimmed volume(s)"
             duration_seconds: duration,
             space_freed_mb: None,
             timestamp: ts,
+            locking_processes: None,
         })
     })
     .await
@@ -938,6 +1001,7 @@ pub async fn flush_dns(app_handle: tauri::AppHandle) -> Result<HealthCheckResult
             duration_seconds: duration,
             space_freed_mb: None,
             timestamp: ts,
+            locking_processes: None,
         })
     })
     .await
@@ -968,6 +1032,7 @@ pub async fn run_temp_cleanup(app_handle: tauri::AppHandle) -> Result<HealthChec
 
         let mut total_freed: u64 = 0;
         let mut all_errors: Vec<String> = Vec::new();
+        let mut all_locked_paths: Vec<String> = Vec::new();
         let mut log_lines: Vec<String> = Vec::new();
 
         emit_health_event(
@@ -1023,7 +1088,7 @@ pub async fn run_temp_cleanup(app_handle: tauri::AppHandle) -> Result<HealthChec
             log_lines.push(msg.clone());
 
             let mut freed_this_folder: u64 = 0;
-            let errors = delete_dir_contents(path, &mut freed_this_folder);
+            let del_result = delete_dir_contents(path, &mut freed_this_folder);
 
             total_freed += freed_this_folder;
 
@@ -1036,16 +1101,20 @@ pub async fn run_temp_cleanup(app_handle: tauri::AppHandle) -> Result<HealthChec
             log_lines.push(result_msg);
 
             // Reporta erros (arquivos em uso) como informativos, não como falha
-            for err in &errors {
+            for err in &del_result.errors {
                 let err_msg = format!("  [ignorado] {}", err);
                 emit_health_event(&app_handle, "temp_cleanup_progress", "stderr", &err_msg);
                 log_lines.push(err_msg);
             }
-            all_errors.extend(errors);
+            all_errors.extend(del_result.errors);
+            all_locked_paths.extend(del_result.locked_paths);
         }
 
         let duration = start.elapsed().as_secs();
         let freed_mb = bytes_to_mb(total_freed);
+
+        // Agrega processos que travam arquivos (agrupados por PID)
+        let locking_procs = aggregate_locking_processes(&all_locked_paths);
 
         let summary = format!(
             "Total liberado: {:.1} MB ({} arquivos/pastas inacessíveis ignorados)",
@@ -1098,7 +1167,104 @@ pub async fn run_temp_cleanup(app_handle: tauri::AppHandle) -> Result<HealthChec
             duration_seconds: duration,
             space_freed_mb: Some(freed_mb),
             timestamp: ts,
+            locking_processes: if locking_procs.is_empty() { None } else { Some(locking_procs) },
         })
+    })
+    .await
+    .unwrap_or_else(|e| Err(e.to_string()))
+}
+
+/// Agrupa processos que travam arquivos por PID, contando quantos arquivos cada um trava.
+/// Usa a Restart Manager API para re-consultar os caminhos e obter nomes de processo.
+fn aggregate_locking_processes(locked_paths: &[String]) -> Vec<LockingProcessInfo> {
+    use std::collections::HashMap;
+
+    let mut proc_map: HashMap<u32, (String, usize)> = HashMap::new();
+
+    for path in locked_paths {
+        let procs = file_locks::get_locking_processes(path);
+        for p in procs {
+            let entry = proc_map.entry(p.pid).or_insert_with(|| (p.name.clone(), 0));
+            entry.1 += 1;
+        }
+    }
+
+    let mut result: Vec<LockingProcessInfo> = proc_map
+        .into_iter()
+        .map(|(pid, (name, count))| LockingProcessInfo {
+            pid,
+            name,
+            file_count: count,
+        })
+        .collect();
+
+    // Ordena por quantidade de arquivos travados (mais primeiro)
+    result.sort_by(|a, b| b.file_count.cmp(&a.file_count));
+    result
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Encerramento de processos que travam arquivos
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Processos críticos do Windows que NUNCA devem ser encerrados.
+const CRITICAL_PROCESSES: &[&str] = &[
+    "system", "csrss", "smss", "wininit", "services", "lsass", "svchost",
+    "explorer", "dwm", "winlogon", "taskmgr", "conhost", "ntoskrnl",
+    "frameguard",
+];
+
+/// Encerra um processo pelo PID usando `taskkill /F`.
+///
+/// Recusa encerrar processos críticos do Windows (csrss, svchost, explorer, etc.)
+/// para evitar instabilidade do sistema.
+#[tauri::command]
+pub async fn kill_process(pid: u32) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        // Identifica o nome do processo antes de encerrar (para validar contra deny-list)
+        let name_output = Command::new("tasklist.exe")
+            .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("Erro ao consultar processo: {}", e))?;
+
+        let name_str = String::from_utf8_lossy(&name_output.stdout);
+        let proc_name = name_str
+            .lines()
+            .next()
+            .and_then(|line| line.split(',').next())
+            .map(|s| s.trim_matches('"').to_lowercase())
+            .unwrap_or_default();
+
+        if proc_name.is_empty() {
+            return Err(format!("Processo PID {} não encontrado.", pid));
+        }
+
+        // Verifica contra a deny-list de processos críticos
+        let base_name = proc_name.trim_end_matches(".exe");
+        if CRITICAL_PROCESSES.iter().any(|&c| base_name == c) {
+            return Err(format!(
+                "Processo \"{}\" é crítico para o sistema e não pode ser encerrado.",
+                proc_name
+            ));
+        }
+
+        let output = Command::new("taskkill.exe")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("Erro ao executar taskkill: {}", e))?;
+
+        if output.status.success() {
+            Ok(format!("Processo \"{}\" (PID {}) encerrado.", proc_name, pid))
+        } else {
+            Err(format!(
+                "Falha ao encerrar \"{}\" (PID {}): {}",
+                proc_name,
+                pid,
+                String::from_utf8_lossy(&output.stderr).trim()
+            ))
+        }
     })
     .await
     .unwrap_or_else(|e| Err(e.to_string()))

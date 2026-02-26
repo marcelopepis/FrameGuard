@@ -128,6 +128,7 @@ pub fn run() {
             // Saúde do Sistema — Manutenção
             health_check::flush_dns,
             health_check::run_temp_cleanup,
+            health_check::kill_process,
             // Planos de Execução
             plans::create_plan,
             plans::update_plan,

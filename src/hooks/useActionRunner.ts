@@ -91,6 +91,12 @@ export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
           [meta.id]: { ...cur, running: false, progress: null, lastResult: result, showLog: true, log: nextLog },
         };
       });
+      // Registra atividade (warning = parcialmente bem-sucedido, conta como sucesso)
+      invoke('log_tweak_activity', {
+        name: meta.name,
+        applied: true,
+        success: result.status === 'success' || result.status === 'warning',
+      }).catch(() => {});
     } catch (e) {
       clearInterval(flushTimer);
       const remaining = pendingLines.splice(0);
@@ -99,6 +105,7 @@ export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
         const nextLog = [...cur.log, ...remaining, { type: 'error', text: String(e) }].slice(-500);
         return { ...prev, [meta.id]: { ...cur, running: false, progress: null, log: nextLog } };
       });
+      invoke('log_tweak_activity', { name: meta.name, applied: true, success: false }).catch(() => {});
     } finally {
       endTask(meta.id);
       unlisten();

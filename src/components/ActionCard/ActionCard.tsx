@@ -4,14 +4,16 @@
 // ícone, descrição, detalhes técnicos expansíveis, barra de progresso, log em
 // tempo real e botão de execução.
 
-import { useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Globe, RefreshCw,
   ChevronDown, ChevronUp, Loader2,
   CheckCircle2, XCircle, AlertTriangle, Play,
+  Lock, X as XIcon,
 } from 'lucide-react';
 import styles from './ActionCard.module.css';
-import type { ActionMeta, ActionState } from '../../types/health';
+import type { ActionMeta, ActionState, LockingProcessInfo } from '../../types/health';
 import { formatDate, formatDuration, formatSpaceFreed } from '../../utils/formatters';
 
 interface ActionCardProps {
@@ -153,6 +155,15 @@ export function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, d
         </div>
       </div>
 
+      {/* ── Processos travando arquivos (apenas temp_cleanup) ── */}
+      {!state.running && result?.locking_processes && result.locking_processes.length > 0 && (
+        <LockingProcessesPanel
+          processes={result.locking_processes}
+          onRetry={onRun}
+          disabled={disabled}
+        />
+      )}
+
       {/* ── Área de log (tempo real ou histórico) ── */}
       {(state.running || state.showLog) && state.log.length > 0 && (
         <div className={styles.logArea} ref={logRef}>
@@ -174,6 +185,92 @@ export function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, d
             <div className={`${styles.logLine} ${styles.logCursor}`}>▋</div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Painel de processos que travam arquivos ────────────────────────────────
+
+function LockingProcessesPanel({
+  processes, onRetry, disabled,
+}: {
+  processes: LockingProcessInfo[];
+  onRetry: () => void;
+  disabled?: boolean;
+}) {
+  const [killing, setKilling] = useState<Set<number>>(new Set());
+  const [killed, setKilled] = useState<Set<number>>(new Set());
+  const [errors, setErrors] = useState<Map<number, string>>(new Map());
+
+  async function handleKill(pid: number) {
+    setKilling(prev => new Set(prev).add(pid));
+    setErrors(prev => { const m = new Map(prev); m.delete(pid); return m; });
+
+    try {
+      await invoke<string>('kill_process', { pid });
+      setKilled(prev => new Set(prev).add(pid));
+    } catch (e) {
+      setErrors(prev => new Map(prev).set(pid, String(e)));
+    } finally {
+      setKilling(prev => { const s = new Set(prev); s.delete(pid); return s; });
+    }
+  }
+
+  const allKilled = processes.every(p => killed.has(p.pid));
+
+  return (
+    <div className={styles.lockPanel}>
+      <div className={styles.lockHeader}>
+        <Lock size={13} strokeWidth={2.5} />
+        <span>Processos travando arquivos</span>
+      </div>
+
+      <div className={styles.lockList}>
+        {processes.map(p => (
+          <div key={p.pid} className={`${styles.lockRow} ${killed.has(p.pid) ? styles.lockRowKilled : ''}`}>
+            <div className={styles.lockInfo}>
+              <span className={styles.lockName}>{p.name}</span>
+              <span className={styles.lockMeta}>PID {p.pid} · {p.file_count} arquivo{p.file_count !== 1 ? 's' : ''}</span>
+            </div>
+
+            {killed.has(p.pid) ? (
+              <span className={styles.lockKilledBadge}>
+                <CheckCircle2 size={11} strokeWidth={2.5} />
+                Encerrado
+              </span>
+            ) : killing.has(p.pid) ? (
+              <span className={styles.lockKillingBadge}>
+                <Loader2 size={11} className={styles.spinner} />
+                Encerrando...
+              </span>
+            ) : (
+              <button
+                className={styles.lockKillBtn}
+                onClick={() => handleKill(p.pid)}
+                title={`Encerrar ${p.name}`}
+              >
+                <XIcon size={11} strokeWidth={2.5} />
+                Encerrar
+              </button>
+            )}
+
+            {errors.has(p.pid) && (
+              <span className={styles.lockError}>{errors.get(p.pid)}</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {allKilled && (
+        <button
+          className={styles.lockRetryBtn}
+          onClick={onRetry}
+          disabled={disabled}
+        >
+          <Play size={12} strokeWidth={2.5} />
+          Executar limpeza novamente
+        </button>
       )}
     </div>
   );

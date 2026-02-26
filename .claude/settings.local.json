@@ -17,7 +17,9 @@
       "Bash(cargo check:*)",
       "Bash(npx tsc:*)",
       "Bash(printf:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(xargs grep -l \"invoke\\\\|commands\")",
+      "Bash(npm run build)"
     ]
   }
 }

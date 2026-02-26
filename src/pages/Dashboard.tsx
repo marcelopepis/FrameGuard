@@ -63,24 +63,30 @@ export default function Dashboard() {
   const { showToast } = useToast();
   const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
 
-  // Fetch paralelo: hardware + status + summary + atividade recente + planos
+  // Loading progressivo: cada chamada renderiza sua seção assim que os dados chegam
+  // (os skeletons tratam o estado null de cada seção independentemente)
   useEffect(() => {
-    Promise.all([
-      getStaticHwInfo(),
-      getSystemStatus(),
-      getSystemSummary(),
-      invoke<ActivityEntry[]>('get_recent_activity', { limit: 5 }),
-      invoke<Plan[]>('get_all_plans'),
-    ]).then(([hwInfo, sysStatus, sysSummary, recentActivity, allPlans]) => {
-      setHw(hwInfo);
-      setStatus(sysStatus);
-      setSummary(sysSummary);
-      setActivity(recentActivity);
-      setBuiltinPlans(allPlans.filter(p => p.builtin));
-    }).catch((err) => console.error('[FrameGuard] dashboard init falhou:', err));
+    getSystemSummary().then(setSummary).catch(() => {});
+    invoke<ActivityEntry[]>('get_recent_activity', { limit: 5 }).then(setActivity).catch(() => {});
+    invoke<Plan[]>('get_all_plans')
+      .then(plans => setBuiltinPlans(plans.filter(p => p.builtin)))
+      .catch(() => {});
+    getStaticHwInfo().then(setHw).catch(() => {});
+    getSystemStatus().then(setStatus).catch(() => {});
 
     return () => { cleanup(); };
   }, [cleanup]);
+
+  // Refresh periódico de atividade e status (custo negligível: ~50 ms cada)
+  // Necessário porque o Dashboard é always-mounted (keep-alive via display:none)
+  useEffect(() => {
+    const id = setInterval(() => {
+      invoke<ActivityEntry[]>('get_recent_activity', { limit: 5 })
+        .then(setActivity).catch(() => {});
+      getSystemStatus().then(setStatus).catch(() => {});
+    }, 10_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Polling de CPU e RAM a cada 2 segundos
   useEffect(() => {

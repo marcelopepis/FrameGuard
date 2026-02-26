@@ -8,6 +8,12 @@ export interface CommandEvent {
   timestamp: string;
 }
 
+export interface LockingProcessInfo {
+  pid: number;
+  name: string;
+  file_count: number;
+}
+
 export interface HealthCheckResult {
   id: string;
   name: string;
@@ -17,6 +23,7 @@ export interface HealthCheckResult {
   duration_seconds: number;
   space_freed_mb: number | null;
   timestamp: string;
+  locking_processes?: LockingProcessInfo[];
 }
 
 export interface LogLine {

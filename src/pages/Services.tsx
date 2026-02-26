@@ -244,13 +244,24 @@ export default function Services() {
       const result = await invoke<BatchResult>('disable_services', { ids });
       if (result.succeeded.length > 0) {
         showToast('success', 'Serviços desabilitados', `${result.succeeded.length} serviço(s) desabilitado(s) com sucesso.`);
+        invoke('log_tweak_activity', {
+          name: `Desabilitar ${result.succeeded.length} serviço(s)`,
+          applied: true, success: true,
+        }).catch(() => {});
       }
       for (const f of result.failed) {
         showToast('error', `Falha: ${f.id}`, f.error);
       }
+      if (result.failed.length > 0 && result.succeeded.length === 0) {
+        invoke('log_tweak_activity', {
+          name: `Desabilitar serviços (${result.failed.length} falha(s))`,
+          applied: true, success: false,
+        }).catch(() => {});
+      }
       await loadData();
     } catch (e) {
       showToast('error', 'Erro ao desabilitar serviços', String(e));
+      invoke('log_tweak_activity', { name: 'Desabilitar serviços', applied: true, success: false }).catch(() => {});
     } finally {
       setSvcLoading(false);
     }
@@ -268,6 +279,10 @@ export default function Services() {
       const result = await invoke<BatchResult>('restore_services', { ids });
       if (result.succeeded.length > 0) {
         showToast('success', 'Serviços restaurados', `${result.succeeded.length} serviço(s) restaurado(s) ao padrão original.`);
+        invoke('log_tweak_activity', {
+          name: `Restaurar ${result.succeeded.length} serviço(s)`,
+          applied: false, success: true,
+        }).catch(() => {});
       }
       for (const f of result.failed) {
         showToast('error', `Falha: ${f.id}`, f.error);
@@ -275,6 +290,7 @@ export default function Services() {
       await loadData();
     } catch (e) {
       showToast('error', 'Erro ao restaurar serviços', String(e));
+      invoke('log_tweak_activity', { name: 'Restaurar serviços', applied: false, success: false }).catch(() => {});
     } finally {
       setSvcLoading(false);
     }
@@ -291,13 +307,24 @@ export default function Services() {
       const result = await invoke<BatchResult>('disable_tasks', { ids });
       if (result.succeeded.length > 0) {
         showToast('success', 'Tarefas desabilitadas', `${result.succeeded.length} tarefa(s) desabilitada(s) com sucesso.`);
+        invoke('log_tweak_activity', {
+          name: `Desabilitar ${result.succeeded.length} tarefa(s)`,
+          applied: true, success: true,
+        }).catch(() => {});
       }
       for (const f of result.failed) {
         showToast('error', `Falha: ${f.id}`, f.error);
       }
+      if (result.failed.length > 0 && result.succeeded.length === 0) {
+        invoke('log_tweak_activity', {
+          name: `Desabilitar tarefas (${result.failed.length} falha(s))`,
+          applied: true, success: false,
+        }).catch(() => {});
+      }
       await loadData();
     } catch (e) {
       showToast('error', 'Erro ao desabilitar tarefas', String(e));
+      invoke('log_tweak_activity', { name: 'Desabilitar tarefas', applied: true, success: false }).catch(() => {});
     } finally {
       setTaskLoading(false);
     }
@@ -315,6 +342,10 @@ export default function Services() {
       const result = await invoke<BatchResult>('restore_tasks', { ids });
       if (result.succeeded.length > 0) {
         showToast('success', 'Tarefas restauradas', `${result.succeeded.length} tarefa(s) restaurada(s).`);
+        invoke('log_tweak_activity', {
+          name: `Restaurar ${result.succeeded.length} tarefa(s)`,
+          applied: false, success: true,
+        }).catch(() => {});
       }
       for (const f of result.failed) {
         showToast('error', `Falha: ${f.id}`, f.error);
@@ -322,6 +353,7 @@ export default function Services() {
       await loadData();
     } catch (e) {
       showToast('error', 'Erro ao restaurar tarefas', String(e));
+      invoke('log_tweak_activity', { name: 'Restaurar tarefas', applied: false, success: false }).catch(() => {});
     } finally {
       setTaskLoading(false);
     }

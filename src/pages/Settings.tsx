@@ -11,7 +11,7 @@ import { dataDir as getDataDir } from '@tauri-apps/api/path';
 import {
   Download, Upload, FolderOpen, Shield, Github,
   ChevronDown, ChevronUp,
-  Loader2, RefreshCw, MonitorCog, Database, Info,
+  Loader2, MonitorCog, Database, Info,
 } from 'lucide-react';
 import styles from './Settings.module.css';
 import { useToast } from '../contexts/ToastContext';

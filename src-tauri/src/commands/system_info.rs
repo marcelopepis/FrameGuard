@@ -1,6 +1,7 @@
 // Informações do sistema (CPU, GPU, RAM, OS, status de features)
 use serde::Serialize;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 use sysinfo::System;
 
 use crate::utils::command_runner::{run_command, run_powershell};
@@ -106,11 +107,23 @@ pub async fn get_static_hw_info() -> Result<StaticHwInfo, String> {
     Ok(info)
 }
 
-// ─── Status do sistema (lido fresco a cada chamada) ──────────────────────────
+// ─── Status do sistema (cache com TTL de 5 s) ──────────────────────────────
+
+/// Cache com TTL para SystemStatus — evita re-executar PowerShell a cada chamada.
+struct CachedStatus {
+    data: SystemStatus,
+    fetched_at: Instant,
+}
+
+static STATUS_CACHE: OnceLock<Mutex<Option<CachedStatus>>> = OnceLock::new();
+
+/// TTL do cache de status em segundos.
+const STATUS_TTL_SECS: u64 = 5;
 
 /// Status de configurações do Windows relevantes para gaming.
-/// Sempre lido fresco do registro/powercfg — não cacheado.
-#[derive(Debug, Serialize)]
+/// Cacheado com TTL de 5 s — a primeira chamada pode levar 500-1000 ms (powercfg),
+/// chamadas dentro do TTL retornam instantaneamente.
+#[derive(Debug, Clone, Serialize)]
 pub struct SystemStatus {
     /// `true` se o Windows Game Mode está ativo
     pub game_mode_enabled: bool,
@@ -129,10 +142,20 @@ pub struct SystemStatus {
 }
 
 /// Lê status de configurações do Windows (registro + powercfg).
-/// Sempre fresco — chamar ao abrir o Dashboard e após aplicar tweaks.
+/// Resultado cacheado por 5 s — evita re-executar PowerShell em navegação rápida.
 #[tauri::command]
 pub async fn get_system_status() -> Result<SystemStatus, String> {
-    tokio::task::spawn_blocking(|| {
+    // Verifica cache TTL antes de gastar CPU
+    let cache = STATUS_CACHE.get_or_init(|| Mutex::new(None));
+    if let Ok(guard) = cache.lock() {
+        if let Some(ref cached) = *guard {
+            if cached.fetched_at.elapsed().as_secs() < STATUS_TTL_SECS {
+                return Ok(cached.data.clone());
+            }
+        }
+    }
+
+    let status = tokio::task::spawn_blocking(|| {
         use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
         use winreg::RegKey;
 
@@ -229,10 +252,23 @@ pub async fn get_system_status() -> Result<SystemStatus, String> {
         })
     })
     .await
-    .unwrap_or_else(|e| Err(e.to_string()))
+    .unwrap_or_else(|e| Err(e.to_string()))?;
+
+    // Atualiza o cache
+    if let Ok(mut guard) = cache.lock() {
+        *guard = Some(CachedStatus {
+            data: status.clone(),
+            fetched_at: Instant::now(),
+        });
+    }
+
+    Ok(status)
 }
 
 // ─── Uso atual de CPU e RAM (polling periódico) ──────────────────────────────
+
+/// Instância persistente de `System` — evita recriação cara a cada poll.
+static SYS_USAGE: OnceLock<Mutex<System>> = OnceLock::new();
 
 /// Informações de uso atual de CPU e RAM (para polling periódico do dashboard).
 #[derive(Debug, Serialize)]
@@ -242,10 +278,21 @@ pub struct SystemUsage {
 }
 
 /// Retorna o uso atual de CPU e RAM com medição de delta de 200 ms.
+/// Usa instância persistente de `System` — muito mais leve que criar `System::new_all()` a cada chamada.
 #[tauri::command]
 pub async fn get_system_usage() -> Result<SystemUsage, String> {
     tokio::task::spawn_blocking(|| {
-        let mut sys = System::new_all();
+        let sys_mutex = SYS_USAGE.get_or_init(|| {
+            let mut sys = System::new();
+            sys.refresh_cpu_usage();
+            sys.refresh_memory();
+            Mutex::new(sys)
+        });
+
+        let mut sys = sys_mutex
+            .lock()
+            .map_err(|_| "Falha ao adquirir lock do System".to_string())?;
+
         std::thread::sleep(std::time::Duration::from_millis(200));
         sys.refresh_cpu_usage();
         sys.refresh_memory();
@@ -268,39 +315,53 @@ pub async fn get_system_usage() -> Result<SystemUsage, String> {
     .unwrap_or_else(|e| Err(e.to_string()))
 }
 
-// ─── Resumo do sistema ────────────────────────────────────────────────────────
+// ─── Resumo do sistema (cacheado — nunca muda na sessão) ────────────────────
 
-/// Dados essenciais do sistema para prova de conceito frontend↔backend
-#[derive(Debug, Serialize)]
+/// Cache global para dados do sistema que não mudam durante a sessão.
+static SUMMARY_CACHE: OnceLock<SystemSummary> = OnceLock::new();
+
+/// Dados essenciais do sistema (OS, hostname, elevação).
+/// Cacheados na primeira chamada — retornam instantaneamente nas chamadas seguintes.
+#[derive(Debug, Clone, Serialize)]
 pub struct SystemSummary {
     pub os_version: String,
     pub hostname: String,
     pub is_elevated: bool,
 }
 
-/// Retorna resumo do sistema: versão do Windows, hostname e status de elevação
+/// Retorna resumo do sistema: versão do Windows, hostname e status de elevação.
+/// Async com spawn_blocking para não bloquear a main thread do Tauri (evita freeze ao mover janela).
 #[tauri::command]
-pub fn get_system_summary() -> Result<SystemSummary, String> {
-    let os_version = get_windows_version()
-        // Fallback via sysinfo se o registro falhar
-        .unwrap_or_else(|_| {
-            sysinfo::System::long_os_version()
-                .unwrap_or_else(|| "Windows 11".to_string())
-        });
+pub async fn get_system_summary() -> Result<SystemSummary, String> {
+    if let Some(cached) = SUMMARY_CACHE.get() {
+        return Ok(cached.clone());
+    }
 
-    let hostname = sysinfo::System::host_name()
-        // Fallback via variável de ambiente do Windows
-        .unwrap_or_else(|| {
-            std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Desconhecido".to_string())
-        });
+    let info = tokio::task::spawn_blocking(|| {
+        let os_version = get_windows_version()
+            .unwrap_or_else(|_| {
+                sysinfo::System::long_os_version()
+                    .unwrap_or_else(|| "Windows 11".to_string())
+            });
 
-    let is_elevated = crate::utils::elevated::is_elevated();
+        let hostname = sysinfo::System::host_name()
+            .unwrap_or_else(|| {
+                std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Desconhecido".to_string())
+            });
 
-    Ok(SystemSummary {
-        os_version,
-        hostname,
-        is_elevated,
+        let is_elevated = crate::utils::elevated::is_elevated();
+
+        SystemSummary {
+            os_version,
+            hostname,
+            is_elevated,
+        }
     })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let _ = SUMMARY_CACHE.set(info.clone());
+    Ok(info)
 }
 
 /// Lê a versão do Windows pelo registro.
