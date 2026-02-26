@@ -9,9 +9,16 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|_app| {
+            // Pre-warm GPU cache em background (query WMI lenta, 2-4s).
+            // Não bloqueia a abertura da janela — Dashboard mostra skeleton enquanto carrega.
+            system_info::pre_warm_gpu_cache();
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             // Informações do sistema
             system_info::get_static_hw_info,
+            system_info::get_gpu_info,
             system_info::get_system_status,
             system_info::get_system_usage,
             system_info::get_system_summary,

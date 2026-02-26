@@ -8,11 +8,14 @@ use crate::utils::command_runner::{run_command, run_powershell};
 
 // ─── Cache de hardware estático (nunca muda durante a sessão) ────────────────
 
-/// Cache global para dados de hardware que não mudam durante a sessão.
+/// Cache global para dados de CPU/RAM que não mudam durante a sessão.
 static HW_CACHE: OnceLock<StaticHwInfo> = OnceLock::new();
 
-/// Informações estáticas de hardware (CPU, GPU, RAM total).
-/// Cacheadas na primeira chamada — retornam instantaneamente nas chamadas seguintes.
+/// Cache global para dados de GPU (pre-warm em setup(), query WMI lenta).
+static GPU_CACHE: OnceLock<GpuInfo> = OnceLock::new();
+
+/// Informações estáticas de CPU e RAM.
+/// Cacheadas na primeira chamada — retornam em <100ms (sysinfo, sem PowerShell).
 #[derive(Debug, Clone, Serialize)]
 pub struct StaticHwInfo {
     /// Nome completo da CPU (ex: "Intel Core i9-13900K")
@@ -21,18 +24,22 @@ pub struct StaticHwInfo {
     pub cpu_cores: u32,
     /// Total de RAM instalada em GB
     pub ram_total_gb: f64,
+}
+
+/// Informações de GPU (nome + VRAM).
+/// Cacheadas e pre-warmed em setup() para não bloquear a abertura do Dashboard.
+#[derive(Debug, Clone, Serialize)]
+pub struct GpuInfo {
     /// Nome da GPU principal (ex: "NVIDIA GeForce RTX 4080")
     pub gpu_name: String,
     /// VRAM da GPU em GB (0.0 se não disponível)
     pub gpu_vram_gb: f64,
 }
 
-/// Coleta dados estáticos de hardware (CPU, GPU, RAM total).
-/// Resultado cacheado em memória — a primeira chamada pode levar 2-4s (query WMI da GPU),
-/// chamadas subsequentes retornam instantaneamente.
+/// Coleta dados estáticos de CPU e RAM (rápido, <100ms via sysinfo).
+/// Resultado cacheado em memória — chamadas subsequentes retornam instantaneamente.
 #[tauri::command]
 pub async fn get_static_hw_info() -> Result<StaticHwInfo, String> {
-    // Retorna cache se já inicializado
     if let Some(cached) = HW_CACHE.get() {
         return Ok(cached.clone());
     }
@@ -51,60 +58,98 @@ pub async fn get_static_hw_info() -> Result<StaticHwInfo, String> {
         let ram_total = sys.total_memory();
         let ram_total_gb = (ram_total as f64 / 1_073_741_824.0 * 10.0).round() / 10.0;
 
-        // ── GPU via PowerShell ─────────────────────────────────────────────────
-        // Win32_VideoController.AdapterRAM é uint32 → trava em ~4 GB para placas maiores.
-        // Lê HardwareInformation.qwMemorySize (QWORD 64-bit) da chave de registro do driver.
-        // Retorna "Nome|vram_bytes". Fallback para AdapterRAM se a chave não for encontrada.
-        let gpu_raw = run_command(
-            "powershell.exe",
-            &[
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
-                 $g = Get-WmiObject Win32_VideoController | Sort-Object AdapterRAM -Descending | Select-Object -First 1; \
-                 $vram = (Get-ChildItem 'HKLM:\\SYSTEM\\ControlSet001\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' \
-                   -ErrorAction SilentlyContinue | ForEach-Object { \
-                     $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; \
-                     if ($p.DriverDesc -eq $g.Name) { $p.'HardwareInformation.qwMemorySize' } \
-                   } | Where-Object { $_ } | Select-Object -First 1); \
-                 if (-not $vram) { $vram = [uint64]$g.AdapterRAM }; \
-                 \"$($g.Name)|$vram\"",
-            ],
-        )
-        .ok()
-        .filter(|r| r.success && !r.stdout.trim().is_empty())
-        .map(|r| r.stdout.trim().to_string())
-        .unwrap_or_default();
-
-        let mut parts = gpu_raw.splitn(2, '|');
-        let gpu_name = parts
-            .next()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| "GPU Desconhecida".to_string());
-        let gpu_vram_gb = parts
-            .next()
-            .and_then(|s| s.trim().parse::<u64>().ok())
-            .map(|bytes| (bytes as f64 / 1_073_741_824.0 * 10.0).round() / 10.0)
-            .unwrap_or(0.0);
-
         StaticHwInfo {
             cpu_name,
             cpu_cores,
             ram_total_gb,
-            gpu_name,
-            gpu_vram_gb,
         }
     })
     .await
     .map_err(|e| e.to_string())?;
 
-    // Salva no cache (ignora erro se outra thread já inicializou)
     let _ = HW_CACHE.set(info.clone());
     Ok(info)
+}
+
+/// Retorna dados da GPU (nome + VRAM). Pre-warmed em setup() via `pre_warm_gpu_cache`.
+/// Se o cache ainda não estiver pronto, executa a query WMI em background e aguarda.
+#[tauri::command]
+pub async fn get_gpu_info() -> Result<GpuInfo, String> {
+    if let Some(cached) = GPU_CACHE.get() {
+        return Ok(cached.clone());
+    }
+
+    let info = tokio::task::spawn_blocking(collect_gpu_info)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let _ = GPU_CACHE.set(info.clone());
+    Ok(info)
+}
+
+/// Inicia coleta de GPU em background (chamado no setup do Tauri).
+/// Não bloqueia a abertura da janela — Dashboard mostra skeleton enquanto carrega.
+pub fn pre_warm_gpu_cache() {
+    tokio::spawn(async {
+        if GPU_CACHE.get().is_some() {
+            return;
+        }
+        let info = tokio::task::spawn_blocking(collect_gpu_info)
+            .await
+            .unwrap_or(GpuInfo {
+                gpu_name: "GPU Desconhecida".to_string(),
+                gpu_vram_gb: 0.0,
+            });
+        let _ = GPU_CACHE.set(info);
+    });
+}
+
+/// Coleta dados de GPU via PowerShell/WMI (operação lenta, 2-4s).
+/// Chamada sempre dentro de spawn_blocking.
+fn collect_gpu_info() -> GpuInfo {
+    // Win32_VideoController.AdapterRAM é uint32 → trava em ~4 GB para placas maiores.
+    // Lê HardwareInformation.qwMemorySize (QWORD 64-bit) da chave de registro do driver.
+    // Retorna "Nome|vram_bytes". Fallback para AdapterRAM se a chave não for encontrada.
+    let gpu_raw = run_command(
+        "powershell.exe",
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+             $g = Get-WmiObject Win32_VideoController | Sort-Object AdapterRAM -Descending | Select-Object -First 1; \
+             $vram = (Get-ChildItem 'HKLM:\\SYSTEM\\ControlSet001\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' \
+               -ErrorAction SilentlyContinue | ForEach-Object { \
+                 $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; \
+                 if ($p.DriverDesc -eq $g.Name) { $p.'HardwareInformation.qwMemorySize' } \
+               } | Where-Object { $_ } | Select-Object -First 1); \
+             if (-not $vram) { $vram = [uint64]$g.AdapterRAM }; \
+             \"$($g.Name)|$vram\"",
+        ],
+    )
+    .ok()
+    .filter(|r| r.success && !r.stdout.trim().is_empty())
+    .map(|r| r.stdout.trim().to_string())
+    .unwrap_or_default();
+
+    let mut parts = gpu_raw.splitn(2, '|');
+    let gpu_name = parts
+        .next()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "GPU Desconhecida".to_string());
+    let gpu_vram_gb = parts
+        .next()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .map(|bytes| (bytes as f64 / 1_073_741_824.0 * 10.0).round() / 10.0)
+        .unwrap_or(0.0);
+
+    GpuInfo {
+        gpu_name,
+        gpu_vram_gb,
+    }
 }
 
 // ─── Status do sistema (cache com TTL de 5 s) ──────────────────────────────
@@ -131,8 +176,8 @@ pub struct SystemStatus {
     pub hags_enabled: bool,
     /// `true` se VBS (Virtualization Based Security) está ativo
     pub vbs_enabled: bool,
-    /// `true` se o Game DVR está desabilitado (otimizado para gaming)
-    pub game_dvr_disabled: bool,
+    /// Status do Game DVR: "disabled", "available" ou "recording"
+    pub game_dvr_status: String,
     /// Nome do plano de energia ativo (ex: "Desempenho Máximo")
     pub power_plan_name: String,
     /// Tier do plano: "ultimate", "high" ou "other"
@@ -189,24 +234,32 @@ pub async fn get_system_status() -> Result<SystemStatus, String> {
             .map(|v| v != 0)
             .unwrap_or(false);
 
-        // Game DVR: desabilitado = otimizado
-        let dvr_main = hkcu
+        // Game DVR: 3 chaves relevantes para status no Dashboard
+        let dvr_enabled = hkcu
             .open_subkey(r"System\GameConfigStore")
             .ok()
             .and_then(|k| k.get_value::<u32, _>("GameDVR_Enabled").ok())
             .unwrap_or(1);
+        let historical = hkcu
+            .open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR")
+            .ok()
+            .and_then(|k| k.get_value::<u32, _>("HistoricalCaptureEnabled").ok())
+            .unwrap_or(0);
         let policy_dvr: Option<u32> = hklm
             .open_subkey(r"SOFTWARE\Policies\Microsoft\Windows\GameDVR")
             .ok()
             .and_then(|k| k.get_value::<u32, _>("AllowGameDVR").ok());
-        let app_capture: Option<u32> = hkcu
-            .open_subkey(r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR")
-            .ok()
-            .and_then(|k| k.get_value::<u32, _>("AppCaptureEnabled").ok());
 
-        let game_dvr_disabled = dvr_main == 0
-            || policy_dvr == Some(0)
-            || (dvr_main != 0 && policy_dvr.is_none() && app_capture == Some(0));
+        let game_dvr_status = if policy_dvr == Some(0) {
+            "disabled"
+        } else if dvr_enabled == 0 {
+            "disabled"
+        } else if historical == 1 {
+            "recording"
+        } else {
+            "available"
+        }
+        .to_string();
 
         // Power Plan: detecção por GUID (independente de idioma do Windows)
         let powercfg_output = run_powershell("powercfg /getactivescheme")
@@ -245,7 +298,7 @@ pub async fn get_system_status() -> Result<SystemStatus, String> {
             game_mode_enabled,
             hags_enabled,
             vbs_enabled,
-            game_dvr_disabled,
+            game_dvr_status,
             power_plan_name,
             power_plan_tier,
             timer_resolution_optimized,

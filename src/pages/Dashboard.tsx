@@ -6,8 +6,8 @@ import {
   HeartPulse, Gamepad2, Wrench, Lock,
   Loader2, X, ChevronDown, ChevronUp, MinusCircle,
 } from 'lucide-react';
-import { getStaticHwInfo, getSystemStatus, getSystemSummary, getSystemUsage } from '../services/systemInfo';
-import type { StaticHwInfo, SystemStatus, SystemSummary } from '../services/systemInfo';
+import { getStaticHwInfo, getGpuInfo, getSystemStatus, getSystemSummary, getSystemUsage } from '../services/systemInfo';
+import type { StaticHwInfo, GpuInfo, SystemStatus, SystemSummary } from '../services/systemInfo';
 import { usePlanExecution } from '../hooks';
 import type { Plan, ExecState, ItemStatus } from '../hooks';
 import { useToast } from '../contexts/ToastContext';
@@ -52,6 +52,7 @@ function formatDuration(seconds: number): string {
 
 export default function Dashboard() {
   const [hw, setHw] = useState<StaticHwInfo | null>(null);
+  const [gpu, setGpu] = useState<GpuInfo | null>(null);
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [summary, setSummary] = useState<SystemSummary | null>(null);
   const [cpuPercent, setCpuPercent] = useState<number | null>(null);
@@ -72,6 +73,7 @@ export default function Dashboard() {
       .then(plans => setBuiltinPlans(plans.filter(p => p.builtin)))
       .catch(() => {});
     getStaticHwInfo().then(setHw).catch(() => {});
+    getGpuInfo().then(setGpu).catch(() => {});
     getSystemStatus().then(setStatus).catch(() => {});
 
     return () => { cleanup(); };
@@ -146,12 +148,12 @@ export default function Dashboard() {
             </div>
             <span className={styles.cardLabel}>Placa de Vídeo</span>
           </div>
-          {hw ? (
+          {gpu ? (
             <>
-              <p className={styles.cardValue}>{hw.gpu_name}</p>
+              <p className={styles.cardValue}>{gpu.gpu_name}</p>
               <p className={styles.cardDetail}>
                 <span className={styles.highlight}>
-                  {hw.gpu_vram_gb > 0 ? `${hw.gpu_vram_gb} GB VRAM` : 'GPU dedicada'}
+                  {gpu.gpu_vram_gb > 0 ? `${gpu.gpu_vram_gb} GB VRAM` : 'GPU dedicada'}
                 </span>
               </p>
             </>
@@ -246,13 +248,9 @@ export default function Dashboard() {
               loading={!status}
               tooltip="Virtualization Based Security protege o Windows via virtualização, mas pode reduzir performance em games em até 10–15%. Recomendado: Desabilitado para gaming."
             />
-            <StatusBadge
-              label="Game DVR"
-              optimized={status?.game_dvr_disabled ?? false}
-              goodLabel="Desabilitado"
-              badLabel="Habilitado"
+            <GameDvrBadge
+              dvrStatus={status?.game_dvr_status ?? 'available'}
               loading={!status}
-              tooltip="Gravação em segundo plano do Game DVR consome GPU (encoder) e CPU mesmo quando você não está gravando. Recomendado: Desabilitado."
             />
           </div>
           <div className={styles.badges}>
@@ -661,6 +659,54 @@ interface PowerPlanBadgeProps {
   tier: string;
   name: string;
   loading?: boolean;
+}
+
+// ─── GameDvrBadge (3 estados) ─────────────────────────────
+
+interface GameDvrBadgeProps {
+  dvrStatus: string;
+  loading?: boolean;
+}
+
+function GameDvrBadge({ dvrStatus, loading }: GameDvrBadgeProps) {
+  const badgeStyle = loading
+    ? ''
+    : dvrStatus === 'disabled'
+      ? styles.badgeOn
+      : dvrStatus === 'available'
+        ? styles.badgeOff
+        : styles.badgeError;
+
+  const dotStyle = loading
+    ? ''
+    : dvrStatus === 'disabled'
+      ? styles.dotOn
+      : dvrStatus === 'available'
+        ? styles.dotOff
+        : styles.dotError;
+
+  const statusText = loading
+    ? '…'
+    : dvrStatus === 'disabled'
+      ? 'Desabilitado'
+      : dvrStatus === 'available'
+        ? 'Ativo (sem gravação)'
+        : 'Gravação ativa';
+
+  const tooltip = dvrStatus === 'disabled'
+    ? 'O Game DVR está desabilitado. Encoder de GPU e buffer circular inativos.'
+    : dvrStatus === 'available'
+      ? 'O Game DVR está disponível mas a gravação em background está desligada. Sem impacto em performance.'
+      : 'Gravação em background está ligada. Pode impactar FPS.';
+
+  return (
+    <div className={`${styles.badge} ${badgeStyle}`}>
+      <span className={`${styles.dot} ${dotStyle}`} />
+      <span className={styles.badgeLabel}>Game DVR</span>
+      <span className={styles.badgeStatus}>{statusText}</span>
+      <div className={styles.badgeTooltip}>{tooltip}</div>
+    </div>
+  );
 }
 
 function PowerPlanBadge({ tier, name, loading }: PowerPlanBadgeProps) {

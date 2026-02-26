@@ -7,11 +7,15 @@ export interface SystemSummary {
   is_elevated: boolean;
 }
 
-// Espelha StaticHwInfo do Rust — dados que não mudam durante a sessão
+// Espelha StaticHwInfo do Rust — CPU e RAM (rápido, <100ms)
 export interface StaticHwInfo {
   cpu_name: string;
   cpu_cores: number;
   ram_total_gb: number;
+}
+
+// Espelha GpuInfo do Rust — dados de GPU (lento, 2-4s, pre-warmed no setup)
+export interface GpuInfo {
   gpu_name: string;
   gpu_vram_gb: number;
 }
@@ -21,7 +25,7 @@ export interface SystemStatus {
   game_mode_enabled: boolean;
   hags_enabled: boolean;
   vbs_enabled: boolean;
-  game_dvr_disabled: boolean;
+  game_dvr_status: string;
   power_plan_name: string;
   power_plan_tier: string;
   timer_resolution_optimized: boolean;
@@ -37,9 +41,14 @@ export async function getSystemSummary(): Promise<SystemSummary> {
   return invoke<SystemSummary>('get_system_summary');
 }
 
-/** Hardware estático (CPU, GPU, RAM total). Cacheado no backend — primeira chamada lenta, demais instantâneas. */
+/** Hardware estático — CPU e RAM (rápido, <100ms). Cacheado no backend. */
 export async function getStaticHwInfo(): Promise<StaticHwInfo> {
   return invoke<StaticHwInfo>('get_static_hw_info');
+}
+
+/** GPU info (nome + VRAM). Pre-warmed no setup — pode já estar pronto quando Dashboard carrega. */
+export async function getGpuInfo(): Promise<GpuInfo> {
+  return invoke<GpuInfo>('get_gpu_info');
 }
 
 /** Status de configurações do Windows (Game Mode, HAGS, VBS, DVR, Power Plan, Timer). Sempre fresco. */

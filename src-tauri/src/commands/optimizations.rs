@@ -45,12 +45,11 @@ const DELIVERY_OPT_DEFAULT: u32 = 1;
 /// HKCU: chave principal que habilita/desabilita o Game DVR globalmente
 const GAME_DVR_PATH_GAMECONFIG: &str = r"System\GameConfigStore";
 const GAME_DVR_KEY_ENABLED: &str = "GameDVR_Enabled";
-/// HKLM: política de grupo que bloqueia o Game DVR para todos os usuários
-const GAME_DVR_PATH_POLICIES: &str = r"SOFTWARE\Policies\Microsoft\Windows\GameDVR";
-const GAME_DVR_KEY_ALLOW: &str = "AllowGameDVR";
-/// HKCU: controla a captura de tela via Game DVR
+/// HKCU: controla a captura manual (screenshots/gravação on-demand)
 const GAME_DVR_PATH_APPCAP: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR";
 const GAME_DVR_KEY_APPCAP: &str = "AppCaptureEnabled";
+/// HKCU: controla a gravação em background ("Gravar o que aconteceu") — impacto real em performance
+const GAME_DVR_KEY_HISTORICAL: &str = "HistoricalCaptureEnabled";
 
 // ─── Constantes — Xbox Overlay ────────────────────────────────────────────────
 
@@ -1008,23 +1007,26 @@ fn restore_multi_entries(entries: &[Value]) -> Result<(), String> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TWEAK — Desabilitar Game DVR / Background Recording
 //
-// Três chaves de registro controlam o Game DVR:
-//   1. HKCU\System\GameConfigStore -> GameDVR_Enabled
-//   2. HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR -> AllowGameDVR
+// Quatro chaves de registro controlam o Game DVR:
+//   1. HKCU\System\GameConfigStore -> GameDVR_Enabled (master switch)
+//   2. HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR -> AllowGameDVR (policy)
 //   3. HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR -> AppCaptureEnabled
+//   4. HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR -> HistoricalCaptureEnabled
 //
-// Todas devem ser 0 para considerar o tweak ativo. O encoder de vídeo da GPU
-// fica inativo e o buffer circular de memória não é alocado.
+// Ao aplicar: seta GameDVR_Enabled=0, AppCaptureEnabled=0, HistoricalCaptureEnabled=0.
+// Ao reverter: seta GameDVR_Enabled=1, AppCaptureEnabled=1, HistoricalCaptureEnabled=0
+// (manter background OFF — é o default seguro do Windows).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 fn get_game_dvr_is_applied() -> Result<bool, String> {
-    let v1 = read_dword(Hive::CurrentUser, GAME_DVR_PATH_GAMECONFIG, GAME_DVR_KEY_ENABLED)?
+    let dvr_enabled = read_dword(Hive::CurrentUser, GAME_DVR_PATH_GAMECONFIG, GAME_DVR_KEY_ENABLED)?
         .unwrap_or(1);
-    let v2 = read_dword(Hive::LocalMachine, GAME_DVR_PATH_POLICIES, GAME_DVR_KEY_ALLOW)?
+    let app_capture = read_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_APPCAP)?
         .unwrap_or(1);
-    let v3 = read_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_APPCAP)?
-        .unwrap_or(1);
-    Ok(v1 == 0 && v2 == 0 && v3 == 0)
+    let historical = read_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_HISTORICAL)?
+        .unwrap_or(0);
+    // Tweak aplicado = master switch off + captura off + background off
+    Ok(dvr_enabled == 0 && app_capture == 0 && historical == 0)
 }
 
 #[tauri::command]
@@ -1034,9 +1036,9 @@ pub fn get_game_dvr_info() -> Result<TweakInfo, String> {
     Ok(TweakInfo {
         id: "disable_game_dvr".to_string(),
         name: "Desabilitar Game DVR / Gravação em Segundo Plano".to_string(),
-        description: "Desabilita a gravação em segundo plano do Game DVR, liberando recursos da \
-            GPU (encoder) e CPU. Diferente do Game Mode, que prioriza recursos, o Game DVR \
-            ativamente grava vídeo em buffer circular mesmo quando você não está gravando."
+        description: "Desabilita completamente o Game DVR (master switch, captura e gravação em \
+            background). A gravação em segundo plano consome GPU (encoder) e CPU mesmo quando \
+            você não está gravando. Ao reverter, restaura a feature sem gravação em background."
             .to_string(),
         category: "gpu_display".to_string(),
         is_applied,
@@ -1050,7 +1052,7 @@ pub fn get_game_dvr_info() -> Result<TweakInfo, String> {
     })
 }
 
-/// Desabilita o Game DVR zerando as três chaves de registro que o controlam.
+/// Desabilita o Game DVR zerando as chaves de registro que o controlam.
 ///
 /// Persiste backup multi-chave em `backups.json` antes de qualquer modificação.
 #[tauri::command]
@@ -1060,8 +1062,8 @@ pub fn disable_game_dvr() -> Result<(), String> {
     }
 
     let orig_1 = read_dword(Hive::CurrentUser, GAME_DVR_PATH_GAMECONFIG, GAME_DVR_KEY_ENABLED)?;
-    let orig_2 = read_dword(Hive::LocalMachine, GAME_DVR_PATH_POLICIES, GAME_DVR_KEY_ALLOW)?;
-    let orig_3 = read_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_APPCAP)?;
+    let orig_2 = read_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_APPCAP)?;
+    let orig_3 = read_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_HISTORICAL)?;
 
     let v1 = orig_1.map(|v| json!(v)).unwrap_or(Value::Null);
     let v2 = orig_2.map(|v| json!(v)).unwrap_or(Value::Null);
@@ -1070,7 +1072,7 @@ pub fn disable_game_dvr() -> Result<(), String> {
     backup_before_apply(
         "disable_game_dvr",
         TweakCategory::Registry,
-        "Game DVR — GameDVR_Enabled + AllowGameDVR + AppCaptureEnabled",
+        "Game DVR — GameDVR_Enabled + AppCaptureEnabled + HistoricalCaptureEnabled",
         OriginalValue {
             path: "MULTI".to_string(),
             key: "game_dvr_keys".to_string(),
@@ -1082,15 +1084,15 @@ pub fn disable_game_dvr() -> Result<(), String> {
                     "value": v1
                 },
                 {
-                    "hive": "HKLM",
-                    "path": GAME_DVR_PATH_POLICIES,
-                    "key": GAME_DVR_KEY_ALLOW,
+                    "hive": "HKCU",
+                    "path": GAME_DVR_PATH_APPCAP,
+                    "key": GAME_DVR_KEY_APPCAP,
                     "value": v2
                 },
                 {
                     "hive": "HKCU",
                     "path": GAME_DVR_PATH_APPCAP,
-                    "key": GAME_DVR_KEY_APPCAP,
+                    "key": GAME_DVR_KEY_HISTORICAL,
                     "value": v3
                 }
             ])),
@@ -1100,22 +1102,25 @@ pub fn disable_game_dvr() -> Result<(), String> {
     )?;
 
     write_dword(Hive::CurrentUser, GAME_DVR_PATH_GAMECONFIG, GAME_DVR_KEY_ENABLED, 0)?;
-    write_dword(Hive::LocalMachine, GAME_DVR_PATH_POLICIES, GAME_DVR_KEY_ALLOW, 0)?;
     write_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_APPCAP, 0)?;
+    write_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_HISTORICAL, 0)?;
     Ok(())
 }
 
-/// Restaura as três chaves do Game DVR para seus valores originais a partir do backup.
+/// Reverte o Game DVR para estado funcional mas seguro:
+/// GameDVR_Enabled=1, AppCaptureEnabled=1, HistoricalCaptureEnabled=0.
+/// Mantém gravação em background desligada (é o default seguro do Windows).
 #[tauri::command]
 pub fn revert_game_dvr() -> Result<(), String> {
-    let original = restore_from_backup("disable_game_dvr")?;
-    let entries = original
-        .value
-        .ok_or("Backup de 'disable_game_dvr' está vazio")?;
-    let arr = entries
-        .as_array()
-        .ok_or("Formato de backup inválido para 'disable_game_dvr'")?;
-    restore_multi_entries(arr)
+    // Marca backup como revertido
+    let _original = restore_from_backup("disable_game_dvr")?;
+
+    // Restaura para valores seguros (NÃO restaura HistoricalCaptureEnabled do backup —
+    // mantém background recording OFF independente do valor original)
+    write_dword(Hive::CurrentUser, GAME_DVR_PATH_GAMECONFIG, GAME_DVR_KEY_ENABLED, 1)?;
+    write_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_APPCAP, 1)?;
+    write_dword(Hive::CurrentUser, GAME_DVR_PATH_APPCAP, GAME_DVR_KEY_HISTORICAL, 0)?;
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

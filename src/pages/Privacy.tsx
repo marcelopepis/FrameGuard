@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Loader2, XCircle, RefreshCw } from 'lucide-react';
+import { Loader2, XCircle, RefreshCw, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import styles from './Optimizations.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
@@ -159,9 +159,23 @@ export default function Privacy() {
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [cardStates, setCardStates] = useState<Record<string, CardState>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const { isRunning } = useGlobalRunning();
   const { showToast } = useToast();
+
+  function toggleSection(sectionId: string) {
+    setExpanded(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  }
+
+  const allExpanded = SECTIONS.every(s => expanded[s.id]);
+
+  function toggleAll() {
+    const next = !allExpanded;
+    const state: Record<string, boolean> = {};
+    for (const s of SECTIONS) state[s.id] = next;
+    setExpanded(state);
+  }
 
   async function loadTweaks() {
     setPageLoading(true);
@@ -273,9 +287,15 @@ export default function Privacy() {
           <h1 className={styles.title}>Privacidade e Debloat</h1>
           <p className={styles.subtitle}>Controle de telemetria, rastreamento e apps desnecessários</p>
         </div>
-        <button className={styles.btnRefresh} onClick={loadTweaks} title="Recarregar status">
-          <RefreshCw size={14} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className={styles.toggleAllBtn} onClick={toggleAll}>
+            <ChevronsUpDown size={13} />
+            {allExpanded ? 'Colapsar tudo' : 'Expandir tudo'}
+          </button>
+          <button className={styles.btnRefresh} onClick={loadTweaks} title="Recarregar status">
+            <RefreshCw size={14} />
+          </button>
+        </div>
       </div>
 
       {/* ── Seções de tweaks ── */}
@@ -287,31 +307,51 @@ export default function Privacy() {
 
           if (sectionTweaks.length === 0) return null;
 
+          const activeCount = sectionTweaks.filter(t => t.is_applied).length;
+          const isOpen = !!expanded[section.id];
+
           return (
             <div key={section.id} className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <span className={styles.sectionTitle}>{section.title}</span>
-                <span className={styles.sectionSubtitle}>{section.subtitle}</span>
+              <div className={styles.sectionHeader} onClick={() => toggleSection(section.id)}>
+                <div className={styles.sectionHeaderLeft}>
+                  <span className={styles.sectionTitle}>{section.title}</span>
+                  <span className={styles.sectionSubtitle}>{section.subtitle}</span>
+                </div>
+                <div className={styles.sectionStats}>
+                  <span className={styles.sectionCount}>{sectionTweaks.length} ajustes</span>
+                  {activeCount > 0 && (
+                    <span className={styles.sectionActive}>{activeCount} ativo{activeCount !== 1 ? 's' : ''}</span>
+                  )}
+                </div>
+                <ChevronDown
+                  size={15}
+                  strokeWidth={2}
+                  className={`${styles.sectionChevron} ${isOpen ? styles.sectionChevronOpen : ''}`}
+                />
               </div>
 
-              <div className={styles.tweakList}>
-                {sectionTweaks.map(tweak => {
-                  const state = cardStates[tweak.id];
-                  if (!state) return null;
-                  return (
-                    <TweakCard
-                      key={tweak.id}
-                      tweak={tweak}
-                      state={state}
-                      onApply={() => handleApply(tweak)}
-                      onRevert={() => handleRevert(tweak)}
-                      onRestoreDefault={() => {}}
-                      onToggleDetails={() => toggleDetails(tweak.id)}
-                      globalDisabled={isRunning && !state.loading}
-                      technicalDetail={TECHNICAL_DETAILS[tweak.id]}
-                    />
-                  );
-                })}
+              <div className={`${styles.sectionContent} ${isOpen ? styles.sectionContentOpen : ''}`}>
+                <div className={styles.sectionContentInner}>
+                  <div className={styles.tweakList}>
+                    {sectionTweaks.map(tweak => {
+                      const state = cardStates[tweak.id];
+                      if (!state) return null;
+                      return (
+                        <TweakCard
+                          key={tweak.id}
+                          tweak={tweak}
+                          state={state}
+                          onApply={() => handleApply(tweak)}
+                          onRevert={() => handleRevert(tweak)}
+                          onRestoreDefault={() => {}}
+                          onToggleDetails={() => toggleDetails(tweak.id)}
+                          globalDisabled={isRunning && !state.loading}
+                          technicalDetail={TECHNICAL_DETAILS[tweak.id]}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           );
