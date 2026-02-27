@@ -384,6 +384,20 @@
   user-select: none;
 }
 
+.vendorBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: rgba(118, 185, 0, 0.1);
+  border: 1px solid rgba(118, 185, 0, 0.2);
+  color: #76b900;
+  user-select: none;
+}
+
 /* ─── Badge de nível de evidência ───────────────────────── */
 
 .evidenceBadgeWrap {

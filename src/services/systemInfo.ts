@@ -60,3 +60,14 @@ export async function getSystemStatus(): Promise<SystemStatus> {
 export async function getSystemUsage(): Promise<SystemUsage> {
   return invoke<SystemUsage>('get_system_usage');
 }
+
+// Espelha DetectedVendors do Rust — vendors de GPU e CPU detectados
+export interface DetectedVendors {
+  gpu_vendor: string;
+  cpu_vendor: string;
+}
+
+/** Vendors de hardware detectados. Usa caches do backend (instantâneo se pre-warmed). */
+export async function getDetectedVendors(): Promise<DetectedVendors> {
+  return invoke<DetectedVendors>('get_detected_vendors');
+}

@@ -69,6 +69,8 @@ pub fn get_telemetry_registry_info() -> Result<TweakInfo, String> {
         default_value_description:
             "Padrão Windows: telemetria em nível Completo, experiências personalizadas e ID de publicidade habilitados"
                 .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -217,6 +219,8 @@ pub fn get_copilot_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Proven,
         default_value_description:
             "Padrão Windows: Copilot habilitado, botão visível, Cortana permitida".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -356,6 +360,8 @@ pub fn get_content_delivery_info() -> Result<TweakInfo, String> {
         default_value_description:
             "Padrão Windows: instalação automática de apps sugeridos e sugestões habilitadas"
                 .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -485,6 +491,8 @@ pub fn get_background_apps_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Plausible,
         default_value_description:
             "Padrão Windows: apps UWP podem executar em segundo plano".to_string(),
+    
+        hardware_filter: None,
     })
 }
 

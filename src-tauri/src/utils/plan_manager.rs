@@ -108,7 +108,8 @@ const BUILTIN_PRIVACIDADE_DEBLOAT: &str = "builtin_privacidade_debloat";
 /// Histórico:
 ///   1 — versão inicial (planos criados sem campo builtin_version)
 ///   2 — reordenação do Saúde Completa (limpeza antes de scans)
-const CURRENT_BUILTIN_VERSION: u32 = 2;
+///   3 — adicionado disable_nvidia_telemetry ao gaming plan (auto-skip por hardware)
+const CURRENT_BUILTIN_VERSION: u32 = 3;
 
 /// Injeta planos built-in que ainda não existam no estado, e atualiza
 /// planos com versão inferior à `CURRENT_BUILTIN_VERSION`.
@@ -176,6 +177,7 @@ fn seed_builtin_plans(state: &mut PlansFile) {
                 "enable_timer_resolution",
                 "disable_mouse_acceleration",
                 "enable_ultimate_performance",
+                "disable_nvidia_telemetry", // auto-skip em hardware não-NVIDIA
             ],
         },
         BuiltinDef {

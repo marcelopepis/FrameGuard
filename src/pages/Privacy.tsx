@@ -11,6 +11,7 @@ import styles from './Optimizations.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
 import { useSearchHighlight } from '../hooks/useSearchHighlight';
+import { useHardwareFilter } from '../hooks/useHardwareFilter';
 import {
   TweakInfo, CardState, TweakCard, makeCardState,
 } from '../components/TweakCard';
@@ -164,6 +165,7 @@ export default function Privacy() {
 
   const { isRunning } = useGlobalRunning();
   const { showToast } = useToast();
+  const { filterCompatible, getVendorBadge } = useHardwareFilter();
 
   const expandSection = useCallback((id: string) => {
     setExpanded(prev => ({ ...prev, [id]: true }));
@@ -312,7 +314,8 @@ export default function Privacy() {
       {/* ── Seções de tweaks ── */}
       <div className={styles.sections}>
         {SECTIONS.map(section => {
-          const sectionTweaks = section.tweakIds
+          const compatibleIds = filterCompatible(section.tweakIds);
+          const sectionTweaks = compatibleIds
             .map(id => tweaks.find(t => t.id === id))
             .filter((t): t is TweakInfo => t !== undefined);
 
@@ -358,6 +361,7 @@ export default function Privacy() {
                             onToggleDetails={() => toggleDetails(tweak.id)}
                             globalDisabled={isRunning && !state.loading}
                             technicalDetail={TECHNICAL_DETAILS[tweak.id]}
+                            vendorBadge={getVendorBadge(tweak.id)}
                           />
                         </div>
                       );

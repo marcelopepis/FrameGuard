@@ -51,6 +51,8 @@ export interface TweakCardProps {
    * (ex: configurado externamente via DISM ou ferramenta de terceiros).
    */
   isBackupBased?: boolean;
+  /** Label do badge de vendor (ex: "NVIDIA", "AMD") para tweaks vendor-specific. */
+  vendorBadge?: string | null;
 }
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
@@ -130,6 +132,7 @@ export function TweakCard({
   globalDisabled,
   technicalDetail,
   isBackupBased = false,
+  vendorBadge,
 }: TweakCardProps) {
   const dismLogRef = useRef<HTMLDivElement>(null);
 
@@ -292,6 +295,9 @@ export function TweakCard({
             <span className={`${styles.riskBadge} ${riskClass}`}>
               {RISK_LABEL[tweak.risk_level]}
             </span>
+            {vendorBadge && (
+              <span className={styles.vendorBadge}>{vendorBadge}</span>
+            )}
             {tweak.requires_restart && (
               <span className={styles.restartBadge}>
                 Requer reinicialização

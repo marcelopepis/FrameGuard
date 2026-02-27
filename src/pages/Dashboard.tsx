@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { getStaticHwInfo, getGpuInfo, getSystemStatus, getSystemSummary, getSystemUsage } from '../services/systemInfo';
 import type { StaticHwInfo, GpuInfo, SystemStatus, SystemSummary } from '../services/systemInfo';
-import { usePlanExecution } from '../hooks';
+import { usePlanExecution, useHardwareFilter } from '../hooks';
 import type { Plan, ExecState, ItemStatus } from '../hooks';
 import { useToast } from '../contexts/ToastContext';
 import styles from './Dashboard.module.css';
@@ -65,6 +65,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
+  const { isCompatible } = useHardwareFilter();
 
   // Loading progressivo: cada chamada renderiza sua seção assim que os dados chegam
   // (os skeletons tratam o estado null de cada seção independentemente)
@@ -304,6 +305,7 @@ export default function Dashboard() {
                 });
               }}
               disabled={execState?.running ?? false}
+              isCompatible={isCompatible}
             />
           ))}
         </div>
@@ -419,11 +421,12 @@ interface QuickPlanCardProps {
   onView: () => void;
   onRun: () => void;
   disabled: boolean;
+  isCompatible: (tweakId: string) => boolean;
 }
 
-function QuickPlanCard({ plan, onView, onRun, disabled }: QuickPlanCardProps) {
+function QuickPlanCard({ plan, onView, onRun, disabled, isCompatible }: QuickPlanCardProps) {
   const Icon = guessPlanIcon(plan.name);
-  const enabledCount = plan.items.filter(i => i.enabled).length;
+  const enabledCount = plan.items.filter(i => i.enabled && isCompatible(i.tweak_id)).length;
 
   return (
     <div className={styles.quickPlanCard} onClick={onView} role="button" tabIndex={0}>

@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import styles from './Plans.module.css';
 import { useToast } from '../contexts/ToastContext';
-import { usePlanExecution } from '../hooks';
+import { usePlanExecution, useHardwareFilter } from '../hooks';
+import { TWEAK_HARDWARE_MAP } from '../hooks/useHardwareFilter';
 import type { Plan, PlanItem, ExecState, ItemStatus } from '../hooks';
 
 // ── Catálogo de tweaks disponíveis ────────────────────────────────────────────
@@ -300,6 +301,7 @@ export default function Plans() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
+  const { isCompatible, getVendorBadge } = useHardwareFilter();
 
   // Guia colapsável
   const [guideOpen, setGuideOpen] = useState(() => {
@@ -461,6 +463,7 @@ export default function Plans() {
               onDeleteCancel={() => setConfirmDeleteId(null)}
               onRun={() => handleExecutePlan(plan)}
               onDuplicate={() => handleDuplicatePlan(plan.id)}
+              isCompatible={isCompatible}
             />
           ))}
         </div>
@@ -473,6 +476,8 @@ export default function Plans() {
           onClose={() => setViewingPlan(null)}
           onRun={() => { setViewingPlan(null); handleExecutePlan(viewingPlan); }}
           onDuplicate={() => { setViewingPlan(null); handleDuplicatePlan(viewingPlan.id); }}
+          isCompatible={isCompatible}
+          getVendorBadge={getVendorBadge}
         />
       )}
 
@@ -602,11 +607,12 @@ interface PlanCardProps {
   onDeleteCancel: () => void;
   onRun: () => void;
   onDuplicate: () => void;
+  isCompatible: (tweakId: string) => boolean;
 }
 
-function PlanCard({ plan, confirmDeleteId, onView, onEdit, onDelete, onDeleteCancel, onRun, onDuplicate }: PlanCardProps) {
+function PlanCard({ plan, confirmDeleteId, onView, onEdit, onDelete, onDeleteCancel, onRun, onDuplicate, isCompatible }: PlanCardProps) {
   const isConfirmingDelete = confirmDeleteId === plan.id;
-  const enabledCount = plan.items.filter(i => i.enabled).length;
+  const enabledCount = plan.items.filter(i => i.enabled && isCompatible(i.tweak_id)).length;
   const isBuiltin = plan.builtin;
 
   return (
@@ -819,23 +825,33 @@ function PlanEditor({ initial, onSave, onCancel }: PlanEditorProps) {
               return (
                 <div key={cat.key} className={styles.tweakCategory}>
                   <p className={styles.categoryLabel}>{cat.label}</p>
-                  {tweaksInCat.map(tweak => (
-                    <label
-                      key={tweak.id}
-                      className={`${styles.tweakItem} ${checkedIds.has(tweak.id) ? styles.tweakItemChecked : ''}`}
-                    >
-                      <input
-                        type='checkbox'
-                        className={styles.tweakCheckbox}
-                        checked={checkedIds.has(tweak.id)}
-                        onChange={e => toggleTweak(tweak.id, e.target.checked)}
-                      />
-                      <div className={styles.tweakMeta}>
-                        <span className={styles.tweakName}>{tweak.name}</span>
-                        <span className={styles.tweakDesc}>{tweak.description}</span>
-                      </div>
-                    </label>
-                  ))}
+                  {tweaksInCat.map(tweak => {
+                    const vendorLabel = TWEAK_HARDWARE_MAP[tweak.id]
+                      ? (TWEAK_HARDWARE_MAP[tweak.id].gpu_vendor ?? TWEAK_HARDWARE_MAP[tweak.id].cpu_vendor ?? '').toUpperCase()
+                      : '';
+                    return (
+                      <label
+                        key={tweak.id}
+                        className={`${styles.tweakItem} ${checkedIds.has(tweak.id) ? styles.tweakItemChecked : ''}`}
+                      >
+                        <input
+                          type='checkbox'
+                          className={styles.tweakCheckbox}
+                          checked={checkedIds.has(tweak.id)}
+                          onChange={e => toggleTweak(tweak.id, e.target.checked)}
+                        />
+                        <div className={styles.tweakMeta}>
+                          <span className={styles.tweakName}>
+                            {tweak.name}
+                            {vendorLabel && (
+                              <span className={styles.vendorBadge}>{vendorLabel}</span>
+                            )}
+                          </span>
+                          <span className={styles.tweakDesc}>{tweak.description}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -905,12 +921,14 @@ interface PlanViewModalProps {
   onClose: () => void;
   onRun: () => void;
   onDuplicate: () => void;
+  isCompatible: (tweakId: string) => boolean;
+  getVendorBadge: (tweakId: string) => string | null;
 }
 
-function PlanViewModal({ plan, onClose, onRun, onDuplicate }: PlanViewModalProps) {
+function PlanViewModal({ plan, onClose, onRun, onDuplicate, isCompatible, getVendorBadge }: PlanViewModalProps) {
   const isBuiltin = plan.builtin;
   const sortedItems = [...plan.items].sort((a, b) => a.order - b.order);
-  const enabledCount = plan.items.filter(i => i.enabled).length;
+  const enabledCount = plan.items.filter(i => i.enabled && isCompatible(i.tweak_id)).length;
 
   return (
     <div className={styles.modalOverlay} onClick={onClose}>
@@ -941,12 +959,27 @@ function PlanViewModal({ plan, onClose, onRun, onDuplicate }: PlanViewModalProps
         <div className={styles.viewList}>
           {sortedItems.map((item, idx) => {
             const tweak = TWEAK_MAP[item.tweak_id];
+            const compatible = isCompatible(item.tweak_id);
+            const vendorLabel = getVendorBadge(item.tweak_id);
             return (
-              <div key={item.tweak_id} className={styles.viewItem}>
+              <div
+                key={item.tweak_id}
+                className={`${styles.viewItem} ${!compatible ? styles.viewItemIncompatible : ''}`}
+              >
                 <span className={styles.viewNum}>{idx + 1}</span>
                 <div className={styles.viewItemInfo}>
-                  <span className={styles.viewItemName}>{tweak?.name ?? item.tweak_id}</span>
-                  {tweak?.description && (
+                  <span className={styles.viewItemName}>
+                    {tweak?.name ?? item.tweak_id}
+                    {vendorLabel && (
+                      <span className={styles.vendorBadge}>{vendorLabel}</span>
+                    )}
+                  </span>
+                  {!compatible && (
+                    <span className={styles.incompatibleLabel}>
+                      Hardware incompatível — será ignorado
+                    </span>
+                  )}
+                  {compatible && tweak?.description && (
                     <span className={styles.viewItemDesc}>{tweak.description}</span>
                   )}
                 </div>

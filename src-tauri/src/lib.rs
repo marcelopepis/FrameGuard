@@ -19,6 +19,7 @@ pub fn run() {
             // Informações do sistema
             system_info::get_static_hw_info,
             system_info::get_gpu_info,
+            system_info::get_detected_vendors,
             system_info::get_system_status,
             system_info::get_system_usage,
             system_info::get_system_summary,

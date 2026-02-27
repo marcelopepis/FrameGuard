@@ -172,6 +172,20 @@ pub enum EvidenceLevel {
     Unproven,
 }
 
+/// Filtro de hardware para tweaks vendor-specific.
+///
+/// Quando `None` no `TweakInfo`, o tweak é universal (roda em qualquer hardware).
+/// Quando `Some(...)`, apenas o hardware com vendor correspondente deve exibir/executar.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareFilter {
+    /// Vendor de GPU requerido: `"nvidia"`, `"amd"` ou `"intel"`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_vendor: Option<String>,
+    /// Vendor de CPU requerido: `"intel"` ou `"amd"`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_vendor: Option<String>,
+}
+
 /// Informações completas de um tweak para exibição na UI.
 ///
 /// Combina metadados estáticos (nome, descrição, risco) com o estado dinâmico
@@ -201,6 +215,10 @@ pub struct TweakInfo {
     pub evidence_level: EvidenceLevel,
     /// Descrição do valor padrão do Windows para exibição no botão "Restaurar Padrão"
     pub default_value_description: String,
+    /// Filtro de hardware: `None` = universal, `Some(...)` = vendor-specific.
+    /// Mantido em sincronia com `get_tweak_hardware_filter()` em `plans.rs`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hardware_filter: Option<HardwareFilter>,
 }
 
 // ─── Tipos de status por tweak ────────────────────────────────────────────────
@@ -306,6 +324,8 @@ pub fn get_wallpaper_compression_info() -> Result<TweakInfo, String> {
         risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Unproven,
         default_value_description: "Padrão Windows: compressão JPEG em 85% (JPEGImportQuality ausente)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -454,6 +474,8 @@ pub fn get_reserved_storage_info() -> Result<TweakInfo, String> {
         risk_level: RiskLevel::Medium,
         evidence_level: EvidenceLevel::Proven,
         default_value_description: "Padrão Windows: Armazenamento Reservado habilitado (~7 GB)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -613,6 +635,8 @@ pub fn get_delivery_optimization_info() -> Result<TweakInfo, String> {
         risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Plausible,
         default_value_description: "Padrão Windows: P2P habilitado (DODownloadMode = 1)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -743,6 +767,8 @@ pub fn get_hags_info() -> Result<TweakInfo, String> {
         risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Plausible,
         default_value_description: "Padrão Windows 11: HAGS ativo (HwSchMode = 2)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -798,6 +824,8 @@ pub fn get_game_mode_info() -> Result<TweakInfo, String> {
         risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Unproven,
         default_value_description: "Padrão Windows: Game Mode ativo (AutoGameModeEnabled = 1)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -856,6 +884,8 @@ pub fn get_vbs_info() -> Result<TweakInfo, String> {
         risk_level: RiskLevel::Medium,
         evidence_level: EvidenceLevel::Proven,
         default_value_description: "Padrão Windows 11: VBS ativa (EnableVirtualizationBasedSecurity = 1)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -1049,6 +1079,8 @@ pub fn get_game_dvr_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Proven,
         default_value_description: "Padrão Windows: Game DVR habilitado (GameDVR_Enabled = 1)"
             .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -1161,6 +1193,8 @@ pub fn get_xbox_overlay_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Proven,
         default_value_description:
             "Padrão Windows: Xbox Game Bar habilitado (UseNexusForGameBarEnabled = 1)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -1287,6 +1321,8 @@ pub fn get_msi_mode_gpu_info() -> Result<TweakInfo, String> {
         default_value_description:
             "Padrão Windows: MSI Mode desabilitado para GPU (MSISupported ausente ou 0)"
                 .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -1399,6 +1435,8 @@ pub fn get_mpo_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Plausible,
         default_value_description: "Padrão Windows: MPO habilitado (OverlayTestMode ausente)"
             .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -1518,6 +1556,10 @@ pub fn get_nvidia_telemetry_info() -> Result<TweakInfo, String> {
         default_value_description:
             "Padrão NVIDIA: telemetria habilitada e serviço NvTelemetryContainer ativo"
                 .to_string(),
+        hardware_filter: Some(HardwareFilter {
+            gpu_vendor: Some("nvidia".to_string()),
+            cpu_vendor: None,
+        }),
     })
 }
 
@@ -1654,6 +1696,8 @@ pub fn get_timer_resolution_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Proven,
         default_value_description:
             "Padrão Windows: GlobalTimerResolutionRequests ausente (timer 15,6ms)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -1754,6 +1798,8 @@ pub fn get_mouse_acceleration_info() -> Result<TweakInfo, String> {
         default_value_description:
             "Padrão Windows: MouseSpeed = \"1\", Threshold1 = \"6\", Threshold2 = \"10\""
                 .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -1874,6 +1920,8 @@ pub fn get_fullscreen_optimizations_info() -> Result<TweakInfo, String> {
         default_value_description:
             "Padrão Windows: Fullscreen Optimizations habilitado (chaves FSE ausentes)"
                 .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -2004,6 +2052,8 @@ pub fn get_ultimate_performance_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Proven,
         default_value_description: "Padrão Windows: plano Balanceado ou Alto Desempenho ativo"
             .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -2127,6 +2177,8 @@ pub fn get_power_throttling_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Plausible,
         default_value_description:
             "Padrão Windows: Power Throttling habilitado (PowerThrottlingOff ausente)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -2217,6 +2269,8 @@ pub fn get_hibernation_info() -> Result<TweakInfo, String> {
         risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Proven,
         default_value_description: "Padrão Windows: hibernação habilitada (hiberfil.sys presente)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -2336,6 +2390,8 @@ pub fn get_ntfs_last_access_info() -> Result<TweakInfo, String> {
         default_value_description:
             "Padrão Windows: timestamps habilitados (0) ou desabilitados pelo sistema (2) em volumes grandes"
                 .to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -2482,6 +2538,8 @@ pub fn get_nagle_info() -> Result<TweakInfo, String> {
         risk_level: RiskLevel::Low,
         evidence_level: EvidenceLevel::Plausible,
         default_value_description: "Padrão Windows: algoritmo de Nagle habilitado".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -2628,6 +2686,8 @@ pub fn get_sticky_keys_info() -> Result<TweakInfo, String> {
         evidence_level: EvidenceLevel::Proven,
         default_value_description:
             "Padrão Windows: atalho de Sticky Keys habilitado (Flags = 510)".to_string(),
+    
+        hardware_filter: None,
     })
 }
 
@@ -2733,6 +2793,8 @@ pub fn get_bing_search_info() -> Result<TweakInfo, String> {
         default_value_description:
             "Padrão Windows: busca Bing habilitada no Menu Iniciar (chave ausente ou = 1)"
                 .to_string(),
+    
+        hardware_filter: None,
     })
 }
 

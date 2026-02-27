@@ -36,6 +36,19 @@ pub struct GpuInfo {
     pub gpu_vram_gb: f64,
 }
 
+/// Vendors de hardware detectados (GPU e CPU).
+///
+/// Derivado dos caches existentes (`HW_CACHE` e `GPU_CACHE`) — não faz
+/// novas queries WMI. Usado pelo frontend para filtrar tweaks vendor-specific
+/// e pelo backend para pular tweaks incompatíveis durante execução de planos.
+#[derive(Debug, Clone, Serialize)]
+pub struct DetectedVendors {
+    /// `"nvidia"`, `"amd"`, `"intel"` ou `"unknown"`
+    pub gpu_vendor: String,
+    /// `"intel"`, `"amd"` ou `"unknown"`
+    pub cpu_vendor: String,
+}
+
 /// Coleta dados estáticos de CPU e RAM (rápido, <100ms via sysinfo).
 /// Resultado cacheado em memória — chamadas subsequentes retornam instantaneamente.
 #[tauri::command]
@@ -85,6 +98,48 @@ pub async fn get_gpu_info() -> Result<GpuInfo, String> {
 
     let _ = GPU_CACHE.set(info.clone());
     Ok(info)
+}
+
+/// Detecta vendors de GPU e CPU a partir dos nomes no cache.
+///
+/// Retorna imediatamente se os caches já estiverem prontos.
+/// Caso contrário, aguarda a coleta (CPU ~100ms, GPU 2-4s — normalmente já pre-warmed).
+#[tauri::command]
+pub async fn get_detected_vendors() -> Result<DetectedVendors, String> {
+    let hw = get_static_hw_info().await?;
+    let gpu = get_gpu_info().await?;
+
+    let gpu_lower = gpu.gpu_name.to_lowercase();
+    let gpu_vendor = if gpu_lower.contains("nvidia") || gpu_lower.contains("geforce") {
+        "nvidia"
+    } else if gpu_lower.contains("amd") || gpu_lower.contains("radeon") {
+        "amd"
+    } else if gpu_lower.contains("intel")
+        && (gpu_lower.contains("arc")
+            || gpu_lower.contains("iris")
+            || gpu_lower.contains("uhd"))
+    {
+        "intel"
+    } else {
+        "unknown"
+    };
+
+    let cpu_lower = hw.cpu_name.to_lowercase();
+    let cpu_vendor = if cpu_lower.contains("intel") || cpu_lower.contains("core") {
+        "intel"
+    } else if cpu_lower.contains("amd")
+        || cpu_lower.contains("ryzen")
+        || cpu_lower.contains("threadripper")
+    {
+        "amd"
+    } else {
+        "unknown"
+    };
+
+    Ok(DetectedVendors {
+        gpu_vendor: gpu_vendor.to_string(),
+        cpu_vendor: cpu_vendor.to_string(),
+    })
 }
 
 /// Inicia coleta de GPU em background (chamado no setup do Tauri).

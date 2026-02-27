@@ -19,6 +19,8 @@ use serde::Serialize;
 use serde_json::json;
 use tauri::Emitter;
 
+use crate::commands::optimizations::HardwareFilter;
+use crate::commands::system_info::DetectedVendors;
 use crate::utils::activity_log;
 use crate::utils::plan_manager::{self, PlanItem};
 
@@ -345,6 +347,39 @@ pub fn get_all_plans() -> Result<Vec<plan_manager::Plan>, String> {
     plan_manager::get_all_plans()
 }
 
+// ─── Filtro de hardware para tweaks vendor-specific ─────────────────────────
+
+/// Retorna o `HardwareFilter` de um tweak, se aplicável.
+///
+/// Mapeamento estático — apenas tweaks vendor-specific estão listados.
+/// Mantido em sincronia com `TWEAK_HARDWARE_MAP` no frontend
+/// e com o campo `hardware_filter` do `TweakInfo` em `optimizations.rs`.
+fn get_tweak_hardware_filter(tweak_id: &str) -> Option<HardwareFilter> {
+    match tweak_id {
+        "disable_nvidia_telemetry" => Some(HardwareFilter {
+            gpu_vendor: Some("nvidia".to_string()),
+            cpu_vendor: None,
+        }),
+        // Adicionar futuros tweaks vendor-specific aqui
+        _ => None,
+    }
+}
+
+/// Verifica se o hardware detectado é compatível com o filtro do tweak.
+fn is_hardware_compatible(filter: &HardwareFilter, detected: &DetectedVendors) -> bool {
+    if let Some(ref required_gpu) = filter.gpu_vendor {
+        if *required_gpu != detected.gpu_vendor {
+            return false;
+        }
+    }
+    if let Some(ref required_cpu) = filter.cpu_vendor {
+        if *required_cpu != detected.cpu_vendor {
+            return false;
+        }
+    }
+    true
+}
+
 /// Executa todos os itens habilitados de um plano em sequência, emitindo
 /// eventos de progresso `"plan_progress"` em tempo real para o frontend.
 ///
@@ -375,6 +410,14 @@ pub async fn execute_plan(
 
     // Carrega o plano — falha aqui é um erro real (ID inexistente)
     let plan = plan_manager::get_plan(&plan_id)?;
+
+    // Detecta hardware uma vez para validar compatibilidade de tweaks vendor-specific
+    let detected_vendors = super::system_info::get_detected_vendors()
+        .await
+        .unwrap_or(DetectedVendors {
+            gpu_vendor: "unknown".to_string(),
+            cpu_vendor: "unknown".to_string(),
+        });
 
     // Ordena itens por `order` ascendente para garantir sequência correta
     let mut items = plan.items.clone();
@@ -412,6 +455,31 @@ pub async fn execute_plan(
             });
             skipped_count += 1;
             continue;
+        }
+
+        // Hardware incompatível: emite "skipped" com motivo e avança
+        if let Some(filter) = get_tweak_hardware_filter(&item.tweak_id) {
+            if !is_hardware_compatible(&filter, &detected_vendors) {
+                emit_progress(
+                    &app_handle,
+                    &plan_id,
+                    &item.tweak_id,
+                    index,
+                    total_items,
+                    "skipped",
+                    None,
+                    progress_before,
+                );
+
+                results.push(ItemResult {
+                    tweak_id: item.tweak_id.clone(),
+                    status: "skipped".to_string(),
+                    error: Some("Hardware incompatível — tweak ignorado".to_string()),
+                    result_data: None,
+                });
+                skipped_count += 1;
+                continue;
+            }
         }
 
         // Emite "running" antes de iniciar o tweak
