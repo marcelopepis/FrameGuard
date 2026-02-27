@@ -115,3 +115,12 @@ button {
   font-family: inherit;
   color: inherit;
 }
+
+/* Search highlight — aplicado via classList.add() pela busca global */
+.searchHighlight {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: -2px;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.2) !important;
+  border-radius: var(--radius-md);
+  transition: outline 0.3s ease, box-shadow 0.3s ease;
+}

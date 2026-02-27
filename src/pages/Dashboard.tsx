@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import {
   Cpu, Layers, Database, Globe, ShieldCheck, ShieldOff,
@@ -61,6 +62,7 @@ export default function Dashboard() {
   const [activity, setActivity] = useState<ActivityEntry[] | null>(null);
   const [builtinPlans, setBuiltinPlans] = useState<Plan[] | null>(null);
 
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
 
@@ -292,6 +294,7 @@ export default function Dashboard() {
             <QuickPlanCard
               key={plan.id}
               plan={plan}
+              onView={() => navigate(`/plans?viewPlan=${plan.id}`)}
               onRun={() => {
                 execute(plan, () => {
                   showToast('success', 'Plano concluído', plan.name);
@@ -413,16 +416,17 @@ function guessPlanIcon(name: string) {
 
 interface QuickPlanCardProps {
   plan: Plan;
+  onView: () => void;
   onRun: () => void;
   disabled: boolean;
 }
 
-function QuickPlanCard({ plan, onRun, disabled }: QuickPlanCardProps) {
+function QuickPlanCard({ plan, onView, onRun, disabled }: QuickPlanCardProps) {
   const Icon = guessPlanIcon(plan.name);
   const enabledCount = plan.items.filter(i => i.enabled).length;
 
   return (
-    <div className={styles.quickPlanCard}>
+    <div className={styles.quickPlanCard} onClick={onView} role="button" tabIndex={0}>
       <div className={styles.quickPlanIcon}>
         <Icon size={16} strokeWidth={2} />
       </div>

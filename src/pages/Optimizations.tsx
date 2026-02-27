@@ -4,13 +4,14 @@
 // Aplicar/Reverter/Restaurar Padrão com feedback em tempo real e disable global
 // quando qualquer comando de longa duração estiver em execução em outra página.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Loader2, XCircle, RefreshCw, ChevronDown, ChevronsUpDown, ShieldAlert, AlertTriangle, Skull, Ban } from 'lucide-react';
 import styles from './Optimizations.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
+import { useSearchHighlight } from '../hooks/useSearchHighlight';
 import {
   TweakInfo, CardState, TweakCard, makeCardState,
 } from '../components/TweakCard';
@@ -416,6 +417,16 @@ export default function Optimizations() {
   const { isRunning } = useGlobalRunning();
   const { showToast } = useToast();
 
+  const expandSection = useCallback((id: string) => {
+    setExpanded(prev => ({ ...prev, [id]: true }));
+  }, []);
+
+  useSearchHighlight({
+    dataAttribute: 'data-tweak-id',
+    pageLoading,
+    expandSection,
+  });
+
   function toggleSection(sectionId: string) {
     setExpanded(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
   }
@@ -630,18 +641,19 @@ export default function Optimizations() {
                       const state = cardStates[tweak.id];
                       if (!state) return null;
                       return (
-                        <TweakCard
-                          key={tweak.id}
-                          tweak={tweak}
-                          state={state}
-                          onApply={() => handleApply(tweak)}
-                          onRevert={() => handleRevert(tweak)}
-                          onRestoreDefault={() => handleRestoreDefault(tweak)}
-                          onToggleDetails={() => toggleDetails(tweak.id)}
-                          globalDisabled={isRunning && !state.loading}
-                          technicalDetail={TECHNICAL_DETAILS[tweak.id]}
-                          isBackupBased={BACKUP_BASED.has(tweak.id)}
-                        />
+                        <div key={tweak.id} data-tweak-id={tweak.id}>
+                          <TweakCard
+                            tweak={tweak}
+                            state={state}
+                            onApply={() => handleApply(tweak)}
+                            onRevert={() => handleRevert(tweak)}
+                            onRestoreDefault={() => handleRestoreDefault(tweak)}
+                            onToggleDetails={() => toggleDetails(tweak.id)}
+                            globalDisabled={isRunning && !state.loading}
+                            technicalDetail={TECHNICAL_DETAILS[tweak.id]}
+                            isBackupBased={BACKUP_BASED.has(tweak.id)}
+                          />
+                        </div>
                       );
                     })}
                   </div>

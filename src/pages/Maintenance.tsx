@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { ActionCard } from '../components/ActionCard/ActionCard';
 import { useActionRunner } from '../hooks/useActionRunner';
+import { useSearchHighlight } from '../hooks/useSearchHighlight';
 import type { ActionMeta, Section } from '../types/health';
 import styles from '../components/ActionCard/ActionCard.module.css';
 
@@ -222,6 +223,11 @@ export default function Maintenance() {
   const { states, handleRun, toggleLog, toggleDetails, isRunning } =
     useActionRunner(ACTIONS, 'frameguard:maintenance');
 
+  useSearchHighlight({
+    dataAttribute: 'data-action-id',
+    pageLoading: false,
+  });
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -242,15 +248,16 @@ export default function Maintenance() {
               </div>
               <div className={styles.actionList}>
                 {sectionActions.map(meta => (
-                  <ActionCard
-                    key={meta.id}
-                    meta={meta}
-                    state={states[meta.id]}
-                    onRun={() => handleRun(meta)}
-                    onToggleLog={() => toggleLog(meta.id)}
-                    onToggleDetails={() => toggleDetails(meta.id)}
-                    disabled={isRunning && !states[meta.id].running}
-                  />
+                  <div key={meta.id} data-action-id={meta.id}>
+                    <ActionCard
+                      meta={meta}
+                      state={states[meta.id]}
+                      onRun={() => handleRun(meta)}
+                      onToggleLog={() => toggleLog(meta.id)}
+                      onToggleDetails={() => toggleDetails(meta.id)}
+                      disabled={isRunning && !states[meta.id].running}
+                    />
+                  </div>
                 ))}
               </div>
             </div>

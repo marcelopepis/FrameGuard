@@ -5,6 +5,7 @@
 // rodando tudo com um clique — com feedback em tempo real via eventos Tauri.
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import {
   Plus, Play, Pencil, Trash2, GripVertical,
@@ -296,6 +297,7 @@ export default function Plans() {
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
 
@@ -320,6 +322,19 @@ export default function Plans() {
     loadPlans();
     return () => { cleanup(); };
   }, [cleanup]);
+
+  // Abre PlanViewModal quando navegado com ?viewPlan=<id> (ex: Dashboard → Planos)
+  useEffect(() => {
+    const viewPlanId = searchParams.get('viewPlan');
+    if (!viewPlanId || plans.length === 0) return;
+
+    const plan = plans.find(p => p.id === viewPlanId);
+    if (plan) {
+      setViewingPlan(plan);
+      // Limpa o param para não reabrir ao voltar
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, plans, setSearchParams]);
 
   async function loadPlans() {
     try {

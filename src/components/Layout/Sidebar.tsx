@@ -4,6 +4,7 @@ import {
   Shield,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import SearchBar from '../SearchBar/SearchBar';
 import styles from './sidebar.module.css';
 
 const APP_VERSION = '0.1.0';
@@ -31,6 +32,9 @@ export default function Sidebar() {
         <Shield className={styles.logoIcon} size={26} strokeWidth={2.5} />
         <span className={styles.logoText}>FrameGuard</span>
       </div>
+
+      {/* Busca global */}
+      <SearchBar />
 
       {/* Navegação principal */}
       <nav className={styles.nav}>

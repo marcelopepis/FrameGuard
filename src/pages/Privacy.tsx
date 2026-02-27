@@ -4,12 +4,13 @@
 // e apps em segundo plano. Lógica idêntica à página de Otimizações — a diferença
 // é apenas a lista de tweaks e as seções.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Loader2, XCircle, RefreshCw, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import styles from './Optimizations.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
+import { useSearchHighlight } from '../hooks/useSearchHighlight';
 import {
   TweakInfo, CardState, TweakCard, makeCardState,
 } from '../components/TweakCard';
@@ -163,6 +164,16 @@ export default function Privacy() {
 
   const { isRunning } = useGlobalRunning();
   const { showToast } = useToast();
+
+  const expandSection = useCallback((id: string) => {
+    setExpanded(prev => ({ ...prev, [id]: true }));
+  }, []);
+
+  useSearchHighlight({
+    dataAttribute: 'data-tweak-id',
+    pageLoading,
+    expandSection,
+  });
 
   function toggleSection(sectionId: string) {
     setExpanded(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
@@ -337,17 +348,18 @@ export default function Privacy() {
                       const state = cardStates[tweak.id];
                       if (!state) return null;
                       return (
-                        <TweakCard
-                          key={tweak.id}
-                          tweak={tweak}
-                          state={state}
-                          onApply={() => handleApply(tweak)}
-                          onRevert={() => handleRevert(tweak)}
-                          onRestoreDefault={() => {}}
-                          onToggleDetails={() => toggleDetails(tweak.id)}
-                          globalDisabled={isRunning && !state.loading}
-                          technicalDetail={TECHNICAL_DETAILS[tweak.id]}
-                        />
+                        <div key={tweak.id} data-tweak-id={tweak.id}>
+                          <TweakCard
+                            tweak={tweak}
+                            state={state}
+                            onApply={() => handleApply(tweak)}
+                            onRevert={() => handleRevert(tweak)}
+                            onRestoreDefault={() => {}}
+                            onToggleDetails={() => toggleDetails(tweak.id)}
+                            globalDisabled={isRunning && !state.loading}
+                            technicalDetail={TECHNICAL_DETAILS[tweak.id]}
+                          />
+                        </div>
                       );
                     })}
                   </div>

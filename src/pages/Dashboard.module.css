@@ -337,6 +337,7 @@
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  cursor: pointer;
   transition:
     border-color var(--transition-normal),
     transform var(--transition-normal),
