@@ -15,6 +15,8 @@ import { useHardwareFilter } from '../hooks/useHardwareFilter';
 import {
   TweakInfo, CardState, TweakCard, makeCardState,
 } from '../components/TweakCard';
+import { ensureRestorePoint, showRestorePointToast } from '../utils/restorePoint';
+import BloatwareSection from '../components/BloatwareSection';
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
@@ -223,6 +225,10 @@ export default function Privacy() {
     updateCard(tweak.id, { loading: true, loadingAction: 'applying' });
 
     try {
+      // Cria ponto de restauração antes de aplicar (se habilitado nas configurações)
+      const rpResult = await ensureRestorePoint(`Antes de aplicar: ${tweak.name}`);
+      showRestorePointToast(rpResult, showToast);
+
       await invoke(APPLY_COMMANDS[tweak.id]);
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
@@ -373,6 +379,9 @@ export default function Privacy() {
           );
         })}
       </div>
+
+      {/* ── Remoção de Bloatware UWP ── */}
+      <BloatwareSection />
     </div>
   );
 }

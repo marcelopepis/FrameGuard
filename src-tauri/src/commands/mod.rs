@@ -8,3 +8,5 @@ pub mod privacy;
 pub mod export_import;
 pub mod services;
 pub mod activity;
+pub mod restore_point;
+pub mod bloatware;

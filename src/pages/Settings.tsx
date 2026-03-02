@@ -148,6 +148,7 @@ export default function Settings() {
   const [language,         setLanguageState        ] = useState(() => localStorage.getItem('fg.language')      || 'pt-BR');
   const [minimizeToTray,   setMinimizeToTrayState  ] = useState(() => localStorage.getItem('fg.minimizeTray')  === 'true');
   const [startWithWindows, setStartWithWindowsState] = useState(() => localStorage.getItem('fg.startWindows')  === 'true');
+  const [restorePoint,     setRestorePointState    ] = useState(() => localStorage.getItem('fg.restorePoint')  !== 'false');
 
   // ── Estado: Pasta de dados
   const [dataDirPath, setDataDirPath] = useState('');
@@ -179,6 +180,7 @@ export default function Settings() {
   function setLanguage(v: string)       { setLanguageState(v);         localStorage.setItem('fg.language',     v); }
   function setMinimizeTray(v: boolean)  { setMinimizeToTrayState(v);   localStorage.setItem('fg.minimizeTray', String(v)); }
   function setStartWindows(v: boolean)  { setStartWithWindowsState(v); localStorage.setItem('fg.startWindows', String(v)); }
+  function setRestorePoint(v: boolean)  { setRestorePointState(v);     localStorage.setItem('fg.restorePoint', String(v)); }
 
   // ── Exportar
   async function handleExport() {
@@ -337,6 +339,15 @@ export default function Settings() {
             <div className={styles.comingSoonNote}>
               As integrações com o sistema operacional serão ativadas em uma versão futura.
             </div>
+
+            <div className={styles.divider} />
+
+            <SettingRow
+              label="Ponto de restauração automático"
+              description="Criar ponto de restauração do Windows antes de aplicar ajustes ou executar planos"
+            >
+              <Toggle checked={restorePoint} onChange={setRestorePoint} />
+            </SettingRow>
           </div>
         </section>
 

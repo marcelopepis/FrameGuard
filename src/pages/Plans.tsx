@@ -19,6 +19,7 @@ import { useToast } from '../contexts/ToastContext';
 import { usePlanExecution, useHardwareFilter } from '../hooks';
 import { TWEAK_HARDWARE_MAP } from '../hooks/useHardwareFilter';
 import type { Plan, PlanItem, ExecState, ItemStatus } from '../hooks';
+import { showRestorePointToast } from '../utils/restorePoint';
 
 // ── Catálogo de tweaks disponíveis ────────────────────────────────────────────
 
@@ -302,6 +303,13 @@ export default function Plans() {
   const { showToast } = useToast();
   const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
   const { isCompatible, getVendorBadge } = useHardwareFilter();
+
+  // Toast para status do ponto de restauração durante execução de plano
+  useEffect(() => {
+    if (execState?.restorePoint) {
+      showRestorePointToast(execState.restorePoint, showToast);
+    }
+  }, [execState?.restorePoint, showToast]);
 
   // Guia colapsável
   const [guideOpen, setGuideOpen] = useState(() => {

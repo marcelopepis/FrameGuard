@@ -12,6 +12,7 @@ import type { StaticHwInfo, GpuInfo, SystemStatus, SystemSummary } from '../serv
 import { usePlanExecution, useHardwareFilter } from '../hooks';
 import type { Plan, ExecState, ItemStatus } from '../hooks';
 import { useToast } from '../contexts/ToastContext';
+import { showRestorePointToast } from '../utils/restorePoint';
 import styles from './Dashboard.module.css';
 
 // ── Tipos de atividade ────────────────────────────────────────────────────────
@@ -66,6 +67,13 @@ export default function Dashboard() {
   const { showToast } = useToast();
   const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
   const { isCompatible } = useHardwareFilter();
+
+  // Toast para status do ponto de restauração durante execução de plano
+  useEffect(() => {
+    if (execState?.restorePoint) {
+      showRestorePointToast(execState.restorePoint, showToast);
+    }
+  }, [execState?.restorePoint, showToast]);
 
   // Loading progressivo: cada chamada renderiza sua seção assim que os dados chegam
   // (os skeletons tratam o estado null de cada seção independentemente)

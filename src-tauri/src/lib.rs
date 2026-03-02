@@ -2,7 +2,7 @@
 mod commands;
 mod utils;
 
-use commands::{activity, cleanup, export_import, health_check, optimizations, plans, privacy, services, system_info};
+use commands::{activity, bloatware, cleanup, export_import, health_check, optimizations, plans, privacy, restore_point, services, system_info};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -159,6 +159,11 @@ pub fn run() {
             services::get_tasks_status,
             services::disable_tasks,
             services::restore_tasks,
+            // Ponto de Restauração
+            restore_point::create_restore_point,
+            // Remoção de Bloatware UWP
+            bloatware::get_installed_uwp_apps,
+            bloatware::remove_uwp_apps,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o FrameGuard");

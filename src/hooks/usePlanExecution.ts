@@ -7,6 +7,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { isRestorePointEnabled } from '../utils/restorePoint';
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -75,12 +76,18 @@ export interface ItemExecState {
   hcStatus?: 'success' | 'warning' | 'error';
 }
 
+export interface RestorePointStatus {
+  status: 'created' | 'skipped' | 'disabled' | 'failed';
+  message: string;
+}
+
 export interface ExecState {
   running: boolean;
   items: Record<string, ItemExecState>;
   progress: number;
   summary: PlanExecutionSummary | null;
   fatalError: string | null;
+  restorePoint: RestorePointStatus | null;
 }
 
 // ── Hook ────────────────────────────────────────────────────────────────────
@@ -98,7 +105,12 @@ export function usePlanExecution() {
     });
 
     setExecutingPlan(plan);
-    setExecState({ running: true, items: initialItems, progress: 0, summary: null, fatalError: null });
+    setExecState({ running: true, items: initialItems, progress: 0, summary: null, fatalError: null, restorePoint: null });
+
+    // Listener para status do ponto de restauração (emitido pelo backend antes de executar)
+    const unlistenRp = await listen<RestorePointStatus>('restore_point_status', (event) => {
+      setExecState(prev => prev ? { ...prev, restorePoint: event.payload } : prev);
+    });
 
     // Registra listener ANTES do invoke (para não perder eventos iniciais)
     const unlisten = await listen<PlanProgress>('plan_progress', (event) => {
@@ -126,7 +138,10 @@ export function usePlanExecution() {
     unlistenRef.current = unlisten;
 
     try {
-      const summary = await invoke<PlanExecutionSummary>('execute_plan', { planId: plan.id });
+      const summary = await invoke<PlanExecutionSummary>('execute_plan', {
+        planId: plan.id,
+        shouldCreateRestorePoint: isRestorePointEnabled(),
+      });
       setExecState(prev => prev
         ? { ...prev, running: false, summary, progress: 100 }
         : prev,
@@ -139,6 +154,7 @@ export function usePlanExecution() {
       );
     } finally {
       unlisten();
+      unlistenRp();
       unlistenRef.current = null;
     }
   }, []);

@@ -23,6 +23,7 @@ use crate::commands::optimizations::HardwareFilter;
 use crate::commands::system_info::DetectedVendors;
 use crate::utils::activity_log;
 use crate::utils::plan_manager::{self, PlanItem};
+use crate::utils::restore_point;
 
 // ─── Tipos de evento e resultado ─────────────────────────────────────────────
 
@@ -404,12 +405,42 @@ fn is_hardware_compatible(filter: &HardwareFilter, detected: &DetectedVendors) -
 pub async fn execute_plan(
     app_handle: tauri::AppHandle,
     plan_id: String,
+    should_create_restore_point: Option<bool>,
 ) -> Result<PlanExecutionSummary, String> {
     let started_at = now_utc();
     let start_instant = std::time::Instant::now();
 
     // Carrega o plano — falha aqui é um erro real (ID inexistente)
     let plan = plan_manager::get_plan(&plan_id)?;
+
+    // Cria restore point antes de executar o plano (1 por execução, não 1 por tweak).
+    // Falha no restore point NÃO impede a execução do plano.
+    if should_create_restore_point.unwrap_or(false) {
+        let plan_name = plan.name.clone();
+        let rp_result = tokio::task::spawn_blocking(move || {
+            restore_point::create_restore_point(&format!("Antes do plano: {}", plan_name))
+        })
+        .await
+        .unwrap_or_else(|_| restore_point::RestorePointResult::Failed("spawn_blocking falhou".to_string()));
+
+        // Emite evento para o frontend mostrar toast
+        let rp_status = match &rp_result {
+            restore_point::RestorePointResult::Created => "created",
+            restore_point::RestorePointResult::Skipped => "skipped",
+            restore_point::RestorePointResult::Disabled(_) => "disabled",
+            restore_point::RestorePointResult::Failed(_) => "failed",
+        };
+        let rp_message = match &rp_result {
+            restore_point::RestorePointResult::Created => "Ponto de restauração criado".to_string(),
+            restore_point::RestorePointResult::Skipped => "Ponto de restauração recente já existe".to_string(),
+            restore_point::RestorePointResult::Disabled(msg) => msg.clone(),
+            restore_point::RestorePointResult::Failed(msg) => msg.clone(),
+        };
+        let _ = app_handle.emit("restore_point_status", serde_json::json!({
+            "status": rp_status,
+            "message": rp_message,
+        }));
+    }
 
     // Detecta hardware uma vez para validar compatibilidade de tweaks vendor-specific
     let detected_vendors = super::system_info::get_detected_vendors()

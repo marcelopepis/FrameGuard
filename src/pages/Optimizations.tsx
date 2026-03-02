@@ -16,6 +16,7 @@ import { useHardwareFilter } from '../hooks/useHardwareFilter';
 import {
   TweakInfo, CardState, TweakCard, makeCardState,
 } from '../components/TweakCard';
+import { ensureRestorePoint, showRestorePointToast } from '../utils/restorePoint';
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
@@ -491,6 +492,10 @@ export default function Optimizations() {
     const unlisten = await subscribeDism(tweak.id);
 
     try {
+      // Cria ponto de restauração antes de aplicar (se habilitado nas configurações)
+      const rpResult = await ensureRestorePoint(`Antes de aplicar: ${tweak.name}`);
+      showRestorePointToast(rpResult, showToast);
+
       await invoke(APPLY_COMMANDS[tweak.id]);
       const updated = await invoke<TweakInfo>(INFO_COMMANDS[tweak.id]);
       setTweaks(prev => prev.map(t => t.id === tweak.id ? updated : t));
