@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { BrowserRouter, useLocation, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import { Dashboard, Optimizations, Privacy, Maintenance, Services, Plans, Settings } from './pages';
+import { Dashboard, Optimizations, Privacy, Maintenance, Cleanup, Services, Plans, Settings } from './pages';
 import { GlobalRunningProvider } from './contexts/RunningContext';
 import { ToastProvider } from './contexts/ToastContext';
 
@@ -11,6 +11,7 @@ const ROUTES = [
   { path: '/optimizations', Page: Optimizations },
   { path: '/privacy',       Page: Privacy },
   { path: '/maintenance',   Page: Maintenance },
+  { path: '/cleanup',       Page: Cleanup },
   { path: '/services',      Page: Services },
   { path: '/plans',         Page: Plans },
   { path: '/settings',      Page: Settings },

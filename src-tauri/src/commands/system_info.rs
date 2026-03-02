@@ -142,6 +142,30 @@ pub async fn get_detected_vendors() -> Result<DetectedVendors, String> {
     })
 }
 
+/// Detecção síncrona de vendor de GPU a partir do cache OnceLock.
+/// Retorna `"nvidia"`, `"amd"`, `"intel"` ou `"unknown"`.
+/// Se o cache ainda não estiver populado (pre-warm pendente), retorna `"unknown"`.
+pub(crate) fn detect_gpu_vendor_sync() -> String {
+    let gpu_name = GPU_CACHE
+        .get()
+        .map(|g| g.gpu_name.to_lowercase())
+        .unwrap_or_default();
+
+    if gpu_name.contains("nvidia") || gpu_name.contains("geforce") {
+        "nvidia".to_string()
+    } else if gpu_name.contains("amd") || gpu_name.contains("radeon") {
+        "amd".to_string()
+    } else if gpu_name.contains("intel")
+        && (gpu_name.contains("arc") || gpu_name.contains("iris") || gpu_name.contains("uhd"))
+    {
+        "intel".to_string()
+    } else if gpu_name.is_empty() {
+        "unknown".to_string()
+    } else {
+        "unknown".to_string()
+    }
+}
+
 /// Inicia coleta de GPU em background (chamado no setup do Tauri).
 /// Não bloqueia a abertura da janela — Dashboard mostra skeleton enquanto carrega.
 pub fn pre_warm_gpu_cache() {

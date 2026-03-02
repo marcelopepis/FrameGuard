@@ -1,0 +1,596 @@
+/* ─── Layout da página ────────────────────────────────────── */
+
+.page {
+  padding: 36px 40px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ─── Header ─────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+}
+
+/* ─── Estado inicial ─────────────────────────────────────── */
+
+.initialState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 80px 0;
+}
+
+.initialIcon {
+  color: var(--color-text-muted);
+  opacity: 0.35;
+}
+
+.initialText {
+  text-align: center;
+  color: var(--color-text-secondary);
+  max-width: 480px;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.scanBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 28px;
+  background: var(--color-accent);
+  color: #0a0e17;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.scanBtn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.scanBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ─── Estado de scan ─────────────────────────────────────── */
+
+.scanningState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 80px 0;
+  color: var(--color-text-secondary);
+  font-size: 13.5px;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  color: var(--color-accent);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Resultados — Topo ──────────────────────────────────── */
+
+.resultsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.totalBanner {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.totalSize {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.totalLabel {
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+}
+
+.scanDuration {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.btnNewScan {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.btnNewScan:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+/* ─── Lista de categorias ────────────────────────────────── */
+
+.categoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.categoryCard {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color var(--transition-normal);
+}
+
+.categoryCard:hover {
+  border-color: var(--color-border-hover);
+}
+
+.categoryHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.categoryIcon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.categoryInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.categoryName {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.categoryDesc {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.categorySize {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.chevron {
+  transition: transform var(--transition-fast);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* ─── Checkbox custom ────────────────────────────────────── */
+
+.checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.checkbox:checked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.checkbox:checked::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 4.5px;
+  width: 4px;
+  height: 8px;
+  border: solid #0a0e17;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox:indeterminate {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.checkbox:indeterminate::after {
+  content: '';
+  position: absolute;
+  top: 5.5px;
+  left: 3px;
+  width: 8px;
+  height: 2px;
+  background: #0a0e17;
+  border-radius: 1px;
+}
+
+/* ─── Badges de risco ────────────────────────────────────── */
+
+.riskBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.riskSafe {
+  background: rgba(52, 211, 153, 0.12);
+  color: var(--color-success);
+}
+
+.riskModerate {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--color-warning);
+}
+
+.riskCaution {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--color-error);
+}
+
+/* ─── Items expandidos ───────────────────────────────────── */
+
+.categoryItems {
+  padding: 0 16px 14px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  padding: 3px 0;
+}
+
+.itemName {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+
+.itemPath {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.itemSize {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+/* ─── Footer com totais e botão de limpar ────────────────── */
+
+.resultsFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.totalSelected {
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+}
+
+.totalSelectedValue {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.cleanBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  background: var(--color-accent);
+  color: #0a0e17;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.cleanBtn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.cleanBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ─── Estado de limpeza (progresso) ──────────────────────── */
+
+.cleaningState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 60px 0;
+}
+
+.progressSection {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.progressBar {
+  flex: 1;
+  height: 8px;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-hover));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progressPercent {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  min-width: 60px;
+  text-align: right;
+}
+
+.cleaningInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.cleaningFreed {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Relatório final ────────────────────────────────────── */
+
+.reportState {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.reportSummary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 0 16px;
+  text-align: center;
+}
+
+.reportIcon {
+  color: var(--color-success);
+}
+
+.reportTitle {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.reportSubtitle {
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+}
+
+.skippedNote {
+  font-size: 12.5px;
+  color: var(--color-warning);
+  margin-top: 4px;
+}
+
+/* ─── Detalhes por item ──────────────────────────────────── */
+
+.reportDetails {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.reportItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reportItem:last-child {
+  border-bottom: none;
+}
+
+.reportItemName {
+  color: var(--color-text-primary);
+  font-weight: 500;
+  flex: 1;
+}
+
+.reportItemFreed {
+  color: var(--color-accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-left: 16px;
+}
+
+.reportItemFiles {
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  margin-left: 12px;
+  min-width: 90px;
+  text-align: right;
+}
+
+/* ─── Painel de processos bloqueadores ───────────────────── */
+
+.lockingPanel {
+  background: rgba(251, 191, 36, 0.05);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.lockingTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-warning);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lockingProcess {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.lockingName {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.lockingPid {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.lockingCount {
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+
+/* ─── Ações do relatório ─────────────────────────────────── */
+
+.reportActions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 8px;
+}

@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Zap, ShieldAlert, Wrench, Server, ClipboardList, Settings,
+  LayoutDashboard, Zap, ShieldAlert, Wrench, Eraser, Server, ClipboardList, Settings,
   Shield,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -18,6 +18,7 @@ const ITEMS: NavItemDef[] = [
   { kind: 'link', path: '/optimizations', label: 'Otimizações',   Icon: Zap },
   { kind: 'link', path: '/privacy',       label: 'Privacidade',   Icon: ShieldAlert },
   { kind: 'link', path: '/maintenance',   label: 'Manutenção',    Icon: Wrench },
+  { kind: 'link', path: '/cleanup',       label: 'Limpeza',       Icon: Eraser },
   { kind: 'link', path: '/services',      label: 'Serviços',      Icon: Server },
   { kind: 'link', path: '/plans',         label: 'Planos',        Icon: ClipboardList },
   { kind: 'sep' },

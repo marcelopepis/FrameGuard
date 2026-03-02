@@ -122,8 +122,8 @@ pub fn run() {
             privacy::disable_background_apps,
             privacy::revert_background_apps,
             // Limpeza
-            cleanup::analyze_cleanup,
-            cleanup::run_cleanup,
+            cleanup::scan_cleanup,
+            cleanup::execute_cleanup,
             // Saúde do Sistema — DISM
             health_check::run_dism_cleanup,
             health_check::run_dism_checkhealth,
