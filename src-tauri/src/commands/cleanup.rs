@@ -929,23 +929,61 @@ fn scan_avancado() -> CleanupCategory {
 // Comandos Tauri
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Evento de progresso emitido durante o scan de categorias.
+#[derive(Debug, Clone, Serialize)]
+struct ScanProgressEvent {
+    category_name: String,
+    category_index: u32,
+    total_categories: u32,
+}
+
 /// Escaneia o sistema e retorna categorias de limpeza com tamanhos reais.
+/// Emite `scan_progress` antes de cada categoria para feedback na UI.
 #[tauri::command]
-pub async fn scan_cleanup() -> Result<CleanupScanResult, String> {
+pub async fn scan_cleanup(app: tauri::AppHandle) -> Result<CleanupScanResult, String> {
+    let handle = app.clone();
     tokio::task::spawn_blocking(move || {
         let start = Instant::now();
         let mut categories: Vec<CleanupCategory> = Vec::new();
+        let total: u32 = 5;
 
+        let _ = handle.emit("scan_progress", ScanProgressEvent {
+            category_name: "Sistema Windows".to_string(),
+            category_index: 1,
+            total_categories: total,
+        });
         categories.push(scan_sistema_windows());
+
+        let _ = handle.emit("scan_progress", ScanProgressEvent {
+            category_name: "GPU Shader Cache".to_string(),
+            category_index: 2,
+            total_categories: total,
+        });
         categories.push(scan_gpu_shader_cache());
 
+        let _ = handle.emit("scan_progress", ScanProgressEvent {
+            category_name: "Browsers".to_string(),
+            category_index: 3,
+            total_categories: total,
+        });
         if let Some(cat) = scan_browsers() {
             categories.push(cat);
         }
+
+        let _ = handle.emit("scan_progress", ScanProgressEvent {
+            category_name: "Aplicativos".to_string(),
+            category_index: 4,
+            total_categories: total,
+        });
         if let Some(cat) = scan_aplicativos() {
             categories.push(cat);
         }
 
+        let _ = handle.emit("scan_progress", ScanProgressEvent {
+            category_name: "Avançado".to_string(),
+            category_index: 5,
+            total_categories: total,
+        });
         categories.push(scan_avancado());
 
         // Remove categorias vazias (exceto avançado que sempre mostra WinSxS)

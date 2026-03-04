@@ -158,9 +158,10 @@ fn now_utc() -> String {
 /// Deve ser chamado **antes** de qualquer modificação no sistema para garantir
 /// que o valor original esteja preservado para uma reversão futura.
 ///
-/// Retorna erro se já existir um backup com status `Applied` para o mesmo
-/// `tweak_id` — isso protege o valor original verdadeiro contra sobrescrita
-/// acidental em caso de chamada duplicada.
+/// Se já existir um backup com status `Applied` para o mesmo `tweak_id`,
+/// atualiza apenas o timestamp e o `applied_value`, preservando o
+/// `original_value` verdadeiro. Isso permite reaplicar tweaks que o Windows
+/// reverteu silenciosamente sem perder a referência para reversão.
 ///
 /// # Parâmetros
 /// - `tweak_id`: identificador único do tweak (ex: `"disable_vbs"`)
@@ -179,13 +180,18 @@ pub fn backup_before_apply(
         .lock()
         .map_err(|_| "Falha ao adquirir lock no estado de backups".to_string())?;
 
-    // Protege o original verdadeiro: não sobrescreve backup ativo existente
+    // Protege o original verdadeiro: não sobrescreve backup ativo existente.
+    // Se o tweak já tem backup Applied, apenas atualiza o timestamp —
+    // isso permite reaplicar tweaks que o Windows reverteu silenciosamente.
     if let Some(existing) = state.backups.get(tweak_id) {
         if existing.status == BackupStatus::Applied {
-            return Err(format!(
-                "Backup para '{}' já existe com status Applied — original preservado",
-                tweak_id
-            ));
+            let mut updated = existing.clone();
+            updated.backed_up_at = now_utc();
+            updated.applied_value = applied_value;
+            state.backups.insert(tweak_id.to_string(), updated);
+            state.last_modified = now_utc();
+            save_to_disk(&state)?;
+            return Ok(());
         }
     }
 

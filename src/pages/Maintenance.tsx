@@ -4,7 +4,7 @@
 // agrupando as ações em três seções: limpeza rápida, DISM e verificação de disco.
 
 import {
-  Globe, Trash2,
+  Globe,
   ShieldCheck, Search, Wrench, Package,
   FileCheck, HardDrive, Zap,
 } from 'lucide-react';
@@ -54,26 +54,6 @@ O flush força o Windows a consultar os servidores DNS configurados na próxima 
     estimatedDuration: '< 1 segundo',
     eventChannel: 'dns_flush_progress',
     command: 'flush_dns',
-    category: 'limpeza',
-  },
-  {
-    id: 'temp_cleanup',
-    name: 'Limpeza de Temporários',
-    Icon: Trash2,
-    description: 'Remove arquivos temporários de %TEMP%, Windows\\Temp e do cache do Windows Update. Arquivos em uso são ignorados.',
-    technicalDetails:
-`Remove arquivos de três locais:
-
-• %TEMP%                                   — Temporários do usuário atual (instaladores, extrações, caches)
-• C:\\Windows\\Temp                         — Temporários do sistema e serviços Windows
-• C:\\Windows\\SoftwareDistribution\\Download — Cache do Windows Update (atualizações já instaladas)
-
-Arquivos em uso são pulados silenciosamente. A pasta SoftwareDistribution\\Download é recriada automaticamente pelo Windows Update quando necessário.
-
-O espaço liberado é calculado com precisão comparando o tamanho antes e depois da remoção.`,
-    estimatedDuration: '30 segundos–3 minutos',
-    eventChannel: 'temp_cleanup_progress',
-    command: 'run_temp_cleanup',
     category: 'limpeza',
   },
 

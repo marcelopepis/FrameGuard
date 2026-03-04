@@ -1,7 +1,6 @@
 // Página de Configurações do FrameGuard.
 //
-// Seções: Geral (preferências de UI), Backup e Dados (export/import/backups),
-// Sobre (versão, licença, repositório).
+// Seções: Geral (preferências de UI), Backup e Dados (export/import/backups).
 
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -9,9 +8,9 @@ import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { dataDir as getDataDir } from '@tauri-apps/api/path';
 import {
-  Download, Upload, FolderOpen, Shield, Github,
+  Download, Upload, FolderOpen,
   ChevronDown, ChevronUp,
-  Loader2, MonitorCog, Database, Info,
+  Loader2, MonitorCog, Database,
 } from 'lucide-react';
 import styles from './Settings.module.css';
 import { useToast } from '../contexts/ToastContext';
@@ -57,9 +56,6 @@ interface TweakInfo {
 }
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
-
-const APP_VERSION = '0.1.0';
-const GITHUB_URL = 'https://github.com/marcelopepis/FrameGuard';
 
 const TWEAK_INFO_COMMANDS = [
   'get_wallpaper_compression_info',
@@ -274,11 +270,6 @@ export default function Settings() {
   // ── Abrir pasta de dados no Explorer
   async function handleOpenDataDir() {
     try { await openPath(dataDirPath); } catch {}
-  }
-
-  // ── Abrir URL externa
-  async function handleOpenUrl(url: string) {
-    try { await openPath(url); } catch {}
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -609,40 +600,6 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* ════════ SEÇÃO: SOBRE ════════ */}
-        <section className={styles.section}>
-          <SectionHeading Icon={Info} title="Sobre" />
-
-          <div className={styles.card}>
-
-            <div className={styles.aboutHeader}>
-              <div className={styles.aboutLogo}>
-                <Shield size={22} />
-              </div>
-              <div>
-                <div className={styles.aboutName}>FrameGuard</div>
-                <div className={styles.aboutVersion}>Versão {APP_VERSION} · GPL v3</div>
-              </div>
-            </div>
-
-            <div className={styles.divider} />
-
-            <button
-              className={styles.githubLink}
-              onClick={() => handleOpenUrl(GITHUB_URL)}
-            >
-              <Github size={14} />
-              Repositório no GitHub
-            </button>
-
-            <div className={styles.divider} />
-
-            <p className={styles.aboutNote}>
-              Veja o manifesto completo, informações do projeto e verifique atualizações
-              na página <strong>Sobre</strong> no menu lateral.
-            </p>
-          </div>
-        </section>
 
       </div>
     </div>

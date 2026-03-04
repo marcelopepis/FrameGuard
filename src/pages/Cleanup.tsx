@@ -47,6 +47,11 @@ export default function Cleanup() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<CleanupProgressEvent | null>(null);
   const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null);
+  const [scanProgress, setScanProgress] = useState<{
+    categoryName: string;
+    categoryIndex: number;
+    totalCategories: number;
+  } | null>(null);
 
   const { isRunning, startTask, endTask } = useGlobalRunning();
   const { showToast } = useToast();
@@ -54,6 +59,20 @@ export default function Cleanup() {
   // ── Scan ──────────────────────────────────────────────────
   const handleScan = useCallback(async () => {
     setPhase('scanning');
+    setScanProgress(null);
+
+    const unlisten = await listen<{
+      category_name: string;
+      category_index: number;
+      total_categories: number;
+    }>('scan_progress', (event) => {
+      setScanProgress({
+        categoryName: event.payload.category_name,
+        categoryIndex: event.payload.category_index,
+        totalCategories: event.payload.total_categories,
+      });
+    });
+
     try {
       const result = await invoke<CleanupScanResult>('scan_cleanup');
       setScanResult(result);
@@ -73,6 +92,9 @@ export default function Cleanup() {
     } catch (e) {
       showToast('error', 'Erro ao escanear', String(e));
       setPhase('initial');
+    } finally {
+      unlisten();
+      setScanProgress(null);
     }
   }, [showToast]);
 
@@ -178,7 +200,24 @@ export default function Cleanup() {
       {phase === 'scanning' && (
         <div className={styles.scanningState}>
           <Loader2 size={28} className={styles.spinner} />
-          <span>Escaneando sistema...</span>
+          {scanProgress ? (
+            <>
+              <span>Escaneando: {scanProgress.categoryName}</span>
+              <span className={styles.scanCounter}>
+                {scanProgress.categoryIndex} de {scanProgress.totalCategories}
+              </span>
+              <div className={styles.progressBar} style={{ width: 200, marginTop: 8 }}>
+                <div
+                  className={styles.progressFill}
+                  style={{
+                    width: `${(scanProgress.categoryIndex / scanProgress.totalCategories) * 100}%`,
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            <span>Iniciando escaneamento...</span>
+          )}
         </div>
       )}
 

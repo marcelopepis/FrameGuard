@@ -210,7 +210,7 @@ pub fn pre_warm_gpu_cache() {
     {
         return; // Já em andamento
     }
-    tokio::spawn(async {
+    tauri::async_runtime::spawn(async {
         let info = tokio::task::spawn_blocking(collect_gpu_info)
             .await
             .unwrap_or(GpuInfo {

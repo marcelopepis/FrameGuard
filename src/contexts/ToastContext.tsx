@@ -57,8 +57,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     type: ToastType,
     title: string,
     message?: string,
-    duration = 4000,
+    duration?: number,
   ) => {
+    const defaultDuration = type === 'error' ? 8000 : 6000;
+    const finalDuration = duration ?? defaultDuration;
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     setToasts(prev => {
@@ -66,11 +68,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const list = prev.filter(t => !t.dismissing).length >= MAX_TOASTS
         ? prev.slice(1)
         : prev;
-      return [...list, { id, type, title, message, duration, dismissing: false }];
+      return [...list, { id, type, title, message, duration: finalDuration, dismissing: false }];
     });
 
-    if (duration > 0) {
-      const timer = setTimeout(() => dismissToast(id), duration);
+    if (finalDuration > 0) {
+      const timer = setTimeout(() => dismissToast(id), finalDuration);
       timers.current.set(id, timer);
     }
   }, [dismissToast]);

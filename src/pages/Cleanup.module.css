@@ -92,6 +92,12 @@
   font-size: 13.5px;
 }
 
+.scanCounter {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
 .spinner {
   animation: spin 1s linear infinite;
   color: var(--color-accent);
