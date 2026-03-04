@@ -205,3 +205,9 @@ Este projeto está licenciado sob a [GNU General Public License v3.0](LICENSE).
 <p align="center">
   Feito por <a href="https://github.com/marcelopepis"><strong>Marcelo Pepis</strong></a>
 </p>
+
+<p align="center">
+  <a href="https://github.com/marcelopepis"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a>
+  <a href="https://www.linkedin.com/in/marcelo-pepis/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a>
+  <a href="https://www.instagram.com/marcelo_pepis/"><img src="https://img.shields.io/badge/Instagram-E4405F?style=for-the-badge&logo=instagram&logoColor=white" alt="Instagram"></a>
+</p>
