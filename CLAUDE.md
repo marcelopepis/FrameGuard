@@ -7,11 +7,11 @@ Informações que o Claude Code precisa saber ao executar qualquer prompt:
 - Stack: Tauri (Rust backend) + React (TypeScript frontend)
 - Estrutura: Backend em `src-tauri/src/`, Frontend em `src/`
 - Padrões existentes: OnceLock<Mutex<T>>, comandos async com spawn_blocking, CSS Modules, ícones Lucide
-- Keep-alive: App.tsx renderiza todas as páginas simultaneamente, escondendo inativas com display:none
+- Renderização condicional: App.tsx renderiza APENAS a página ativa (sem keep-alive). Páginas carregam dados somente quando navegadas pela primeira vez (lazy loading via useRef)
 - Planos built-in: IDs prefixados com "builtin_" e definidos em plan_manager.rs
 - Persistência: JSON em %APPDATA%\FrameGuard/ (plans.json, backups.json, activity_log.json)
 - O app roda em Windows PT-BR — detecção baseada em texto deve ser agnóstica de idioma
-- Correções recentes já aplicadas: activity log integration, dashboard cache com TTL/OnceLock, file locks com Restart Manager API
+- Correções recentes: activity log, dashboard cache TTL/OnceLock, file locks (Restart Manager API), comandos async com spawn_blocking, detecção de GPU via registro direto (sem PowerShell), Power Plan por GUID (cross-locale)
 - Features recentes: WelcomeModal (primeira execução), busca global na sidebar (Ctrl+K), filtro por hardware/vendor, remoção de bloatware UWP, ponto de restauração automático, página de cleanup categorizado, página educacional (Learn)
 
 Ao gerar código novo:
@@ -72,7 +72,7 @@ Ao gerar código novo:
 ```
 FrameGuard/
 ├── src/                           # Frontend React/TS
-│   ├── App.tsx                    # Router + keep-alive (todas as 10 páginas montadas)
+│   ├── App.tsx                    # Router + renderização condicional (apenas página ativa montada)
 │   ├── main.tsx                   # Entry point
 │   ├── components/
 │   │   ├── ActionCard/            # Card de ação com progresso, logs, resultado
@@ -266,7 +266,7 @@ interface TweakInfo {
 | `/about`         | About          | Versão, créditos, verificação de atualizações    |
 | `/settings`      | Settings       | Export/import .fg, backups, config               |
 
-**Keep-alive:** Todas as páginas ficam sempre montadas (`display: none` quando inativas) para preservar estado React, listeners e execuções em andamento.
+**Renderização condicional:** Apenas a página ativa é montada (`pathname === path ? <Page /> : null`). Páginas com dados pesados usam `useRef` para carregar apenas na primeira visita.
 
 ## Eventos Tauri (Backend → Frontend)
 
@@ -464,19 +464,97 @@ npm run tauri     # CLI Tauri (e.g., npm run tauri build)
 - Comparação semântica de versões
 - Exibe release notes da versão mais recente
 
+## Detecção e Localização
+
+### Power Plan
+
+- Detecção por GUID, NUNCA por nome (Windows PT-BR tem nomes diferentes)
+- Ultimate Performance: `e9a42b02-d5df-448d-aa00-03f14749eb61`
+- High Performance: `8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c`
+- Nome extraído do output de `powercfg /getactivescheme` entre parênteses
+
+### Game DVR (3 estados)
+
+- `disabled`: DVR desabilitado por política ou GameDVR_Enabled=0
+- `available`: DVR ativo mas sem gravação em background (HistoricalCaptureEnabled=0)
+- `recording`: DVR ativo COM gravação em background (HistoricalCaptureEnabled=1)
+- Somente `recording` impacta performance de forma mensurável
+
+### GPU
+
+- Detecção via registro direto (sem PowerShell/WMI)
+- Path: `HKLM\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\000X`
+- VRAM: `HardwareInformation.qwMemorySize` (QWORD, 64-bit — necessário para GPUs >4GB)
+- Vendor: inferido do nome (nvidia/geforce → nvidia, amd/radeon → amd)
+
 ## Cache e Performance
 
 | Item                 | Estratégia                    | TTL      |
 |----------------------|-------------------------------|----------|
 | StaticHwInfo         | `OnceLock` (cache permanente) | Sessão   |
+| GpuInfo              | `OnceLock` (pre-warm setup)   | Sessão   |
 | SystemStatus         | `OnceLock<Mutex>` + TTL       | 5s       |
+| SystemSummary        | `OnceLock` (cache permanente) | Sessão   |
 | Backups/Plans/Log    | `OnceLock<Mutex>` + arquivo   | Persistente |
 | Restore Point        | `Mutex<Option<Instant>>`      | 24h      |
-| GPU pre-warm         | `OnceLock` (setup)            | Sessão   |
 | UI event buffer      | Flush a cada 80ms             | —        |
 | Log DOM              | Max 500 linhas                | —        |
-| CPU/RAM polling      | setInterval                   | 2s       |
+| CPU/RAM polling      | setInterval (delay até HW OK) | 3s       |
 | Status/Activity poll | setInterval                   | 10s      |
+
+## Performance e Inicialização
+
+Princípios críticos para não degradar a experiência de abertura do app:
+
+### Renderização condicional (não keep-alive)
+
+- App.tsx renderiza apenas a página ativa com `pathname === path ? <Page /> : null`
+- Páginas com dados pesados (Optimizations, Privacy, Services) usam `useRef` para carregar apenas na primeira vez que ficam visíveis
+- Dashboard é a exceção: carrega no mount porque é sempre a primeira página
+
+### Comandos async obrigatórios
+
+- **Todo** comando `#[tauri::command]` que faz I/O (registro, PowerShell, filesystem) DEVE ser `pub async fn` com `tokio::task::spawn_blocking`
+- Comandos `pub fn` (sync) rodam na main thread do Tauri e **congelam a WebView inteira**
+- Template:
+
+```rust
+  #[tauri::command]
+  pub async fn get_example_info() -> Result<TweakInfo, String> {
+      tokio::task::spawn_blocking(|| {
+          // lógica aqui
+          Ok(TweakInfo { ... })
+      })
+      .await
+      .map_err(|e| e.to_string())?
+  }
+```
+
+### Evitar PowerShell quando possível
+
+- Registro do Windows: usar `winreg` diretamente (~1ms vs ~2s via PowerShell)
+- GPU info: ler de `HKLM\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}` (~50ms vs ~3s via WMI)
+- Power Plan: chamar `powercfg.exe` diretamente via `run_command`, sem wrapper PowerShell (~50ms vs ~2s)
+- PowerShell reservado para: DISM, SFC, operações que genuinamente precisam de scripts
+
+### Pre-warm de caches
+
+- `pre_warm_all_caches()` chamado no setup do Tauri
+- Popula GPU, CPU/RAM, SystemSummary e SystemStatus em background
+- Dashboard mostra skeleton enquanto dados chegam
+
+### Polling de CPU/RAM
+
+- Inicia SOMENTE após dados de HW carregarem (`useEffect` depende de `hw`)
+- Intervalo de 3s (suficiente para delta preciso)
+- `try_lock` no Mutex evita enfileiramento de medições
+
+## Toast e Feedback
+
+- Toasts de sucesso/info: 6 segundos de duração
+- Toasts de erro: 8 segundos de duração
+- Toasts persistentes: `duration=0` (não fecha automaticamente)
+- Implementação: `ToastContext` com `useCallback`, animação de dismiss com 300ms
 
 ## Adicionando um Novo Tweak (Checklist)
 
@@ -488,12 +566,27 @@ npm run tauri     # CLI Tauri (e.g., npm run tauri build)
    - (opcional) `restore_{tweak}_default() -> Result<(), String>`
 2. Registrar no `tauri::generate_handler![]` em `lib.rs`
 3. Usar `backup_before_apply()` antes de alterar registro/sistema
-4. Se async necessário: `tokio::task::spawn_blocking`
+4. OBRIGATÓRIO: usar `pub async fn` + `tokio::task::spawn_blocking` — comandos sync congelam a UI
 
 ### Frontend (React)
 1. Adicionar entrada no array de tweaks da página correspondente
 2. TweakCard já lida com apply/revert/restore automaticamente
 3. Adicionar `tweak_id` nos planos built-in se relevante (`plan_manager.rs`)
+
+### Planos Built-in
+
+- Se o tweak deve aparecer em planos oficiais, adicionar o ID em `plan_manager.rs`
+- CURRENT_BUILTIN_VERSION deve ser incrementado para trigger auto-update dos planos do usuário
+- Ordem nos planos: limpeza primeiro, depois otimizações, depois verificações
+
+### Testes manuais (pré-release)
+
+- [ ] Tweak aplica sem erro
+- [ ] Tweak reverte sem erro
+- [ ] Backup é criado corretamente (verificar em Configurações > Ver backups)
+- [ ] Reaplicar tweak já aplicado não dá erro (backup update)
+- [ ] Filtro de hardware funciona (tweak some se hardware incompatível)
+- [ ] Busca global encontra o tweak (verificar searchIndex.ts)
 
 ## Adicionando uma Nova Ação de Manutenção (Checklist)
 

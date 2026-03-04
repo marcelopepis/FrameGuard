@@ -22,16 +22,18 @@
   <a href="#screenshots">Screenshots</a> ·
   <a href="#features">Features</a> ·
   <a href="#instalação">Instalação</a> ·
-  <a href="#contribuindo">Contribuindo</a>
+  <a href="#roadmap">Roadmap</a>
 </p>
 
 ---
 
 ## O que é o FrameGuard?
 
-O FrameGuard é uma ferramenta **gratuita e open-source** que reúne otimizações, manutenção e limpeza do Windows 11 em um único lugar — sem bullshit, sem snake oil, sem telemetria.
+O FrameGuard é uma ferramenta **100% gratuita e open-source** que reúne otimizações, manutenção e limpeza do Windows 11 em um único lugar.
 
-Cada tweak tem classificação de evidência (comprovado, plausível ou não comprovado), detalhes técnicos completos e reversão com um clique. Você decide o que aplica, sabendo exatamente o que vai acontecer.
+Sem versão PRO, sem funcionalidade trancada atrás de paywall, sem telemetria, sem ads. Todo o código é aberto, auditável, e sempre será.
+
+Cada tweak tem classificação de evidência (comprovado, plausível ou não comprovado), detalhes técnicos completos e reversão com um clique. Você decide o que aplica, sabendo exatamente o que vai acontecer no seu sistema.
 
 ## Screenshots
 
@@ -82,7 +84,7 @@ Cada tweak tem classificação de evidência (comprovado, plausível ou não com
 **Planos de Execução**
 - Combine múltiplos tweaks em rotinas reutilizáveis
 - 4 planos oficiais incluídos: Manutenção Básica, Saúde Completa, Otimização Gaming, Privacidade e Debloat
-- Criação de planos personalizados com drag-and-drop
+- Criação de planos personalizados
 
 **Mais**
 - Busca global (`Ctrl+K`) para encontrar qualquer tweak, ação ou plano
@@ -113,6 +115,27 @@ npm run tauri build
 ```
 
 O instalador NSIS será gerado em `src-tauri/target/release/bundle/nsis/`.
+
+## Roadmap
+
+O FrameGuard está em desenvolvimento ativo. Próximos passos planejados:
+
+**v1.1**
+- Tema claro sincronizado com a preferência do Windows
+- Revisão de tweaks: adicionar novos com evidência e remover os que se provarem ineficazes
+- Animações e transições refinadas
+
+**v1.2**
+- Refactoring de módulos grandes (optimizations.rs, cleanup.rs, Plans.tsx)
+- Mais mitos e explicações na página educacional
+- Recomendações por perfil de hardware
+
+**v2.0**
+- Publicação na Microsoft Store
+- Auto-updater nativo
+- Perfis de otimização compartilháveis pela comunidade
+
+Sugestões são bem-vindas — abra uma [Issue](https://github.com/marcelopepis/FrameGuard/issues/new/choose).
 
 ## Desenvolvimento
 
@@ -159,17 +182,9 @@ FrameGuard/
 
 ## Contribuindo
 
-1. Fork o repositório
-2. Crie uma branch (`git checkout -b feature/minha-feature`)
-3. Commit suas alterações (`git commit -m 'feat: minha feature'`)
-4. Push para a branch (`git push origin feature/minha-feature`)
-5. Abra um Pull Request
+Pull requests são bem-vindos. Consulte o [CLAUDE.md](CLAUDE.md) para detalhes sobre arquitetura e convenções.
 
-Consulte o [CLAUDE.md](CLAUDE.md) para detalhes sobre arquitetura, convenções e checklists de implementação.
-
-### Sugestões de tweaks
-
-O FrameGuard só inclui tweaks com evidência real de impacto. Para sugerir um novo tweak, use o [template de sugestão](https://github.com/marcelopepis/FrameGuard/issues/new?template=tweak_suggestion.yml) e inclua detalhes técnicos + evidência.
+Para sugerir um novo tweak, use o [template de sugestão](https://github.com/marcelopepis/FrameGuard/issues/new?template=tweak_suggestion.yml). O FrameGuard só inclui tweaks com evidência real de impacto.
 
 ## Licença
 
@@ -178,13 +193,13 @@ Este projeto está licenciado sob a [GNU General Public License v3.0](LICENSE).
 ---
 
 <p align="center">
-  <strong>Apoie o projeto</strong><br>
-  O FrameGuard é gratuito e sempre será. Se ele te ajudou,<br>
-  considere um PIX de qualquer valor — todo apoio conta.
+  O FrameGuard é e sempre será <strong>100% gratuito</strong> — sem versão PRO, sem paywall, sem pegadinha.<br>
+  Se o projeto te ajudou e você quiser contribuir com qualquer valor, o PIX está aberto.<br>
+  Totalmente opcional — o app funciona igual pra todo mundo.
 </p>
 
 <p align="center">
-  <img src="src/midia/qrcode.png" alt="PIX QR Code" width="180">
+  <img src="src/midia/qrcode.png" alt="PIX" width="160">
 </p>
 
 <p align="center">
