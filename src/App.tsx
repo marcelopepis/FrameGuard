@@ -1,9 +1,10 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { BrowserRouter, useLocation, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import { Dashboard, Optimizations, Privacy, Maintenance, Cleanup, Services, Plans, Settings } from './pages';
+import { Dashboard, Optimizations, Privacy, Maintenance, Cleanup, Services, Plans, Learn, About, Settings } from './pages';
 import { GlobalRunningProvider } from './contexts/RunningContext';
 import { ToastProvider } from './contexts/ToastContext';
+import WelcomeModal from './components/WelcomeModal/WelcomeModal';
 
 // Todas as rotas declaradas aqui. A ordem determina a renderização no DOM.
 const ROUTES = [
@@ -14,6 +15,8 @@ const ROUTES = [
   { path: '/cleanup',       Page: Cleanup },
   { path: '/services',      Page: Services },
   { path: '/plans',         Page: Plans },
+  { path: '/learn',         Page: Learn },
+  { path: '/about',         Page: About },
   { path: '/settings',      Page: Settings },
 ];
 
@@ -43,11 +46,16 @@ function Pages() {
 }
 
 export default function App() {
+  const [showWelcome, setShowWelcome] = useState(
+    () => localStorage.getItem('fg.firstRunSeen') !== 'true'
+  );
+
   return (
     <BrowserRouter>
       <GlobalRunningProvider>
         <ToastProvider>
           <Pages />
+          {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
         </ToastProvider>
       </GlobalRunningProvider>
     </BrowserRouter>

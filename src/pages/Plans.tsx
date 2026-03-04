@@ -11,7 +11,7 @@ import {
   Plus, Play, Pencil, Trash2, GripVertical,
   CheckCircle2, XCircle, Clock, MinusCircle,
   Loader2, X, ChevronDown, ChevronUp,
-  ClipboardList, Shield, Copy,
+  ClipboardList, Shield, Copy, CalendarClock, Users,
   BookOpen, HeartPulse, Gamepad2, Wrench, Lock, ArrowRight, Info,
 } from 'lucide-react';
 import styles from './Plans.module.css';
@@ -962,6 +962,31 @@ function PlanViewModal({ plan, onClose, onRun, onDuplicate, isCompatible, getVen
             <X size={16} strokeWidth={2} />
           </button>
         </div>
+
+        {/* Badges de metadata */}
+        {(plan.recommended_frequency || plan.target_audience) && (
+          <div className={styles.viewMetaBadges}>
+            {plan.recommended_frequency && (
+              <span className={styles.viewMetaBadge}>
+                <CalendarClock size={12} />
+                {plan.recommended_frequency}
+              </span>
+            )}
+            {plan.target_audience && (
+              <span className={styles.viewMetaBadge}>
+                <Users size={12} />
+                {plan.target_audience}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Descrição expandida */}
+        {plan.long_description && (
+          <div className={styles.viewLongDesc}>
+            {plan.long_description}
+          </div>
+        )}
 
         {/* Lista de tarefas */}
         <div className={styles.viewList}>

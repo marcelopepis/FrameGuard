@@ -1,0 +1,208 @@
+/* ─── Layout da página ────────────────────────────────────── */
+
+.page {
+  padding: 36px 40px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+/* ─── Banner informativo ──────────────────────────────────── */
+
+.infoBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 18px;
+  background: rgba(34, 211, 238, 0.04);
+  border: 1px solid rgba(34, 211, 238, 0.08);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.infoBanner > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-accent);
+  opacity: 0.6;
+}
+
+/* ─── Lista de mitos ──────────────────────────────────────── */
+
+.mythList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Card de mito ────────────────────────────────────────── */
+
+.mythCard {
+  background: rgba(148, 163, 184, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition-normal);
+}
+
+.mythCard:hover {
+  border-color: var(--color-border-hover);
+}
+
+.mythCardOpen {
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+/* ─── Toggle (header do card) ─────────────────────────────── */
+
+.mythToggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.mythToggle:hover {
+  background: rgba(148, 163, 184, 0.04);
+}
+
+.mythToggleLeft {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.mythName {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.mythChevron {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.mythChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* ─── Conteúdo expandido ──────────────────────────────────── */
+
+.mythContent {
+  padding: 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: mythSlideIn 0.2s ease;
+}
+
+@keyframes mythSlideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.mythParagraph {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.mythParagraph:first-child {
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ─── Badge base ──────────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid;
+  width: fit-content;
+  letter-spacing: 0.1px;
+}
+
+/* ─── Variantes de badge ──────────────────────────────────── */
+
+.badgeMito {
+  background: rgba(34, 211, 238, 0.07);
+  border-color: rgba(34, 211, 238, 0.22);
+  color: var(--color-accent);
+}
+
+.badgePerigoso {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+.badgeObsoleto {
+  background: rgba(251, 191, 36, 0.07);
+  border-color: rgba(251, 191, 36, 0.24);
+  color: #fbbf24;
+}
+
+.badgeSnakeOil {
+  background: rgba(148, 163, 184, 0.07);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: var(--color-text-muted);
+}
+
+/* ─── Link de fonte ───────────────────────────────────────── */
+
+.sourceLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-accent);
+  text-decoration: none;
+  width: fit-content;
+  transition: color var(--transition-fast);
+}
+
+.sourceLink:hover {
+  color: var(--color-accent-hover);
+}

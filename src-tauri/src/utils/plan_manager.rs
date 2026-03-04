@@ -51,6 +51,15 @@ pub struct Plan {
     /// que o usuário delete o `plans.json`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub builtin_version: Option<u32>,
+    /// Descrição longa / mini-tutorial do plano (apenas built-in)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub long_description: Option<String>,
+    /// Frequência recomendada de execução (ex: "1x por mês")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recommended_frequency: Option<String>,
+    /// Público-alvo (ex: "Para todos", "Para gamers")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_audience: Option<String>,
 }
 
 /// Estrutura raiz de `plans.json` — envolve todos os planos com metadados de versão.
@@ -109,7 +118,8 @@ const BUILTIN_PRIVACIDADE_DEBLOAT: &str = "builtin_privacidade_debloat";
 ///   1 — versão inicial (planos criados sem campo builtin_version)
 ///   2 — reordenação do Saúde Completa (limpeza antes de scans)
 ///   3 — adicionado disable_nvidia_telemetry ao gaming plan (auto-skip por hardware)
-const CURRENT_BUILTIN_VERSION: u32 = 3;
+///   4 — adicionado long_description, recommended_frequency e target_audience
+const CURRENT_BUILTIN_VERSION: u32 = 4;
 
 /// Injeta planos built-in que ainda não existam no estado, e atualiza
 /// planos com versão inferior à `CURRENT_BUILTIN_VERSION`.
@@ -138,6 +148,9 @@ fn seed_builtin_plans(state: &mut PlansFile) {
         name: &'static str,
         description: &'static str,
         tweak_ids: &'static [&'static str],
+        long_description: &'static str,
+        recommended_frequency: &'static str,
+        target_audience: &'static str,
     }
 
     let definitions = [
@@ -146,6 +159,13 @@ fn seed_builtin_plans(state: &mut PlansFile) {
             name: "Manutenção Básica",
             description: "Limpeza rápida: flush DNS, temporários e TRIM de SSDs",
             tweak_ids: &["flush_dns", "temp_cleanup", "ssd_trim"],
+            long_description: "Este plano executa uma limpeza rápida do seu sistema:\n\n\
+                1. Flush DNS — limpa o cache de resolução de nomes para resolver problemas de conexão\n\
+                2. Limpeza de temporários — remove arquivos temporários do Windows e cache de apps\n\
+                3. TRIM de SSDs — otimiza os SSDs para manter a velocidade de gravação\n\n\
+                Recomendado: Execute semanalmente ou quando sentir que o sistema está lento. Execução rápida (~1-2 minutos).",
+            recommended_frequency: "Semanalmente ou quando notar lentidão",
+            target_audience: "Para todos",
         },
         BuiltinDef {
             id: BUILTIN_SAUDE_COMPLETA,
@@ -164,6 +184,19 @@ fn seed_builtin_plans(state: &mut PlansFile) {
                 "sfc_scannow",
                 "chkdsk",
             ],
+            long_description: "Este plano executa uma verificação completa do seu sistema:\n\n\
+                1. Limpeza de temporários — remove arquivos temp e cache\n\
+                2. Flush DNS — limpa cache de resolução DNS\n\
+                3. TRIM de SSDs — otimiza a velocidade dos SSDs\n\
+                4. DISM CheckHealth — verificação rápida de integridade do component store\n\
+                5. DISM ScanHealth — scan profundo do component store\n\
+                6. DISM RestoreHealth — repara componentes corrompidos via Windows Update\n\
+                7. DISM ComponentCleanup — remove versões antigas de componentes do Windows\n\
+                8. SFC ScanNow — verifica e repara arquivos protegidos do sistema\n\
+                9. Check Disk — verifica erros no sistema de arquivos do disco\n\n\
+                Recomendado: Execute uma vez por mês, ou quando sentir que o Windows está lento ou instável. A execução completa pode levar 10-20 minutos.",
+            recommended_frequency: "1x por mês ou quando o Windows parecer instável",
+            target_audience: "Para todos",
         },
         BuiltinDef {
             id: BUILTIN_OTIMIZACAO_GAMING,
@@ -179,6 +212,18 @@ fn seed_builtin_plans(state: &mut PlansFile) {
                 "enable_ultimate_performance",
                 "disable_nvidia_telemetry", // auto-skip em hardware não-NVIDIA
             ],
+            long_description: "Configura tweaks essenciais para máximo desempenho em jogos:\n\n\
+                1. HAGS — transfere scheduling de GPU para o hardware, reduzindo latência\n\
+                2. Game Mode — prioriza CPU e GPU para o jogo em execução\n\
+                3. VBS desabilitado — remove virtualização que pode custar 5-10% de FPS\n\
+                4. Game DVR desabilitado — remove gravação em background que consome GPU\n\
+                5. Timer 1ms — melhora frame pacing e input lag em monitores 144Hz+\n\
+                6. Aceleração do mouse — desabilita para movimentação 1:1 (raw input)\n\
+                7. Ultimate Performance — plano de energia sem throttling de CPU\n\
+                8. Telemetria NVIDIA — remove coleta de dados da NVIDIA (auto-ignorado em AMD/Intel)\n\n\
+                Recomendado: Execute após instalar ou reinstalar o Windows e drivers de GPU. Reinicie o PC após executar.",
+            recommended_frequency: "1x após instalar drivers ou reinstalar o Windows",
+            target_audience: "Para gamers",
         },
         BuiltinDef {
             id: BUILTIN_PRIVACIDADE_DEBLOAT,
@@ -191,6 +236,15 @@ fn seed_builtin_plans(state: &mut PlansFile) {
                 "disable_background_apps",
                 "disable_bing_search",
             ],
+            long_description: "Remove telemetria e integração com serviços Microsoft:\n\n\
+                1. Telemetria Windows — reduz coleta de dados para o mínimo (3 chaves de registro)\n\
+                2. Copilot / Cortana — desabilita assistentes IA e voz integrados\n\
+                3. Content Delivery — bloqueia instalação silenciosa de apps \"sugeridos\"\n\
+                4. Background Apps — impede apps UWP de executar em segundo plano\n\
+                5. Bing no Menu Iniciar — remove resultados web da pesquisa do Menu Iniciar\n\n\
+                Recomendado: Execute uma vez após instalar o Windows. Após grandes updates (como 24H2), re-execute pois a Microsoft pode reativar configurações.",
+            recommended_frequency: "1x após instalar o Windows; re-executar após updates",
+            target_audience: "Para todos",
         },
     ];
 
@@ -229,6 +283,9 @@ fn seed_builtin_plans(state: &mut PlansFile) {
                     items: items(def.tweak_ids),
                     builtin: true,
                     builtin_version: Some(CURRENT_BUILTIN_VERSION),
+                    long_description: Some(def.long_description.to_string()),
+                    recommended_frequency: Some(def.recommended_frequency.to_string()),
+                    target_audience: Some(def.target_audience.to_string()),
                 },
             );
             modified = true;
@@ -327,6 +384,9 @@ pub fn create_plan(
         items,
         builtin: false,
         builtin_version: None,
+        long_description: None,
+        recommended_frequency: None,
+        target_audience: None,
     };
 
     state.plans.insert(plan.id.clone(), plan.clone());
@@ -424,6 +484,9 @@ pub fn duplicate_plan(plan_id: &str) -> Result<Plan, String> {
         items: source.items,
         builtin: false,
         builtin_version: None,
+        long_description: source.long_description,
+        recommended_frequency: source.recommended_frequency,
+        target_audience: source.target_audience,
     };
 
     state.plans.insert(duplicate.id.clone(), duplicate.clone());

@@ -6,4 +6,6 @@ export { default as Maintenance } from './Maintenance';
 export { default as Cleanup } from './Cleanup';
 export { default as Services } from './Services';
 export { default as Plans } from './Plans';
+export { default as Learn } from './Learn';
+export { default as About } from './About';
 export { default as Settings } from './Settings';

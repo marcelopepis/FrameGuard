@@ -19,7 +19,8 @@
       "Bash(printf:*)",
       "Bash(dir:*)",
       "Bash(xargs grep -l \"invoke\\\\|commands\")",
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "Bash(grep -r \"0.1.0\" /i/FrameGuard/src*)"
     ]
   }
 }

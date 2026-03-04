@@ -317,6 +317,11 @@ export default function Dashboard() {
             />
           ))}
         </div>
+        {builtinPlans !== null && (
+          <button className={styles.viewAllLink} onClick={() => navigate('/plans')}>
+            Ver todos os planos
+          </button>
+        )}
       </section>
 
       {/* Modal de execução (planos rápidos) */}
@@ -435,6 +440,7 @@ interface QuickPlanCardProps {
 function QuickPlanCard({ plan, onView, onRun, disabled, isCompatible }: QuickPlanCardProps) {
   const Icon = guessPlanIcon(plan.name);
   const enabledCount = plan.items.filter(i => i.enabled && isCompatible(i.tweak_id)).length;
+  const lastExec = plan.last_executed ? timeAgo(plan.last_executed) : 'nunca';
 
   return (
     <div className={styles.quickPlanCard} onClick={onView} role="button" tabIndex={0}>
@@ -443,9 +449,16 @@ function QuickPlanCard({ plan, onView, onRun, disabled, isCompatible }: QuickPla
       </div>
       <div className={styles.quickPlanInfo}>
         <span className={styles.quickPlanName}>{plan.name}</span>
-        <span className={styles.quickPlanCount}>
-          {enabledCount} {enabledCount === 1 ? 'item' : 'itens'}
-        </span>
+        <div className={styles.quickPlanMeta}>
+          <span className={styles.quickPlanLastExec}>
+            Última: {lastExec}
+          </span>
+          {plan.recommended_frequency && (
+            <span className={styles.quickPlanFreq}>
+              {plan.recommended_frequency}
+            </span>
+          )}
+        </div>
       </div>
       <button
         className={styles.quickPlanRun}

@@ -2,7 +2,7 @@
 mod commands;
 mod utils;
 
-use commands::{activity, bloatware, cleanup, export_import, health_check, optimizations, plans, privacy, restore_point, services, system_info};
+use commands::{about, activity, bloatware, cleanup, export_import, health_check, optimizations, plans, privacy, restore_point, services, system_info};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -164,6 +164,8 @@ pub fn run() {
             // Remoção de Bloatware UWP
             bloatware::get_installed_uwp_apps,
             bloatware::remove_uwp_apps,
+            // Sobre / Atualizações
+            about::check_for_updates,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o FrameGuard");

@@ -59,7 +59,7 @@ interface TweakInfo {
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
 const APP_VERSION = '0.1.0';
-const GITHUB_URL = 'https://github.com/marcesengel/frameguard';
+const GITHUB_URL = 'https://github.com/marcelopepis/FrameGuard';
 
 const TWEAK_INFO_COMMANDS = [
   'get_wallpaper_compression_info',
@@ -621,7 +621,7 @@ export default function Settings() {
               </div>
               <div>
                 <div className={styles.aboutName}>FrameGuard</div>
-                <div className={styles.aboutVersion}>Versão {APP_VERSION}</div>
+                <div className={styles.aboutVersion}>Versão {APP_VERSION} · GPL v3</div>
               </div>
             </div>
 
@@ -637,35 +637,9 @@ export default function Settings() {
 
             <div className={styles.divider} />
 
-            <div className={styles.metaGrid}>
-              <div className={styles.metaRow}>
-                <span className={styles.metaLabel}>Licença</span>
-                <span className={styles.metaValue}>MIT</span>
-              </div>
-              <div className={styles.metaRow}>
-                <span className={styles.metaLabel}>Plataforma</span>
-                <span className={styles.metaValue}>Windows 11</span>
-              </div>
-              <div className={styles.metaRow}>
-                <span className={styles.metaLabel}>Framework</span>
-                <span className={styles.metaValue}>Tauri v2 · React 18 · Rust</span>
-              </div>
-              <div className={styles.metaRow}>
-                <span className={styles.metaLabel}>Formato de exportação</span>
-                <span className={styles.metaValue}>.fg (JSON legível por humanos)</span>
-              </div>
-              <div className={styles.metaRow}>
-                <span className={styles.metaLabel}>Dados de configuração</span>
-                <span className={styles.metaValue}>%APPDATA%\FrameGuard</span>
-              </div>
-            </div>
-
-            <div className={styles.divider} />
-
             <p className={styles.aboutNote}>
-              FrameGuard é um utilitário de manutenção e otimização para Windows 11
-              focado em gamers. Todas as modificações são reversíveis e documentadas
-              em JSON legível por humanos — total transparência sobre o que é alterado no sistema.
+              Veja o manifesto completo, informações do projeto e verifique atualizações
+              na página <strong>Sobre</strong> no menu lateral.
             </p>
           </div>
         </section>

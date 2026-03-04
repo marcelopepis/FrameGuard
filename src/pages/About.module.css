@@ -1,0 +1,435 @@
+/* ─── Layout da página ────────────────────────────────────── */
+
+.page {
+  padding: 36px 40px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ─── Header ─────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+}
+
+/* ─── Seções ─────────────────────────────────────────────── */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ─── Card base ──────────────────────────────────────────── */
+
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition-normal);
+}
+
+.card:hover {
+  border-color: var(--color-border-hover);
+}
+
+/* ─── Identidade do app ──────────────────────────────────── */
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 28px 26px;
+}
+
+.logo {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent-subtle);
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.identityText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appName {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+}
+
+.tagline {
+  font-size: 13.5px;
+  color: var(--color-accent);
+  font-weight: 500;
+  font-style: italic;
+}
+
+.version {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* ─── Manifesto ──────────────────────────────────────────── */
+
+.manifestoIntro {
+  padding: 22px 26px;
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 0;
+}
+
+.manifestoSection {
+  padding: 20px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.manifestoHeading {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.2px;
+}
+
+.manifestoList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.manifestoListItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.manifestoListItem > svg {
+  color: var(--color-error);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.manifestoListItemBold {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* ─── Pilares ────────────────────────────────────────────── */
+
+.pillars {
+  padding: 20px 26px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.pillar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+.pillar:hover {
+  border-color: var(--color-border-hover);
+}
+
+.pillarName {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pillarName > svg {
+  flex-shrink: 0;
+}
+
+.pillarDesc {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}
+
+/* ─── Manifesto footer ───────────────────────────────────── */
+
+.manifestoFooter {
+  padding: 16px 26px 20px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* ─── Links e metadados ──────────────────────────────────── */
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 26px;
+  background: transparent;
+  border: none;
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.linkRow:hover {
+  color: var(--color-accent-hover);
+  background: rgba(34, 211, 238, 0.03);
+}
+
+.linkRowMuted {
+  composes: linkRow;
+  color: var(--color-text-secondary);
+}
+
+.linkRowMuted:hover {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.metaGrid {
+  padding: 16px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metaRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.metaLabel {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  min-width: 160px;
+  flex-shrink: 0;
+}
+
+.metaValue {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* ─── Verificar atualizações ─────────────────────────────── */
+
+.updateSection {
+  padding: 18px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.updateInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.updateLabel {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.updateDesc {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: var(--color-accent);
+  color: #0a0e17;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btnSecondary:hover:not(:disabled) {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.actionBusy {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+/* ─── Resultado de atualização ───────────────────────────── */
+
+.updateResult {
+  padding: 14px 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.updateResult > svg {
+  flex-shrink: 0;
+}
+
+.updateUpToDate {
+  composes: updateResult;
+  color: var(--color-success);
+  background: rgba(52, 211, 153, 0.04);
+}
+
+.updateAvailable {
+  composes: updateResult;
+  color: var(--color-accent);
+  background: rgba(34, 211, 238, 0.04);
+}
+
+.updateError {
+  composes: updateResult;
+  color: var(--color-error);
+  background: rgba(248, 113, 113, 0.04);
+}
+
+.updateLink {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.updateLink:hover {
+  color: var(--color-accent-hover);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Referência Volt (placeholder) ──────────────────────── */
+
+.voltRef {
+  padding: 14px 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+.voltRef > svg {
+  color: var(--color-warning);
+  flex-shrink: 0;
+}

@@ -26,6 +26,9 @@ export interface Plan {
   items: PlanItem[];
   builtin: boolean;
   builtin_version: number | null;
+  long_description?: string | null;
+  recommended_frequency?: string | null;
+  target_audience?: string | null;
 }
 
 interface HealthCheckData {

@@ -10,3 +10,4 @@ pub mod services;
 pub mod activity;
 pub mod restore_point;
 pub mod bloatware;
+pub mod about;
