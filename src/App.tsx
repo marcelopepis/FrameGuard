@@ -30,7 +30,11 @@ function Pages() {
     <Layout>
       {!isKnown && <Navigate to="/" replace />}
       {ROUTES.map(({ path, Page }) => (
-        pathname === path ? <Page key={path} /> : null
+        pathname === path ? (
+          <div key={path} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+            <Page />
+          </div>
+        ) : null
       ))}
     </Layout>
   );
