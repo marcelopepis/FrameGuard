@@ -7,11 +7,13 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
 import {
-  Shield, Github, ExternalLink, User, Zap,
+  Github, ExternalLink, User,
   RefreshCw, CheckCircle2, AlertCircle, X as XIcon,
   Loader2, Crosshair, Heart, Eye, Gem,
 } from 'lucide-react';
 import styles from './About.module.css';
+import voltIcon from '../midia/volt_icon.png';
+import FrameGuardIcon from '../components/FrameGuardIcon';
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
@@ -66,7 +68,7 @@ export default function About() {
         <div className={styles.card}>
           <div className={styles.identity}>
             <div className={styles.logo}>
-              <Shield size={28} />
+              <FrameGuardIcon size={28} />
             </div>
             <div className={styles.identityText}>
               <div className={styles.appName}>FrameGuard</div>
@@ -279,9 +281,13 @@ export default function About() {
 
           <div className={styles.divider} />
 
-          {/* Volt reference (placeholder) */}
+          {/* Volt reference */}
           <div className={styles.voltRef}>
-            <Zap size={13} />
+            <img
+              src={voltIcon}
+              alt="Volt"
+              className={styles.voltIcon}
+            />
             <span>Powered by Volt</span>
           </div>
         </div>

@@ -417,19 +417,27 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── Referência Volt (placeholder) ──────────────────────── */
+/* ─── Referência Volt ────────────────────────────────────── */
 
 .voltRef {
-  padding: 14px 26px;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11.5px;
+  padding: 10px 26px;
+  font-size: 12px;
   color: var(--color-text-muted);
-  opacity: 0.6;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+  transition: opacity 200ms ease;
 }
 
-.voltRef > svg {
-  color: var(--color-warning);
-  flex-shrink: 0;
+.voltRef:hover {
+  opacity: 1;
+}
+
+.voltIcon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
 }

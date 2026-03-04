@@ -1,9 +1,9 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Zap, ShieldAlert, Wrench, Eraser, Server, ClipboardList, BookOpen, Info, Settings,
-  Shield,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import FrameGuardIcon from '../FrameGuardIcon';
 import SearchBar from '../SearchBar/SearchBar';
 import styles from './sidebar.module.css';
 
@@ -32,7 +32,7 @@ export default function Sidebar() {
     <aside className={styles.sidebar}>
       {/* Logo */}
       <div className={styles.logo}>
-        <Shield className={styles.logoIcon} size={26} strokeWidth={2.5} />
+        <FrameGuardIcon size={26} className={styles.logoIcon} />
         <span className={styles.logoText}>FrameGuard</span>
       </div>
 

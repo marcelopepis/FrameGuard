@@ -2,9 +2,10 @@
 // Aparece apenas na primeira execução (flag localStorage: fg.firstRunSeen).
 
 import {
-  Shield, CheckCircle2, ArrowRight,
+  CheckCircle2, ArrowRight,
   Crosshair, Heart, Eye, Gem,
 } from 'lucide-react';
+import FrameGuardIcon from '../FrameGuardIcon';
 import styles from './WelcomeModal.module.css';
 
 const APP_VERSION = '0.1.0';
@@ -26,7 +27,7 @@ export default function WelcomeModal({ onClose }: WelcomeModalProps) {
         {/* Header */}
         <div className={styles.header}>
           <div className={styles.logo}>
-            <Shield size={26} />
+            <FrameGuardIcon size={26} />
           </div>
           <div className={styles.headerText}>
             <div className={styles.appName}>Bem-vindo ao FrameGuard</div>
