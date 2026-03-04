@@ -20,26 +20,8 @@ const ROUTES = [
   { path: '/settings',      Page: Settings },
 ];
 
-// Estilos para cada wrapper de página — cada um tem seu próprio scroll container.
-// Páginas inativas ficam com visibility: hidden + height: 0 para manter o estado
-// React montado sem ocupar espaço nem capturar scroll.
-const activeStyle: React.CSSProperties = {
-  flex: 1,
-  overflowY: 'auto',
-  overflowX: 'hidden',
-  minHeight: 0,
-};
-const hiddenStyle: React.CSSProperties = {
-  height: 0,
-  overflow: 'hidden',
-  visibility: 'hidden',
-};
-
-// Renderiza todas as páginas simultaneamente usando keep-alive:
-// páginas inativas ficam ocultas mas permanecem montadas — preservando
-// estado React, execuções em andamento e listeners Tauri.
-// Cada wrapper é seu próprio scroll container, preservando a posição de scroll
-// ao alternar entre páginas.
+// Renderiza apenas a página ativa — quando o usuário navega, a página
+// anterior desmonta e a nova monta, evitando carga simultânea de todas.
 function Pages() {
   const { pathname } = useLocation();
   const isKnown = ROUTES.some(r => r.path === pathname);
@@ -48,9 +30,7 @@ function Pages() {
     <Layout>
       {!isKnown && <Navigate to="/" replace />}
       {ROUTES.map(({ path, Page }) => (
-        <div key={path} style={pathname === path ? activeStyle : hiddenStyle}>
-          <Page />
-        </div>
+        pathname === path ? <Page key={path} /> : null
       ))}
     </Layout>
   );

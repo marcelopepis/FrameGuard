@@ -1,0 +1,126 @@
+name: "⚡ Sugestão de Tweak"
+description: "Sugira um novo tweak ou otimização para o FrameGuard incluir."
+title: "[Tweak]: "
+labels: ["tweak-suggestion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        O FrameGuard só inclui tweaks com evidência real de impacto.
+        Quanto mais detalhes técnicos você fornecer, maior a chance de ser implementado.
+        **Tweaks sem fundamento técnico (snake oil) não serão aceitos** — e tudo bem,
+        isso protege todo mundo.
+
+  - type: input
+    id: tweak_name
+    attributes:
+      label: Nome do tweak
+      description: "Nome curto e descritivo."
+      placeholder: "Ex: Desabilitar Telemetria do NVIDIA GeForce Experience"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: O que esse tweak faz?
+      description: "Explique tecnicamente o que ele altera no sistema e por que isso melhora performance ou privacidade."
+      placeholder: |
+        Ex: Remove tarefas agendadas e chaves de registro que o GeForce Experience
+        usa para coletar dados de uso e enviar para servidores da NVIDIA. Reduz
+        processos em background e atividade de rede.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Categoria
+      options:
+        - GPU e Display
+        - Gaming
+        - Energia e CPU
+        - Armazenamento
+        - Rede
+        - Visual e Experiência
+        - Privacidade e Telemetria
+        - Serviços e Tarefas
+        - Outra
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical_details
+    attributes:
+      label: Detalhes técnicos
+      description: "Chaves de registro, comandos PowerShell, serviços afetados, etc."
+      placeholder: |
+        Registro:
+        HKLM\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client → OptInOrOutPreference = 0
+
+        Tarefas agendadas:
+        \NVIDIA\NvTmRep_CrashReport*
+
+        Serviços:
+        NvTelemetryContainer → Disabled
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidência de impacto
+      description: |
+        Links para benchmarks, documentação oficial, análises técnicas, ou testes próprios.
+        Sem evidência = sem inclusão. Não precisa ser paper acadêmico — um post técnico
+        bem fundamentado ou teste reproduzível já vale.
+      placeholder: |
+        - https://exemplo.com/artigo-tecnico
+        - Testei com LatencyMon: interrupt latency reduziu de 800μs para 200μs
+        - Documentação oficial da Microsoft: https://learn.microsoft.com/...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Nível de risco
+      description: "Qual a chance de causar instabilidade?"
+      options:
+        - "Baixo — só cosmético ou telemetria, sem impacto funcional"
+        - "Médio — afeta funcionalidade mas é facilmente reversível"
+        - "Alto — pode causar instabilidade, requer restart ou restore point"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reversible
+    attributes:
+      label: É reversível?
+      options:
+        - "Sim — basta restaurar o valor original do registro/serviço"
+        - "Parcialmente — requer restart ou procedimento manual"
+        - "Não — mudança permanente ou difícil de desfazer"
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibilidade
+      description: "Funciona em todas as versões do Windows 11? Depende de hardware específico?"
+      placeholder: "Ex: Só se aplica a sistemas com GPU NVIDIA. Windows 11 22H2+"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: Este tweak tem evidência técnica de impacto real
+          required: true
+        - label: Verifiquei que não é um tweak já incluído no FrameGuard
+          required: true
+        - label: Entendo que tweaks sem fundamento (snake oil) não serão aceitos
+          required: true

@@ -1,0 +1,82 @@
+name: "💡 Feature Request"
+description: "Sugira uma nova funcionalidade ou melhoria para o FrameGuard."
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Toda sugestão é bem-vinda! O FrameGuard é feito pela comunidade, pra comunidade.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isso resolve?
+      description: "Descreva a frustração ou limitação que você encontrou."
+      placeholder: "Ex: Quando executo um plano, não tenho como saber quanto tempo vai levar..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solução proposta
+      description: "Como você imagina que deveria funcionar?"
+      placeholder: "Ex: Mostrar uma barra de progresso com estimativa de tempo durante execução de planos."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: "Você pensou em outras formas de resolver? Workarounds que usa hoje?"
+      placeholder: "Ex: Hoje eu conto os tweaks manualmente pra ter uma ideia do progresso."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área do app
+      description: "Em qual parte do FrameGuard essa feature se encaixa?"
+      options:
+        - Dashboard
+        - Otimizações
+        - Privacidade
+        - Manutenção
+        - Limpeza
+        - Serviços
+        - Planos
+        - Aprenda
+        - Configurações
+        - Geral / Nova seção
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Importância pra você
+      options:
+        - "Nice to have — seria legal, mas não me impede de usar"
+        - "Importante — melhoria significativa no uso diário"
+        - "Crítico — sem isso o app não atende minha necessidade"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto adicional
+      description: "Screenshots, mockups, links de referência, ou qualquer coisa que ajude a entender melhor."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: Verifiquei que não existe uma issue/feature duplicada
+          required: true

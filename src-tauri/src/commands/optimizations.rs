@@ -305,28 +305,30 @@ pub fn get_wallpaper_compression_status() -> Result<WallpaperCompressionStatus, 
 /// Combina o estado atual do registro com metadados estáticos e informações
 /// de backup para montar o `TweakInfo` enviado à UI.
 #[tauri::command]
-pub fn get_wallpaper_compression_info() -> Result<TweakInfo, String> {
-    let status = get_wallpaper_compression_status()?;
-    let (has_backup, last_applied) = backup_info("disable_wallpaper_compression");
+pub async fn get_wallpaper_compression_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let status = get_wallpaper_compression_status()?;
+        let (has_backup, last_applied) = backup_info("disable_wallpaper_compression");
 
-    Ok(TweakInfo {
-        id: "disable_wallpaper_compression".to_string(),
-        name: "Desabilitar Compressão de Wallpaper".to_string(),
-        description: "Desabilita a compressão automática de imagens JPEG usadas como papel de \
-            parede. O Windows reduz a qualidade para 85% por padrão. Este tweak mantém a \
-            qualidade original da imagem (100%)."
-            .to_string(),
-        category: "optimization".to_string(),
-        is_applied: status.enabled,
-        requires_restart: true,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Unproven,
-        default_value_description: "Padrão Windows: compressão JPEG em 85% (JPEGImportQuality ausente)".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "disable_wallpaper_compression".to_string(),
+            name: "Desabilitar Compressão de Wallpaper".to_string(),
+            description: "Desabilita a compressão automática de imagens JPEG usadas como papel de \
+                parede. O Windows reduz a qualidade para 85% por padrão. Este tweak mantém a \
+                qualidade original da imagem (100%)."
+                .to_string(),
+            category: "optimization".to_string(),
+            is_applied: status.enabled,
+            requires_restart: true,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Unproven,
+            default_value_description: "Padrão Windows: compressão JPEG em 85% (JPEGImportQuality ausente)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita a compressão de wallpaper definindo `JPEGImportQuality = 100`.
@@ -453,30 +455,32 @@ pub fn get_reserved_storage_status() -> Result<ReservedStorageStatus, String> {
 /// `is_applied = true` quando o armazenamento reservado está **desabilitado**
 /// (ou seja, o tweak foi aplicado e o espaço foi recuperado).
 #[tauri::command]
-pub fn get_reserved_storage_info() -> Result<TweakInfo, String> {
-    let status = get_reserved_storage_status()?;
-    let (has_backup, last_applied) = backup_info("disable_reserved_storage");
+pub async fn get_reserved_storage_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let status = get_reserved_storage_status()?;
+        let (has_backup, last_applied) = backup_info("disable_reserved_storage");
 
-    Ok(TweakInfo {
-        id: "disable_reserved_storage".to_string(),
-        name: "Recuperar Armazenamento Reservado".to_string(),
-        description: "Recupera o espaço de armazenamento reservado pelo Windows para \
-            atualizações. O Windows reserva cerca de 7GB do disco para garantir que updates \
-            possam ser instalados. Se você prefere gerenciar isso manualmente, pode desabilitar \
-            e recuperar este espaço."
-            .to_string(),
-        category: "optimization".to_string(),
-        // Tweak "aplicado" = armazenamento reservado DESABILITADO = espaço recuperado
-        is_applied: !status.enabled,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Medium,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description: "Padrão Windows: Armazenamento Reservado habilitado (~7 GB)".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "disable_reserved_storage".to_string(),
+            name: "Recuperar Armazenamento Reservado".to_string(),
+            description: "Recupera o espaço de armazenamento reservado pelo Windows para \
+                atualizações. O Windows reserva cerca de 7GB do disco para garantir que updates \
+                possam ser instalados. Se você prefere gerenciar isso manualmente, pode desabilitar \
+                e recuperar este espaço."
+                .to_string(),
+            category: "optimization".to_string(),
+            // Tweak "aplicado" = armazenamento reservado DESABILITADO = espaço recuperado
+            is_applied: !status.enabled,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Medium,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description: "Padrão Windows: Armazenamento Reservado habilitado (~7 GB)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita o armazenamento reservado via DISM com streaming de progresso.
@@ -616,28 +620,30 @@ pub fn get_delivery_optimization_status() -> Result<DeliveryOptimizationStatus, 
 
 /// Retorna as informações completas do tweak de Otimização de Entrega.
 #[tauri::command]
-pub fn get_delivery_optimization_info() -> Result<TweakInfo, String> {
-    let status = get_delivery_optimization_status()?;
-    let (has_backup, last_applied) = backup_info("disable_delivery_optimization");
+pub async fn get_delivery_optimization_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let status = get_delivery_optimization_status()?;
+        let (has_backup, last_applied) = backup_info("disable_delivery_optimization");
 
-    Ok(TweakInfo {
-        id: "disable_delivery_optimization".to_string(),
-        name: "Desabilitar Otimização de Entrega".to_string(),
-        description: "Desabilita o compartilhamento P2P de atualizações do Windows. Por padrão, \
-            o Windows usa sua conexão de internet para enviar partes de updates para outros PCs. \
-            Desabilitar libera banda de rede e pode melhorar latência em jogos online."
-            .to_string(),
-        category: "optimization".to_string(),
-        is_applied: status.enabled,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Plausible,
-        default_value_description: "Padrão Windows: P2P habilitado (DODownloadMode = 1)".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "disable_delivery_optimization".to_string(),
+            name: "Desabilitar Otimização de Entrega".to_string(),
+            description: "Desabilita o compartilhamento P2P de atualizações do Windows. Por padrão, \
+                o Windows usa sua conexão de internet para enviar partes de updates para outros PCs. \
+                Desabilitar libera banda de rede e pode melhorar latência em jogos online."
+                .to_string(),
+            category: "optimization".to_string(),
+            is_applied: status.enabled,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Plausible,
+            default_value_description: "Padrão Windows: P2P habilitado (DODownloadMode = 1)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita a Otimização de Entrega definindo `DODownloadMode = 0`.
@@ -746,30 +752,32 @@ const HAGS_DISABLED_VALUE: u32 = 0;
 
 /// Retorna as informações do tweak HAGS com o estado atual do registro.
 #[tauri::command]
-pub fn get_hags_info() -> Result<TweakInfo, String> {
-    let is_enabled = read_dword(Hive::LocalMachine, HAGS_REG_PATH, HAGS_REG_KEY)?
-        .map(|v| v == HAGS_ENABLED_VALUE)
-        .unwrap_or(true); // padrão Windows 11: HAGS ativo para GPUs compatíveis
+pub async fn get_hags_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_enabled = read_dword(Hive::LocalMachine, HAGS_REG_PATH, HAGS_REG_KEY)?
+            .map(|v| v == HAGS_ENABLED_VALUE)
+            .unwrap_or(true); // padrão Windows 11: HAGS ativo para GPUs compatíveis
 
-    let (has_backup, last_applied) = backup_info("enable_hags");
+        let (has_backup, last_applied) = backup_info("enable_hags");
 
-    Ok(TweakInfo {
-        id: "enable_hags".to_string(),
-        name: "Hardware-Accelerated GPU Scheduling (HAGS)".to_string(),
-        description: "Permite que a GPU gerencie sua própria memória de vídeo diretamente, \
-            reduzindo a latência de renderização e a carga sobre a CPU. Recomendado para gaming."
-            .to_string(),
-        category: "gamer".to_string(),
-        is_applied: is_enabled,
-        requires_restart: true,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Plausible,
-        default_value_description: "Padrão Windows 11: HAGS ativo (HwSchMode = 2)".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "enable_hags".to_string(),
+            name: "Hardware-Accelerated GPU Scheduling (HAGS)".to_string(),
+            description: "Permite que a GPU gerencie sua própria memória de vídeo diretamente, \
+                reduzindo a latência de renderização e a carga sobre a CPU. Recomendado para gaming."
+                .to_string(),
+            category: "gamer".to_string(),
+            is_applied: is_enabled,
+            requires_restart: true,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Plausible,
+            default_value_description: "Padrão Windows 11: HAGS ativo (HwSchMode = 2)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Habilita HAGS definindo HwSchMode = 2 no registro.
@@ -802,31 +810,33 @@ const GAME_MODE_DISABLED: u32 = 0;
 
 /// Retorna as informações do tweak Game Mode com o estado atual do registro.
 #[tauri::command]
-pub fn get_game_mode_info() -> Result<TweakInfo, String> {
-    let is_enabled = read_dword(Hive::CurrentUser, GAME_MODE_REG_PATH, GAME_MODE_REG_KEY)?
-        .map(|v| v == GAME_MODE_ENABLED)
-        .unwrap_or(true); // padrão: Game Mode ativo desde Windows 10 Creators Update
+pub async fn get_game_mode_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_enabled = read_dword(Hive::CurrentUser, GAME_MODE_REG_PATH, GAME_MODE_REG_KEY)?
+            .map(|v| v == GAME_MODE_ENABLED)
+            .unwrap_or(true); // padrão: Game Mode ativo desde Windows 10 Creators Update
 
-    let (has_backup, last_applied) = backup_info("enable_game_mode");
+        let (has_backup, last_applied) = backup_info("enable_game_mode");
 
-    Ok(TweakInfo {
-        id: "enable_game_mode".to_string(),
-        name: "Windows Game Mode".to_string(),
-        description: "Prioriza recursos de CPU e GPU para o jogo em execução, reduzindo a \
-            interferência de processos em segundo plano como atualizações do Windows. \
-            Recomendado para melhor desempenho em jogos."
-            .to_string(),
-        category: "gamer".to_string(),
-        is_applied: is_enabled,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Unproven,
-        default_value_description: "Padrão Windows: Game Mode ativo (AutoGameModeEnabled = 1)".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "enable_game_mode".to_string(),
+            name: "Windows Game Mode".to_string(),
+            description: "Prioriza recursos de CPU e GPU para o jogo em execução, reduzindo a \
+                interferência de processos em segundo plano como atualizações do Windows. \
+                Recomendado para melhor desempenho em jogos."
+                .to_string(),
+            category: "gamer".to_string(),
+            is_applied: is_enabled,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Unproven,
+            default_value_description: "Padrão Windows: Game Mode ativo (AutoGameModeEnabled = 1)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Habilita Game Mode definindo AutoGameModeEnabled = 1 no registro.
@@ -862,31 +872,33 @@ const VBS_DISABLED: u32 = 0;
 /// `is_applied = true` indica que a VBS está **desabilitada** — estado recomendado
 /// para maximizar performance em jogos.
 #[tauri::command]
-pub fn get_vbs_info() -> Result<TweakInfo, String> {
-    let vbs_enabled = read_dword(Hive::LocalMachine, VBS_REG_PATH, VBS_REG_KEY)?
-        .map(|v| v == VBS_ENABLED)
-        .unwrap_or(false); // padrão: VBS inativo em muitos sistemas
+pub async fn get_vbs_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let vbs_enabled = read_dword(Hive::LocalMachine, VBS_REG_PATH, VBS_REG_KEY)?
+            .map(|v| v == VBS_ENABLED)
+            .unwrap_or(false); // padrão: VBS inativo em muitos sistemas
 
-    let (has_backup, last_applied) = backup_info("disable_vbs");
+        let (has_backup, last_applied) = backup_info("disable_vbs");
 
-    Ok(TweakInfo {
-        id: "disable_vbs".to_string(),
-        name: "Virtualização Baseada em Segurança (VBS)".to_string(),
-        description: "A VBS usa virtualização de hardware para isolar partes críticas do Windows, \
-            mas pode reduzir o desempenho em jogos em até 10–15%. Desabilitar melhora FPS, \
-            especialmente em CPUs sem hardware de virtualização otimizado."
-            .to_string(),
-        category: "gamer".to_string(),
-        is_applied: !vbs_enabled, // tweak "aplicado" = VBS desabilitada = bom para gaming
-        requires_restart: true,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Medium,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description: "Padrão Windows 11: VBS ativa (EnableVirtualizationBasedSecurity = 1)".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "disable_vbs".to_string(),
+            name: "Virtualização Baseada em Segurança (VBS)".to_string(),
+            description: "A VBS usa virtualização de hardware para isolar partes críticas do Windows, \
+                mas pode reduzir o desempenho em jogos em até 10–15%. Desabilitar melhora FPS, \
+                especialmente em CPUs sem hardware de virtualização otimizado."
+                .to_string(),
+            category: "gamer".to_string(),
+            is_applied: !vbs_enabled, // tweak "aplicado" = VBS desabilitada = bom para gaming
+            requires_restart: true,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Medium,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description: "Padrão Windows 11: VBS ativa (EnableVirtualizationBasedSecurity = 1)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita VBS definindo EnableVirtualizationBasedSecurity = 0.
@@ -1060,28 +1072,30 @@ fn get_game_dvr_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_game_dvr_info() -> Result<TweakInfo, String> {
-    let is_applied = get_game_dvr_is_applied()?;
-    let (has_backup, last_applied) = backup_info("disable_game_dvr");
-    Ok(TweakInfo {
-        id: "disable_game_dvr".to_string(),
-        name: "Desabilitar Game DVR / Gravação em Segundo Plano".to_string(),
-        description: "Desabilita completamente o Game DVR (master switch, captura e gravação em \
-            background). A gravação em segundo plano consome GPU (encoder) e CPU mesmo quando \
-            você não está gravando. Ao reverter, restaura a feature sem gravação em background."
-            .to_string(),
-        category: "gpu_display".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description: "Padrão Windows: Game DVR habilitado (GameDVR_Enabled = 1)"
-            .to_string(),
-    
-        hardware_filter: None,
-    })
+pub async fn get_game_dvr_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_game_dvr_is_applied()?;
+        let (has_backup, last_applied) = backup_info("disable_game_dvr");
+        Ok(TweakInfo {
+            id: "disable_game_dvr".to_string(),
+            name: "Desabilitar Game DVR / Gravação em Segundo Plano".to_string(),
+            description: "Desabilita completamente o Game DVR (master switch, captura e gravação em \
+                background). A gravação em segundo plano consome GPU (encoder) e CPU mesmo quando \
+                você não está gravando. Ao reverter, restaura a feature sem gravação em background."
+                .to_string(),
+            category: "gpu_display".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description: "Padrão Windows: Game DVR habilitado (GameDVR_Enabled = 1)"
+                .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita o Game DVR zerando as chaves de registro que o controlam.
@@ -1174,28 +1188,30 @@ fn get_xbox_overlay_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_xbox_overlay_info() -> Result<TweakInfo, String> {
-    let is_applied = get_xbox_overlay_is_applied()?;
-    let (has_backup, last_applied) = backup_info("disable_xbox_overlay");
-    Ok(TweakInfo {
-        id: "disable_xbox_overlay".to_string(),
-        name: "Desabilitar Xbox Game Bar Overlay".to_string(),
-        description: "Remove o overlay da Xbox Game Bar que pode ser ativado acidentalmente \
-            durante jogos (Win+G). Impacto em recursos é mínimo, mas elimina o processo \
-            GameBarPresenceWriter.exe."
-            .to_string(),
-        category: "gpu_display".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: Xbox Game Bar habilitado (UseNexusForGameBarEnabled = 1)".to_string(),
-    
-        hardware_filter: None,
-    })
+pub async fn get_xbox_overlay_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_xbox_overlay_is_applied()?;
+        let (has_backup, last_applied) = backup_info("disable_xbox_overlay");
+        Ok(TweakInfo {
+            id: "disable_xbox_overlay".to_string(),
+            name: "Desabilitar Xbox Game Bar Overlay".to_string(),
+            description: "Remove o overlay da Xbox Game Bar que pode ser ativado acidentalmente \
+                durante jogos (Win+G). Impacto em recursos é mínimo, mas elimina o processo \
+                GameBarPresenceWriter.exe."
+                .to_string(),
+            category: "gpu_display".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: Xbox Game Bar habilitado (UseNexusForGameBarEnabled = 1)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita o Xbox Game Bar zerando as duas chaves de controle do overlay.
@@ -1298,32 +1314,34 @@ fn get_msi_mode_is_applied(instance_id: &str) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_msi_mode_gpu_info() -> Result<TweakInfo, String> {
-    let (has_backup, last_applied) = backup_info("enable_msi_mode_gpu");
-    let is_applied = match get_nvidia_instance_id()? {
-        Some(id) => get_msi_mode_is_applied(&id).unwrap_or(false),
-        None => false,
-    };
-    Ok(TweakInfo {
-        id: "enable_msi_mode_gpu".to_string(),
-        name: "Habilitar MSI Mode para GPU".to_string(),
-        description: "Habilita Message Signaled Interrupts para a GPU, reduzindo latência de \
-            DPC. GPUs RTX 40+ já usam MSI por padrão. Benefício principal em GPUs RTX 30 e \
-            anteriores."
-            .to_string(),
-        category: "gpu_display".to_string(),
-        is_applied,
-        requires_restart: true,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Medium,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: MSI Mode desabilitado para GPU (MSISupported ausente ou 0)"
+pub async fn get_msi_mode_gpu_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let (has_backup, last_applied) = backup_info("enable_msi_mode_gpu");
+        let is_applied = match get_nvidia_instance_id()? {
+            Some(id) => get_msi_mode_is_applied(&id).unwrap_or(false),
+            None => false,
+        };
+        Ok(TweakInfo {
+            id: "enable_msi_mode_gpu".to_string(),
+            name: "Habilitar MSI Mode para GPU".to_string(),
+            description: "Habilita Message Signaled Interrupts para a GPU, reduzindo latência de \
+                DPC. GPUs RTX 40+ já usam MSI por padrão. Benefício principal em GPUs RTX 30 e \
+                anteriores."
                 .to_string(),
-    
-        hardware_filter: None,
-    })
+            category: "gpu_display".to_string(),
+            is_applied,
+            requires_restart: true,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Medium,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: MSI Mode desabilitado para GPU (MSISupported ausente ou 0)"
+                    .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Habilita MSI Mode na GPU NVIDIA detectada automaticamente.
@@ -1416,28 +1434,30 @@ fn get_mpo_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_mpo_info() -> Result<TweakInfo, String> {
-    let is_applied = get_mpo_is_applied()?;
-    let (has_backup, last_applied) = backup_info("disable_mpo");
-    Ok(TweakInfo {
-        id: "disable_mpo".to_string(),
-        name: "Desabilitar Multiplane Overlay (MPO)".to_string(),
-        description: "Desabilita o Multiplane Overlay do DWM, que pode causar stuttering e \
-            flickering em configurações multi-monitor com refresh rates diferentes. Recomendado \
-            se você usa dois monitores com Hz diferentes."
-            .to_string(),
-        category: "gpu_display".to_string(),
-        is_applied,
-        requires_restart: true,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Plausible,
-        default_value_description: "Padrão Windows: MPO habilitado (OverlayTestMode ausente)"
-            .to_string(),
-    
-        hardware_filter: None,
-    })
+pub async fn get_mpo_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_mpo_is_applied()?;
+        let (has_backup, last_applied) = backup_info("disable_mpo");
+        Ok(TweakInfo {
+            id: "disable_mpo".to_string(),
+            name: "Desabilitar Multiplane Overlay (MPO)".to_string(),
+            description: "Desabilita o Multiplane Overlay do DWM, que pode causar stuttering e \
+                flickering em configurações multi-monitor com refresh rates diferentes. Recomendado \
+                se você usa dois monitores com Hz diferentes."
+                .to_string(),
+            category: "gpu_display".to_string(),
+            is_applied,
+            requires_restart: true,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Plausible,
+            default_value_description: "Padrão Windows: MPO habilitado (OverlayTestMode ausente)"
+                .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita o MPO escrevendo `OverlayTestMode = 5` em HKLM\SOFTWARE\Microsoft\Windows\Dwm.
@@ -1537,30 +1557,32 @@ fn get_nvidia_telemetry_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_nvidia_telemetry_info() -> Result<TweakInfo, String> {
-    let is_applied = get_nvidia_telemetry_is_applied().unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("disable_nvidia_telemetry");
-    Ok(TweakInfo {
-        id: "disable_nvidia_telemetry".to_string(),
-        name: "Desabilitar Telemetria NVIDIA".to_string(),
-        description: "Desabilita a coleta de telemetria do driver NVIDIA. Remove uso de CPU e \
-            rede em segundo plano sem afetar funcionalidade do driver."
-            .to_string(),
-        category: "gpu_display".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão NVIDIA: telemetria habilitada e serviço NvTelemetryContainer ativo"
+pub async fn get_nvidia_telemetry_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_nvidia_telemetry_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_nvidia_telemetry");
+        Ok(TweakInfo {
+            id: "disable_nvidia_telemetry".to_string(),
+            name: "Desabilitar Telemetria NVIDIA".to_string(),
+            description: "Desabilita a coleta de telemetria do driver NVIDIA. Remove uso de CPU e \
+                rede em segundo plano sem afetar funcionalidade do driver."
                 .to_string(),
-        hardware_filter: Some(HardwareFilter {
-            gpu_vendor: Some("nvidia".to_string()),
-            cpu_vendor: None,
-        }),
-    })
+            category: "gpu_display".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão NVIDIA: telemetria habilitada e serviço NvTelemetryContainer ativo"
+                    .to_string(),
+            hardware_filter: Some(HardwareFilter {
+                gpu_vendor: Some("nvidia".to_string()),
+                cpu_vendor: None,
+            }),
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita a telemetria NVIDIA: zera 4 chaves de registro e desabilita o serviço.
@@ -1677,28 +1699,30 @@ fn get_timer_resolution_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_timer_resolution_info() -> Result<TweakInfo, String> {
-    let is_applied = get_timer_resolution_is_applied()?;
-    let (has_backup, last_applied) = backup_info("enable_timer_resolution");
-    Ok(TweakInfo {
-        id: "enable_timer_resolution".to_string(),
-        name: "Timer de Alta Resolução (GlobalTimerResolutionRequests)".to_string(),
-        description: "Permite que aplicações solicitem timer resolution global de 1ms em vez \
-            do padrão 15,6ms. Melhora frame pacing e reduz input lag, especialmente em \
-            monitores 144Hz+. Específico do Windows 11."
-            .to_string(),
-        category: "gaming".to_string(),
-        is_applied,
-        requires_restart: true,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: GlobalTimerResolutionRequests ausente (timer 15,6ms)".to_string(),
-    
-        hardware_filter: None,
-    })
+pub async fn get_timer_resolution_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_timer_resolution_is_applied()?;
+        let (has_backup, last_applied) = backup_info("enable_timer_resolution");
+        Ok(TweakInfo {
+            id: "enable_timer_resolution".to_string(),
+            name: "Timer de Alta Resolução (GlobalTimerResolutionRequests)".to_string(),
+            description: "Permite que aplicações solicitem timer resolution global de 1ms em vez \
+                do padrão 15,6ms. Melhora frame pacing e reduz input lag, especialmente em \
+                monitores 144Hz+. Específico do Windows 11."
+                .to_string(),
+            category: "gaming".to_string(),
+            is_applied,
+            requires_restart: true,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: GlobalTimerResolutionRequests ausente (timer 15,6ms)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Habilita requisições globais de timer de alta resolução no kernel do Windows 11.
@@ -1778,29 +1802,31 @@ fn get_mouse_acc_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_mouse_acceleration_info() -> Result<TweakInfo, String> {
-    let is_applied = get_mouse_acc_is_applied()?;
-    let (has_backup, last_applied) = backup_info("disable_mouse_acceleration");
-    Ok(TweakInfo {
-        id: "disable_mouse_acceleration".to_string(),
-        name: "Desabilitar Aceleração do Mouse".to_string(),
-        description: "Remove a curva não-linear de resposta do mouse do Windows. Essencial \
-            para mira consistente em jogos FPS. O movimento do cursor passa a ser 1:1 com \
-            o movimento físico do mouse."
-            .to_string(),
-        category: "gaming".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: MouseSpeed = \"1\", Threshold1 = \"6\", Threshold2 = \"10\""
+pub async fn get_mouse_acceleration_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_mouse_acc_is_applied()?;
+        let (has_backup, last_applied) = backup_info("disable_mouse_acceleration");
+        Ok(TweakInfo {
+            id: "disable_mouse_acceleration".to_string(),
+            name: "Desabilitar Aceleração do Mouse".to_string(),
+            description: "Remove a curva não-linear de resposta do mouse do Windows. Essencial \
+                para mira consistente em jogos FPS. O movimento do cursor passa a ser 1:1 com \
+                o movimento físico do mouse."
                 .to_string(),
-    
-        hardware_filter: None,
-    })
+            category: "gaming".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: MouseSpeed = \"1\", Threshold1 = \"6\", Threshold2 = \"10\""
+                    .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita a aceleração do mouse zerando as três chaves REG_SZ.
@@ -1899,30 +1925,32 @@ fn get_fso_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_fullscreen_optimizations_info() -> Result<TweakInfo, String> {
-    let is_applied = get_fso_is_applied()?;
-    let (has_backup, last_applied) = backup_info("disable_fullscreen_optimizations");
-    Ok(TweakInfo {
-        id: "disable_fullscreen_optimizations".to_string(),
-        name: "Desabilitar Fullscreen Optimizations (global)".to_string(),
-        description: "Força jogos a usar fullscreen exclusivo em vez do modo otimizado do \
-            Windows. Era relevante no Windows 10, mas no Windows 11 o sistema de FSO foi \
-            significativamente melhorado. Pode beneficiar jogos DX9/DX11 mais antigos. Para \
-            jogos DX12/Vulkan modernos, o impacto é negligível ou inexistente."
-            .to_string(),
-        category: "gaming".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Unproven,
-        default_value_description:
-            "Padrão Windows: Fullscreen Optimizations habilitado (chaves FSE ausentes)"
+pub async fn get_fullscreen_optimizations_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_fso_is_applied()?;
+        let (has_backup, last_applied) = backup_info("disable_fullscreen_optimizations");
+        Ok(TweakInfo {
+            id: "disable_fullscreen_optimizations".to_string(),
+            name: "Desabilitar Fullscreen Optimizations (global)".to_string(),
+            description: "Força jogos a usar fullscreen exclusivo em vez do modo otimizado do \
+                Windows. Era relevante no Windows 10, mas no Windows 11 o sistema de FSO foi \
+                significativamente melhorado. Pode beneficiar jogos DX9/DX11 mais antigos. Para \
+                jogos DX12/Vulkan modernos, o impacto é negligível ou inexistente."
                 .to_string(),
-    
-        hardware_filter: None,
-    })
+            category: "gaming".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Unproven,
+            default_value_description:
+                "Padrão Windows: Fullscreen Optimizations habilitado (chaves FSE ausentes)"
+                    .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Aplica as 5 chaves FSO de uma vez, preservando cada valor original no backup.
@@ -2053,28 +2081,30 @@ fn get_ultimate_performance_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_ultimate_performance_info() -> Result<TweakInfo, String> {
-    let is_applied = get_ultimate_performance_is_applied().unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("enable_ultimate_performance");
-    Ok(TweakInfo {
-        id: "enable_ultimate_performance".to_string(),
-        name: "Plano de Energia: Ultimate Performance".to_string(),
-        description: "Ativa o plano de energia Ultimate Performance, que mantém o processador \
-            em frequência máxima constantemente. Elimina latência de boost de CPU. Escondido \
-            por padrão no Windows 11."
-            .to_string(),
-        category: "energy_cpu".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Medium,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description: "Padrão Windows: plano Balanceado ou Alto Desempenho ativo"
-            .to_string(),
-    
-        hardware_filter: None,
-    })
+pub async fn get_ultimate_performance_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_ultimate_performance_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("enable_ultimate_performance");
+        Ok(TweakInfo {
+            id: "enable_ultimate_performance".to_string(),
+            name: "Plano de Energia: Ultimate Performance".to_string(),
+            description: "Ativa o plano de energia Ultimate Performance, que mantém o processador \
+                em frequência máxima constantemente. Elimina latência de boost de CPU. Escondido \
+                por padrão no Windows 11."
+                .to_string(),
+            category: "energy_cpu".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Medium,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description: "Padrão Windows: plano Balanceado ou Alto Desempenho ativo"
+                .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Ativa o plano Ultimate Performance duplicando-o a partir do GUID template.
@@ -2178,28 +2208,30 @@ fn get_power_throttling_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_power_throttling_info() -> Result<TweakInfo, String> {
-    let is_applied = get_power_throttling_is_applied()?;
-    let (has_backup, last_applied) = backup_info("disable_power_throttling");
-    Ok(TweakInfo {
-        id: "disable_power_throttling".to_string(),
-        name: "Desabilitar Power Throttling".to_string(),
-        description: "Impede que o Windows reduza a frequência de CPU para processos em \
-            segundo plano. Útil para garantir que nenhum processo relacionado ao jogo seja \
-            limitado."
-            .to_string(),
-        category: "energy_cpu".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Plausible,
-        default_value_description:
-            "Padrão Windows: Power Throttling habilitado (PowerThrottlingOff ausente)".to_string(),
-    
-        hardware_filter: None,
-    })
+pub async fn get_power_throttling_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_power_throttling_is_applied()?;
+        let (has_backup, last_applied) = backup_info("disable_power_throttling");
+        Ok(TweakInfo {
+            id: "disable_power_throttling".to_string(),
+            name: "Desabilitar Power Throttling".to_string(),
+            description: "Impede que o Windows reduza a frequência de CPU para processos em \
+                segundo plano. Útil para garantir que nenhum processo relacionado ao jogo seja \
+                limitado."
+                .to_string(),
+            category: "energy_cpu".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Plausible,
+            default_value_description:
+                "Padrão Windows: Power Throttling habilitado (PowerThrottlingOff ausente)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita o Power Throttling escrevendo `PowerThrottlingOff = 1`.
@@ -2270,28 +2302,30 @@ fn get_hibernation_status() -> bool {
 }
 
 #[tauri::command]
-pub fn get_hibernation_info() -> Result<TweakInfo, String> {
-    // Tweak aplicado = hibernação desabilitada = arquivo ausente
-    let is_applied = !get_hibernation_status();
-    let (has_backup, last_applied) = backup_info("disable_hibernation");
-    Ok(TweakInfo {
-        id: "disable_hibernation".to_string(),
-        name: "Desabilitar Hibernação".to_string(),
-        description: "Desabilita a hibernação e remove o arquivo hiberfil.sys, liberando \
-            8-16 GB de espaço no disco do sistema. Também desabilita o Fast Startup, que \
-            pode causar problemas de driver e estado do sistema."
-            .to_string(),
-        category: "storage".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description: "Padrão Windows: hibernação habilitada (hiberfil.sys presente)".to_string(),
-    
-        hardware_filter: None,
-    })
+pub async fn get_hibernation_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        // Tweak aplicado = hibernação desabilitada = arquivo ausente
+        let is_applied = !get_hibernation_status();
+        let (has_backup, last_applied) = backup_info("disable_hibernation");
+        Ok(TweakInfo {
+            id: "disable_hibernation".to_string(),
+            name: "Desabilitar Hibernação".to_string(),
+            description: "Desabilita a hibernação e remove o arquivo hiberfil.sys, liberando \
+                8-16 GB de espaço no disco do sistema. Também desabilita o Fast Startup, que \
+                pode causar problemas de driver e estado do sistema."
+                .to_string(),
+            category: "storage".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description: "Padrão Windows: hibernação habilitada (hiberfil.sys presente)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita a hibernação via `powercfg /h off`.
@@ -2388,31 +2422,33 @@ fn query_ntfs_last_access() -> Result<u32, String> {
 }
 
 #[tauri::command]
-pub fn get_ntfs_last_access_info() -> Result<TweakInfo, String> {
-    // Applied = valor 1 (User Managed, Disabled — definido explicitamente pelo usuário)
-    let is_applied = query_ntfs_last_access().map(|v| v == 1).unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("disable_ntfs_last_access");
-    Ok(TweakInfo {
-        id: "disable_ntfs_last_access".to_string(),
-        name: "Desabilitar Timestamp de Último Acesso NTFS".to_string(),
-        description: "Impede o NTFS de atualizar o timestamp de último acesso em cada leitura \
-            de arquivo. Reduz operações de escrita no disco. No Windows 11, volumes >128GB já \
-            têm isso desabilitado por padrão, mas este tweak garante a configuração \
-            independente do tamanho."
-            .to_string(),
-        category: "storage".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Plausible,
-        default_value_description:
-            "Padrão Windows: timestamps habilitados (0) ou desabilitados pelo sistema (2) em volumes grandes"
+pub async fn get_ntfs_last_access_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        // Applied = valor 1 (User Managed, Disabled — definido explicitamente pelo usuário)
+        let is_applied = query_ntfs_last_access().map(|v| v == 1).unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_ntfs_last_access");
+        Ok(TweakInfo {
+            id: "disable_ntfs_last_access".to_string(),
+            name: "Desabilitar Timestamp de Último Acesso NTFS".to_string(),
+            description: "Impede o NTFS de atualizar o timestamp de último acesso em cada leitura \
+                de arquivo. Reduz operações de escrita no disco. No Windows 11, volumes >128GB já \
+                têm isso desabilitado por padrão, mas este tweak garante a configuração \
+                independente do tamanho."
                 .to_string(),
-    
-        hardware_filter: None,
-    })
+            category: "storage".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Plausible,
+            default_value_description:
+                "Padrão Windows: timestamps habilitados (0) ou desabilitados pelo sistema (2) em volumes grandes"
+                    .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita os timestamps de último acesso NTFS via `fsutil behavior set disablelastaccess 1`.
@@ -2539,28 +2575,30 @@ fn get_nagle_status() -> NagleStatus {
 }
 
 #[tauri::command]
-pub fn get_nagle_info() -> Result<TweakInfo, String> {
-    let status = get_nagle_status();
-    let (has_backup, last_applied) = backup_info("disable_nagle");
+pub async fn get_nagle_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let status = get_nagle_status();
+        let (has_backup, last_applied) = backup_info("disable_nagle");
 
-    Ok(TweakInfo {
-        id: "disable_nagle".to_string(),
-        name: "Desabilitar Algoritmo de Nagle".to_string(),
-        description: "Desabilita o algoritmo de Nagle e força ACK imediato em conexões TCP. \
-            Pode reduzir latência em 10-20ms para jogos que usam TCP (alguns MMOs, League of \
-            Legends). A maioria dos jogos modernos usa UDP, onde este tweak não tem efeito."
-            .to_string(),
-        category: "network".to_string(),
-        is_applied: status.is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Plausible,
-        default_value_description: "Padrão Windows: algoritmo de Nagle habilitado".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "disable_nagle".to_string(),
+            name: "Desabilitar Algoritmo de Nagle".to_string(),
+            description: "Desabilita o algoritmo de Nagle e força ACK imediato em conexões TCP. \
+                Pode reduzir latência em 10-20ms para jogos que usam TCP (alguns MMOs, League of \
+                Legends). A maioria dos jogos modernos usa UDP, onde este tweak não tem efeito."
+                .to_string(),
+            category: "network".to_string(),
+            is_applied: status.is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Plausible,
+            default_value_description: "Padrão Windows: algoritmo de Nagle habilitado".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Desabilita o algoritmo de Nagle na NIC ativa escrevendo `TcpAckFrequency = 1`
@@ -2687,28 +2725,30 @@ fn get_sticky_keys_status() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_sticky_keys_info() -> Result<TweakInfo, String> {
-    let is_applied = get_sticky_keys_status().unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("disable_sticky_keys");
+pub async fn get_sticky_keys_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_sticky_keys_status().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_sticky_keys");
 
-    Ok(TweakInfo {
-        id: "disable_sticky_keys".to_string(),
-        name: "Desabilitar Teclas de Aderência (Sticky Keys)".to_string(),
-        description: "Desabilita o atalho de ativação do Sticky Keys (5x Shift), prevenindo \
-            interrupções acidentais durante sessões de jogo."
-            .to_string(),
-        category: "visual".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: atalho de Sticky Keys habilitado (Flags = 510)".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "disable_sticky_keys".to_string(),
+            name: "Desabilitar Teclas de Aderência (Sticky Keys)".to_string(),
+            description: "Desabilita o atalho de ativação do Sticky Keys (5x Shift), prevenindo \
+                interrupções acidentais durante sessões de jogo."
+                .to_string(),
+            category: "visual".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: atalho de Sticky Keys habilitado (Flags = 510)".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Define `Flags = "506"` em `HKCU\Control Panel\Accessibility\StickyKeys`
@@ -2793,29 +2833,31 @@ fn get_bing_search_status() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_bing_search_info() -> Result<TweakInfo, String> {
-    let is_applied = get_bing_search_status().unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("disable_bing_search");
+pub async fn get_bing_search_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_bing_search_status().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_bing_search");
 
-    Ok(TweakInfo {
-        id: "disable_bing_search".to_string(),
-        name: "Desabilitar Busca Bing no Menu Iniciar".to_string(),
-        description: "Remove a integração do Bing no menu Iniciar do Windows. Buscas ficam \
-            apenas locais, mais rápidas e sem envio de dados para a Microsoft."
-            .to_string(),
-        category: "visual".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: busca Bing habilitada no Menu Iniciar (chave ausente ou = 1)"
+        Ok(TweakInfo {
+            id: "disable_bing_search".to_string(),
+            name: "Desabilitar Busca Bing no Menu Iniciar".to_string(),
+            description: "Remove a integração do Bing no menu Iniciar do Windows. Buscas ficam \
+                apenas locais, mais rápidas e sem envio de dados para a Microsoft."
                 .to_string(),
-    
-        hardware_filter: None,
-    })
+            category: "visual".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: busca Bing habilitada no Menu Iniciar (chave ausente ou = 1)"
+                    .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Define `BingSearchEnabled = 0` em `HKCU\...\Search` para remover integração Bing.

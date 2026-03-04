@@ -10,9 +10,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|_app| {
-            // Pre-warm GPU cache em background (query WMI lenta, 2-4s).
-            // Não bloqueia a abertura da janela — Dashboard mostra skeleton enquanto carrega.
-            system_info::pre_warm_gpu_cache();
+            // Pre-warm de TODOS os caches estáticos em background.
+            // Roda em paralelo — a janela abre imediatamente enquanto
+            // os dados são coletados. Dashboard mostra skeletons.
+            system_info::pre_warm_all_caches();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

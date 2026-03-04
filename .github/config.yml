@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "❓ Dúvida ou Pergunta"
+    url: https://github.com/marcelopepis/FrameGuard/issues
+    about: "Para dúvidas gerais, abra uma issue com o título começando com [Dúvida]."

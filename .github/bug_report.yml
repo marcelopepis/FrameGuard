@@ -1,0 +1,101 @@
+name: "🐛 Bug Report"
+description: "Algo não funcionou como esperado? Reporte aqui."
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar! Quanto mais detalhes, mais rápido a gente resolve.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrição do bug
+      description: O que aconteceu? O que você esperava que acontecesse?
+      placeholder: "Ex: Ao clicar em 'Aplicar' no tweak de Game DVR, aparece erro de backup..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      description: Como a gente consegue reproduzir o problema?
+      placeholder: |
+        1. Abrir o FrameGuard
+        2. Navegar para Otimizações
+        3. Clicar em 'Aplicar' no Game DVR
+        4. Erro aparece no toast
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento esperado
+      description: O que deveria ter acontecido?
+      placeholder: "O tweak deveria ser aplicado sem erro."
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Versão do FrameGuard
+      description: "Visível no canto inferior esquerdo do app ou em Sobre."
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: windows_version
+    attributes:
+      label: Versão do Windows
+      options:
+        - Windows 11 24H2
+        - Windows 11 23H2
+        - Windows 11 22H2
+        - Windows 10 22H2
+        - Outra (especifique na descrição)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: elevated
+    attributes:
+      label: Executando como Administrador?
+      description: "Alguns tweaks exigem elevação. Aparece no Dashboard do FrameGuard."
+      options:
+        - Sim
+        - Não
+        - Não sei
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware (opcional)
+      description: "CPU, GPU e RAM — se relevante pro bug."
+      placeholder: "i7-13700K, RTX 4070, 32GB DDR5"
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / Logs
+      description: "Cole prints ou mensagens de erro aqui. Arraste imagens direto neste campo."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: Verifiquei que não existe uma issue duplicada
+          required: true
+        - label: Estou usando a versão mais recente do FrameGuard
+          required: false

@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 use sysinfo::System;
 
-use crate::utils::command_runner::{run_command, run_powershell};
+use crate::utils::command_runner::run_command;
 
 // ─── Cache de hardware estático (nunca muda durante a sessão) ────────────────
 
@@ -62,12 +62,24 @@ pub async fn get_static_hw_info() -> Result<StaticHwInfo, String> {
     }
 
     let info = tokio::task::spawn_blocking(|| {
-        let sys = System::new_all();
+        use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind};
+
+        // Cria System VAZIO e refresca APENAS CPU + RAM.
+        // System::new_all() leva 3-8s (coleta processos, discos, rede); isto leva <200ms.
+        let mut sys = System::new_with_specifics(
+            RefreshKind::nothing()
+                .with_cpu(CpuRefreshKind::everything())
+                .with_memory(MemoryRefreshKind::everything()),
+        );
+
+        // Segundo refresh garante que brand() esteja populado em todas as versões do sysinfo
+        sys.refresh_cpu_all();
 
         let cpu_name = sys
             .cpus()
             .first()
             .map(|c| c.brand().trim().to_string())
+            .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "CPU Desconhecida".to_string());
 
         let cpu_cores = sys.physical_core_count().unwrap_or(0) as u32;
@@ -196,77 +208,131 @@ pub(crate) fn detect_gpu_vendor_sync() -> String {
     }
 }
 
-/// Inicia coleta de GPU em background (chamado no setup do Tauri).
-/// Não bloqueia a abertura da janela — Dashboard mostra skeleton enquanto carrega.
-/// Usa `GPU_COLLECTING` para evitar query duplicada se `get_gpu_info()` for chamado
-/// antes do cache estar pronto.
-pub fn pre_warm_gpu_cache() {
-    if GPU_CACHE.get().is_some() {
-        return;
-    }
-    if GPU_COLLECTING
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
+/// Pre-warm de todos os caches estáticos em background.
+/// Chamado no setup do Tauri — não bloqueia a abertura da janela.
+/// Dashboard mostra skeletons enquanto os dados são coletados.
+pub fn pre_warm_all_caches() {
+    // GPU: registro direto, ~50ms
+    if GPU_CACHE.get().is_none()
+        && GPU_COLLECTING
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     {
-        return; // Já em andamento
+        tauri::async_runtime::spawn(async {
+            let info = tokio::task::spawn_blocking(collect_gpu_info)
+                .await
+                .unwrap_or(GpuInfo {
+                    gpu_name: "GPU Desconhecida".to_string(),
+                    gpu_vram_gb: 0.0,
+                });
+            let _ = GPU_CACHE.set(info);
+            GPU_COLLECTING.store(false, Ordering::Release);
+        });
     }
+
+    // CPU + RAM: sysinfo targeted, ~200ms
+    if HW_CACHE.get().is_none() {
+        tauri::async_runtime::spawn(async {
+            let _ = get_static_hw_info().await;
+        });
+    }
+
+    // System summary: registry + hostname, <100ms
+    if SUMMARY_CACHE.get().is_none() {
+        tauri::async_runtime::spawn(async {
+            let _ = get_system_summary().await;
+        });
+    }
+
+    // System status: registry + powercfg direto, ~100ms
     tauri::async_runtime::spawn(async {
-        let info = tokio::task::spawn_blocking(collect_gpu_info)
-            .await
-            .unwrap_or(GpuInfo {
-                gpu_name: "GPU Desconhecida".to_string(),
-                gpu_vram_gb: 0.0,
-            });
-        let _ = GPU_CACHE.set(info);
-        GPU_COLLECTING.store(false, Ordering::Release);
+        let _ = get_system_status().await;
     });
 }
 
-/// Coleta dados de GPU via PowerShell/WMI (operação lenta, 2-4s).
-/// Chamada sempre dentro de spawn_blocking.
+/// Coleta dados de GPU via registro do Windows (leitura direta, <50ms).
+/// Itera subkeys do driver de vídeo e seleciona a GPU com mais VRAM (dedicada > integrada).
+/// Fallback para wmic via cmd se o registro não retornar dados.
 fn collect_gpu_info() -> GpuInfo {
-    // Win32_VideoController.AdapterRAM é uint32 → trava em ~4 GB para placas maiores.
-    // Lê HardwareInformation.qwMemorySize (QWORD 64-bit) da chave de registro do driver.
-    // Retorna "Nome|vram_bytes". Fallback para AdapterRAM se a chave não for encontrada.
-    let gpu_raw = run_command(
-        "powershell.exe",
-        &[
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
-             $g = Get-WmiObject Win32_VideoController | Sort-Object AdapterRAM -Descending | Select-Object -First 1; \
-             $vram = (Get-ChildItem 'HKLM:\\SYSTEM\\ControlSet001\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' \
-               -ErrorAction SilentlyContinue | ForEach-Object { \
-                 $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; \
-                 if ($p.DriverDesc -eq $g.Name) { $p.'HardwareInformation.qwMemorySize' } \
-               } | Where-Object { $_ } | Select-Object -First 1); \
-             if (-not $vram) { $vram = [uint64]$g.AdapterRAM }; \
-             \"$($g.Name)|$vram\"",
-        ],
-    )
-    .ok()
-    .filter(|r| r.success && !r.stdout.trim().is_empty())
-    .map(|r| r.stdout.trim().to_string())
-    .unwrap_or_default();
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
 
-    let mut parts = gpu_raw.splitn(2, '|');
-    let gpu_name = parts
-        .next()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "GPU Desconhecida".to_string());
-    let gpu_vram_gb = parts
-        .next()
-        .and_then(|s| s.trim().parse::<u64>().ok())
-        .map(|bytes| (bytes as f64 / 1_073_741_824.0 * 10.0).round() / 10.0)
-        .unwrap_or(0.0);
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let class_path =
+        r"SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+
+    let mut best_name = String::new();
+    let mut best_vram: u64 = 0;
+
+    // Itera subkeys 0000, 0001, 0002... (cada uma é um adaptador de vídeo)
+    if let Ok(class_key) = hklm.open_subkey(class_path) {
+        for subkey_name in class_key.enum_keys().filter_map(|k| k.ok()) {
+            if let Ok(adapter) = class_key.open_subkey(&subkey_name) {
+                // Lê nome da GPU
+                let name: String = adapter
+                    .get_value("DriverDesc")
+                    .or_else(|_| adapter.get_value("HardwareInformation.AdapterString"))
+                    .unwrap_or_default();
+
+                if name.is_empty() {
+                    continue;
+                }
+
+                // Lê VRAM (qwMemorySize é QWORD = REG_QWORD = u64)
+                let vram: u64 = adapter
+                    .get_value("HardwareInformation.qwMemorySize")
+                    .unwrap_or(0u64);
+
+                // Fallback para MemorySize (u32, trava em ~4GB para GPUs maiores)
+                let vram = if vram == 0 {
+                    adapter
+                        .get_value::<u32, _>("HardwareInformation.MemorySize")
+                        .map(|v| v as u64)
+                        .unwrap_or(0)
+                } else {
+                    vram
+                };
+
+                // Prioriza GPU com mais VRAM (=GPU dedicada, não integrada)
+                if vram > best_vram || (best_name.is_empty() && !name.is_empty()) {
+                    best_name = name;
+                    best_vram = vram;
+                }
+            }
+        }
+    }
+
+    // Fallback: se o registro não retornou nada, tenta wmic via cmd (sem PowerShell)
+    if best_name.is_empty() {
+        if let Ok(output) = run_command(
+            "cmd.exe",
+            &[
+                "/c",
+                "wmic",
+                "path",
+                "Win32_VideoController",
+                "get",
+                "Name",
+                "/value",
+            ],
+        ) {
+            if let Some(line) = output.stdout.lines().find(|l| l.starts_with("Name=")) {
+                best_name = line.trim_start_matches("Name=").trim().to_string();
+            }
+        }
+    }
 
     GpuInfo {
-        gpu_name,
-        gpu_vram_gb,
+        gpu_name: if best_name.is_empty() {
+            "GPU Desconhecida".to_string()
+        } else {
+            best_name
+        },
+        gpu_vram_gb: if best_vram > 0 {
+            (best_vram as f64 / 1_073_741_824.0 * 10.0).round() / 10.0
+        } else {
+            0.0
+        },
     }
 }
 
@@ -380,7 +446,9 @@ pub async fn get_system_status() -> Result<SystemStatus, String> {
         .to_string();
 
         // Power Plan: detecção por GUID (independente de idioma do Windows)
-        let powercfg_output = run_powershell("powercfg /getactivescheme")
+        // Chama powercfg.exe diretamente — SEM wrapper PowerShell.
+        // powercfg.exe roda em ~50ms; via PowerShell levava 1-3s (cold start do interpretador).
+        let powercfg_output = run_command("powercfg.exe", &["/getactivescheme"])
             .ok()
             .map(|o| o.stdout.clone())
             .unwrap_or_default();
@@ -448,23 +516,37 @@ pub struct SystemUsage {
     pub ram_usage_percent: f32,
 }
 
-/// Retorna o uso atual de CPU e RAM com medição de delta de 200 ms.
+/// Retorna o uso atual de CPU e RAM.
 /// Usa instância persistente de `System` — muito mais leve que criar `System::new_all()` a cada chamada.
+/// A primeira chamada faz sleep(200ms) para baseline; chamadas subsequentes usam o delta
+/// natural do intervalo de polling do frontend (2s).
 #[tauri::command]
 pub async fn get_system_usage() -> Result<SystemUsage, String> {
     tokio::task::spawn_blocking(|| {
         let sys_mutex = SYS_USAGE.get_or_init(|| {
             let mut sys = System::new();
             sys.refresh_cpu_usage();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            sys.refresh_cpu_usage();
             sys.refresh_memory();
             Mutex::new(sys)
         });
 
-        let mut sys = sys_mutex
-            .lock()
-            .map_err(|_| "Falha ao adquirir lock do System".to_string())?;
+        // try_lock para não bloquear se outra chamada estiver em andamento
+        let mut sys = match sys_mutex.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                // Outra medição em andamento — retorna defaults
+                return Ok(SystemUsage {
+                    cpu_usage_percent: 0.0,
+                    ram_usage_percent: 0.0,
+                });
+            }
+        };
 
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        // Refresh SEM sleep — usa o delta desde a última medição.
+        // Como o frontend chama a cada 2s, o delta é suficiente
+        // para uma leitura precisa de CPU usage.
         sys.refresh_cpu_usage();
         sys.refresh_memory();
 

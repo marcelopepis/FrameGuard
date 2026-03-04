@@ -469,39 +469,43 @@ fn parse_json_array<T: for<'de> Deserialize<'de>>(json_str: &str) -> Result<Vec<
 
 /// Retorna status atual de todos os serviços curados.
 #[tauri::command]
-pub fn get_services_status() -> Result<Vec<ServiceItem>, String> {
-    let script = build_services_query_script();
-    let output = run_powershell(&script)?;
+pub async fn get_services_status() -> Result<Vec<ServiceItem>, String> {
+    tokio::task::spawn_blocking(|| {
+        let script = build_services_query_script();
+        let output = run_powershell(&script)?;
 
-    if !output.success {
-        return Err(format!("Erro ao consultar serviços: {}", output.stderr));
-    }
+        if !output.success {
+            return Err(format!("Erro ao consultar serviços: {}", output.stderr));
+        }
 
-    let ps_items: Vec<PsServiceInfo> = parse_json_array(&output.stdout)?;
+        let ps_items: Vec<PsServiceInfo> = parse_json_array(&output.stdout)?;
 
-    let mut items = Vec::with_capacity(CURATED_SERVICES.len());
-    for curated in CURATED_SERVICES {
-        let ps = ps_items.iter().find(|p| p.name == curated.name);
-        let (status, startup_type) = match ps {
-            Some(p) => (p.status.clone(), p.start_type.clone()),
-            None => ("NotFound".into(), "NotFound".into()),
-        };
+        let mut items = Vec::with_capacity(CURATED_SERVICES.len());
+        for curated in CURATED_SERVICES {
+            let ps = ps_items.iter().find(|p| p.name == curated.name);
+            let (status, startup_type) = match ps {
+                Some(p) => (p.status.clone(), p.start_type.clone()),
+                None => ("NotFound".into(), "NotFound".into()),
+            };
 
-        let bid = svc_backup_id(curated.name);
-        items.push(ServiceItem {
-            id: curated.name.to_string(),
-            display_name: curated.display_name.to_string(),
-            description: curated.description.to_string(),
-            category: curated.category.to_string(),
-            status,
-            startup_type,
-            is_conditional: curated.is_conditional,
-            conditional_note: curated.conditional_note.map(String::from),
-            has_backup: has_applied_backup(&bid),
-        });
-    }
+            let bid = svc_backup_id(curated.name);
+            items.push(ServiceItem {
+                id: curated.name.to_string(),
+                display_name: curated.display_name.to_string(),
+                description: curated.description.to_string(),
+                category: curated.category.to_string(),
+                status,
+                startup_type,
+                is_conditional: curated.is_conditional,
+                conditional_note: curated.conditional_note.map(String::from),
+                has_backup: has_applied_backup(&bid),
+            });
+        }
 
-    Ok(items)
+        Ok(items)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Desabilita os serviços selecionados (com backup do tipo de startup original).
@@ -671,43 +675,47 @@ pub fn restore_services(ids: Vec<String>) -> Result<BatchResult, String> {
 
 /// Retorna status atual de todas as tarefas agendadas curadas.
 #[tauri::command]
-pub fn get_tasks_status() -> Result<Vec<TaskItem>, String> {
-    let script = build_tasks_query_script();
-    let output = run_powershell(&script)?;
+pub async fn get_tasks_status() -> Result<Vec<TaskItem>, String> {
+    tokio::task::spawn_blocking(|| {
+        let script = build_tasks_query_script();
+        let output = run_powershell(&script)?;
 
-    if !output.success {
-        return Err(format!(
-            "Erro ao consultar tarefas agendadas: {}",
-            output.stderr
-        ));
-    }
+        if !output.success {
+            return Err(format!(
+                "Erro ao consultar tarefas agendadas: {}",
+                output.stderr
+            ));
+        }
 
-    let ps_items: Vec<PsTaskInfo> = parse_json_array(&output.stdout)?;
+        let ps_items: Vec<PsTaskInfo> = parse_json_array(&output.stdout)?;
 
-    let mut items = Vec::with_capacity(CURATED_TASKS.len());
-    for curated in CURATED_TASKS {
-        let ps = ps_items
-            .iter()
-            .find(|p| p.path == curated.path && p.name == curated.name);
-        let state = match ps {
-            Some(p) => p.state.clone(),
-            None => "NotFound".into(),
-        };
+        let mut items = Vec::with_capacity(CURATED_TASKS.len());
+        for curated in CURATED_TASKS {
+            let ps = ps_items
+                .iter()
+                .find(|p| p.path == curated.path && p.name == curated.name);
+            let state = match ps {
+                Some(p) => p.state.clone(),
+                None => "NotFound".into(),
+            };
 
-        let bid = task_backup_id(curated.name);
-        items.push(TaskItem {
-            id: curated.name.to_string(),
-            display_name: curated.display_name.to_string(),
-            description: curated.description.to_string(),
-            category: curated.category.to_string(),
-            state,
-            task_path: curated.path.to_string(),
-            task_name: curated.name.to_string(),
-            has_backup: has_applied_backup(&bid),
-        });
-    }
+            let bid = task_backup_id(curated.name);
+            items.push(TaskItem {
+                id: curated.name.to_string(),
+                display_name: curated.display_name.to_string(),
+                description: curated.description.to_string(),
+                category: curated.category.to_string(),
+                state,
+                task_path: curated.path.to_string(),
+                task_name: curated.name.to_string(),
+                has_backup: has_applied_backup(&bid),
+            });
+        }
 
-    Ok(items)
+        Ok(items)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Desabilita as tarefas agendadas selecionadas (com backup).

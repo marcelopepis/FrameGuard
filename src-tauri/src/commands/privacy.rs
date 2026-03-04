@@ -48,30 +48,32 @@ fn get_telemetry_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_telemetry_registry_info() -> Result<TweakInfo, String> {
-    let is_applied = get_telemetry_is_applied().unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("disable_telemetry_registry");
+pub async fn get_telemetry_registry_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_telemetry_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_telemetry_registry");
 
-    Ok(TweakInfo {
-        id: "disable_telemetry_registry".to_string(),
-        name: "Desabilitar Telemetria do Windows".to_string(),
-        description: "Reduz a coleta de dados de diagnóstico e telemetria enviados à Microsoft. \
-            Define AllowTelemetry = 0 (nível mínimo), desabilita experiências personalizadas e \
-            remove o ID de publicidade usado para rastreamento entre apps."
-            .to_string(),
-        category: "privacy".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: telemetria em nível Completo, experiências personalizadas e ID de publicidade habilitados"
+        Ok(TweakInfo {
+            id: "disable_telemetry_registry".to_string(),
+            name: "Desabilitar Telemetria do Windows".to_string(),
+            description: "Reduz a coleta de dados de diagnóstico e telemetria enviados à Microsoft. \
+                Define AllowTelemetry = 0 (nível mínimo), desabilita experiências personalizadas e \
+                remove o ID de publicidade usado para rastreamento entre apps."
                 .to_string(),
-    
-        hardware_filter: None,
-    })
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: telemetria em nível Completo, experiências personalizadas e ID de publicidade habilitados"
+                    .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -199,29 +201,31 @@ fn get_copilot_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_copilot_info() -> Result<TweakInfo, String> {
-    let is_applied = get_copilot_is_applied().unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("disable_copilot");
+pub async fn get_copilot_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_copilot_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_copilot");
 
-    Ok(TweakInfo {
-        id: "disable_copilot".to_string(),
-        name: "Desabilitar Copilot e Cortana".to_string(),
-        description: "Desabilita o Windows Copilot (assistente IA), oculta o botão da barra \
-            de tarefas e bloqueia o Cortana via política de grupo. Impede envio de consultas \
-            e contexto do sistema para servidores da Microsoft."
-            .to_string(),
-        category: "privacy".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: Copilot habilitado, botão visível, Cortana permitida".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "disable_copilot".to_string(),
+            name: "Desabilitar Copilot e Cortana".to_string(),
+            description: "Desabilita o Windows Copilot (assistente IA), oculta o botão da barra \
+                de tarefas e bloqueia o Cortana via política de grupo. Impede envio de consultas \
+                e contexto do sistema para servidores da Microsoft."
+                .to_string(),
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: Copilot habilitado, botão visível, Cortana permitida".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -339,30 +343,32 @@ fn get_content_delivery_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_content_delivery_info() -> Result<TweakInfo, String> {
-    let is_applied = get_content_delivery_is_applied().unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("disable_content_delivery");
+pub async fn get_content_delivery_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_content_delivery_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_content_delivery");
 
-    Ok(TweakInfo {
-        id: "disable_content_delivery".to_string(),
-        name: "Desabilitar Content Delivery Manager".to_string(),
-        description: "Impede o Windows de instalar silenciosamente apps sugeridos (bloatware), \
-            exibir dicas, sugestões e propagandas no Menu Iniciar e tela de bloqueio. \
-            Também bloqueia recursos de consumidor via política de grupo."
-            .to_string(),
-        category: "privacy".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Low,
-        evidence_level: EvidenceLevel::Proven,
-        default_value_description:
-            "Padrão Windows: instalação automática de apps sugeridos e sugestões habilitadas"
+        Ok(TweakInfo {
+            id: "disable_content_delivery".to_string(),
+            name: "Desabilitar Content Delivery Manager".to_string(),
+            description: "Impede o Windows de instalar silenciosamente apps sugeridos (bloatware), \
+                exibir dicas, sugestões e propagandas no Menu Iniciar e tela de bloqueio. \
+                Também bloqueia recursos de consumidor via política de grupo."
                 .to_string(),
-    
-        hardware_filter: None,
-    })
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: instalação automática de apps sugeridos e sugestões habilitadas"
+                    .to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -471,29 +477,31 @@ fn get_background_apps_is_applied() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_background_apps_info() -> Result<TweakInfo, String> {
-    let is_applied = get_background_apps_is_applied().unwrap_or(false);
-    let (has_backup, last_applied) = backup_info("disable_background_apps");
+pub async fn get_background_apps_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_background_apps_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_background_apps");
 
-    Ok(TweakInfo {
-        id: "disable_background_apps".to_string(),
-        name: "Desabilitar Apps em Segundo Plano".to_string(),
-        description: "Desabilita globalmente a execução de apps UWP em segundo plano. \
-            Reduz consumo de CPU, RAM e rede por apps que verificam notificações e \
-            atualizam conteúdo mesmo quando não estão em uso."
-            .to_string(),
-        category: "privacy".to_string(),
-        is_applied,
-        requires_restart: false,
-        last_applied,
-        has_backup,
-        risk_level: RiskLevel::Medium,
-        evidence_level: EvidenceLevel::Plausible,
-        default_value_description:
-            "Padrão Windows: apps UWP podem executar em segundo plano".to_string(),
-    
-        hardware_filter: None,
-    })
+        Ok(TweakInfo {
+            id: "disable_background_apps".to_string(),
+            name: "Desabilitar Apps em Segundo Plano".to_string(),
+            description: "Desabilita globalmente a execução de apps UWP em segundo plano. \
+                Reduz consumo de CPU, RAM e rede por apps que verificam notificações e \
+                atualizam conteúdo mesmo quando não estão em uso."
+                .to_string(),
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Medium,
+            evidence_level: EvidenceLevel::Plausible,
+            default_value_description:
+                "Padrão Windows: apps UWP podem executar em segundo plano".to_string(),
+
+            hardware_filter: None,
+        })
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

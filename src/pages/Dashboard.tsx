@@ -101,17 +101,25 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
-  // Polling de CPU e RAM a cada 2 segundos
+  // Polling de CPU e RAM — só inicia depois que dados de HW carregarem
+  // para não competir com a inicialização do Dashboard.
   useEffect(() => {
+    if (!hw) return;
+
+    // Primeira medição imediata
+    getSystemUsage().then(u => {
+      setCpuPercent(u.cpu_usage_percent);
+      setRamPercent(u.ram_usage_percent);
+      setRamUsedGb(Math.round(u.ram_usage_percent / 100 * hw.ram_total_gb * 10) / 10);
+    }).catch(() => {});
+
     const id = setInterval(() => {
       getSystemUsage().then(u => {
         setCpuPercent(u.cpu_usage_percent);
         setRamPercent(u.ram_usage_percent);
-        if (hw) {
-          setRamUsedGb(Math.round(u.ram_usage_percent / 100 * hw.ram_total_gb * 10) / 10);
-        }
+        setRamUsedGb(Math.round(u.ram_usage_percent / 100 * hw.ram_total_gb * 10) / 10);
       }).catch(() => {});
-    }, 2000);
+    }, 3000);
     return () => clearInterval(id);
   }, [hw]);
 
