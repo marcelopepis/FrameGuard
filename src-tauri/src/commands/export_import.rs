@@ -516,3 +516,152 @@ pub fn validate_fg_file(file_path: String) -> Result<FgFileInfo, String> {
         tasks_disabled: fg_file.tasks_disabled,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // ── count_backups ───────────────────────────────────────────────────────
+
+    #[test]
+    fn counts_backups_in_valid_structure() {
+        let v = json!({
+            "backups": {
+                "disable_vbs": { "status": "applied" },
+                "enable_hags": { "status": "reverted" }
+            }
+        });
+        assert_eq!(count_backups(&v), 2);
+    }
+
+    #[test]
+    fn zero_for_missing_backups_field() {
+        let v = json!({ "version": "1.0" });
+        assert_eq!(count_backups(&v), 0);
+    }
+
+    #[test]
+    fn zero_for_non_object_backups() {
+        let v = json!({ "backups": "not an object" });
+        assert_eq!(count_backups(&v), 0);
+    }
+
+    #[test]
+    fn zero_for_empty_backups() {
+        let v = json!({ "backups": {} });
+        assert_eq!(count_backups(&v), 0);
+    }
+
+    // ── count_plans ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn counts_plans_correctly() {
+        let v = json!({
+            "plans": {
+                "plan_1": { "name": "Manutenção" },
+                "plan_2": { "name": "Gaming" },
+                "plan_3": { "name": "Privacidade" }
+            }
+        });
+        assert_eq!(count_plans(&v), 3);
+    }
+
+    #[test]
+    fn zero_for_missing_plans() {
+        let v = json!({});
+        assert_eq!(count_plans(&v), 0);
+    }
+
+    // ── read_and_validate_fg ────────────────────────────────────────────────
+
+    #[test]
+    fn rejects_nonexistent_file() {
+        let path = Path::new(r"C:\FrameGuard_test_nonexistent.fg");
+        assert!(read_and_validate_fg(path).is_err());
+    }
+
+    #[test]
+    fn validates_fg_roundtrip() {
+        let fg = FgExportFile {
+            frameguard_export: true,
+            version: "1.0".to_string(),
+            app_version: "0.1.0".to_string(),
+            exported_at: "2025-01-01T00:00:00Z".to_string(),
+            machine_info: MachineInfo {
+                hostname: "TEST-PC".to_string(),
+                os_version: "Windows 11 Pro".to_string(),
+            },
+            backups: json!({}),
+            plans: json!({}),
+            settings: json!({}),
+            services_disabled: vec![],
+            tasks_disabled: vec![],
+        };
+
+        // Serializa para um arquivo temporário
+        let tmp = std::env::temp_dir().join("frameguard_test_export.fg");
+        let content = serde_json::to_string_pretty(&fg).unwrap();
+        std::fs::write(&tmp, &content).unwrap();
+
+        // Valida
+        let result = read_and_validate_fg(&tmp);
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.app_version, "0.1.0");
+        assert_eq!(parsed.machine_info.hostname, "TEST-PC");
+
+        // Limpa
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn rejects_wrong_version() {
+        let fg = FgExportFile {
+            frameguard_export: true,
+            version: "2.0".to_string(),
+            app_version: "0.1.0".to_string(),
+            exported_at: "2025-01-01T00:00:00Z".to_string(),
+            machine_info: MachineInfo {
+                hostname: "PC".to_string(),
+                os_version: "W11".to_string(),
+            },
+            backups: json!({}),
+            plans: json!({}),
+            settings: json!({}),
+            services_disabled: vec![],
+            tasks_disabled: vec![],
+        };
+
+        let tmp = std::env::temp_dir().join("frameguard_test_bad_version.fg");
+        std::fs::write(&tmp, serde_json::to_string(&fg).unwrap()).unwrap();
+
+        let result = read_and_validate_fg(&tmp);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("2.0"));
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn rejects_non_export_file() {
+        let fg = json!({
+            "frameguard_export": false,
+            "version": "1.0",
+            "app_version": "0.1.0",
+            "exported_at": "2025-01-01T00:00:00Z",
+            "machine_info": { "hostname": "PC", "os_version": "W11" },
+            "backups": {},
+            "plans": {},
+            "settings": {}
+        });
+
+        let tmp = std::env::temp_dir().join("frameguard_test_not_export.fg");
+        std::fs::write(&tmp, serde_json::to_string(&fg).unwrap()).unwrap();
+
+        let result = read_and_validate_fg(&tmp);
+        assert!(result.is_err());
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+}

@@ -1,8 +1,10 @@
 [package]
 name = "frameguard"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Utilitário de manutenção e otimização Windows 11 para gamers"
+authors = ["Marcelo Pepis"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/marcelopepis/FrameGuard"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

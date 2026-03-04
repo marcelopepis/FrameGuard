@@ -98,3 +98,51 @@ fn version_is_newer(latest: &str, current: &str) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn newer_major() {
+        assert!(version_is_newer("2.0.0", "1.0.0"));
+    }
+
+    #[test]
+    fn newer_minor() {
+        assert!(version_is_newer("1.1.0", "1.0.0"));
+    }
+
+    #[test]
+    fn newer_patch() {
+        assert!(version_is_newer("1.0.1", "1.0.0"));
+    }
+
+    #[test]
+    fn same_version() {
+        assert!(!version_is_newer("1.0.0", "1.0.0"));
+    }
+
+    #[test]
+    fn older_version() {
+        assert!(!version_is_newer("0.9.0", "1.0.0"));
+    }
+
+    #[test]
+    fn partial_version_strings() {
+        assert!(version_is_newer("2", "1.9.9"));
+        assert!(!version_is_newer("1", "1.0.0"));
+    }
+
+    #[test]
+    fn empty_strings() {
+        assert!(!version_is_newer("", ""));
+        assert!(!version_is_newer("", "1.0.0"));
+    }
+
+    #[test]
+    fn complex_comparison() {
+        assert!(version_is_newer("0.2.0", "0.1.9"));
+        assert!(!version_is_newer("0.1.9", "0.2.0"));
+    }
+}

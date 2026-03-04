@@ -2027,9 +2027,29 @@ fn get_active_power_scheme_guid() -> Result<String, String> {
 
 fn get_ultimate_performance_is_applied() -> Result<bool, String> {
     let output = run_powershell("powercfg /getactivescheme")?;
-    // "Ultimate Performance" é o nome em EN; Windows PT-BR também usa este nome
-    // após duplicação do template GUID e9a42b02-...
-    Ok(output.stdout.to_lowercase().contains("ultimate"))
+    let lower = output.stdout.to_lowercase();
+
+    // 1. Template GUID ativo diretamente (algumas edições do Windows permitem)
+    if lower.contains(ULTIMATE_PERF_GUID) {
+        return Ok(true);
+    }
+
+    // 2. Plano duplicado pelo FrameGuard — compara GUID ativo com o armazenado no backup
+    if let Ok(active_guid) = extract_guid_from_powercfg(&output.stdout) {
+        if let Ok(backups) = get_all_backups() {
+            if let Some(entry) = backups.get("enable_ultimate_performance") {
+                if entry.status == BackupStatus::Applied {
+                    if let Some(stored_guid) = entry.applied_value.as_str() {
+                        if stored_guid.eq_ignore_ascii_case(&active_guid) {
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(false)
 }
 
 #[tauri::command]
@@ -2855,4 +2875,60 @@ pub fn revert_bing_search() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── extract_guid_from_powercfg ──────────────────────────────────────────
+
+    #[test]
+    fn extracts_guid_from_english_output() {
+        let output = "Power Scheme GUID: e9a42b02-d5df-448d-aa00-03f14749eb61  (Ultimate Performance)";
+        let guid = extract_guid_from_powercfg(output).unwrap();
+        assert_eq!(guid, "e9a42b02-d5df-448d-aa00-03f14749eb61");
+    }
+
+    #[test]
+    fn extracts_guid_from_ptbr_output() {
+        let output = "GUID do Esquema de Energia: 381b4222-f694-41f0-9685-ff5bb260df2e  (Equilibrado)";
+        let guid = extract_guid_from_powercfg(output).unwrap();
+        assert_eq!(guid, "381b4222-f694-41f0-9685-ff5bb260df2e");
+    }
+
+    #[test]
+    fn extracts_guid_from_duplicate_output() {
+        // powercfg -duplicatescheme retorna o GUID do novo esquema
+        let output = "Power Scheme GUID: a1b2c3d4-e5f6-7890-abcd-ef1234567890  (Ultimate Performance)";
+        let guid = extract_guid_from_powercfg(output).unwrap();
+        assert_eq!(guid, "a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+    }
+
+    #[test]
+    fn fails_on_no_guid() {
+        let output = "No power scheme found";
+        assert!(extract_guid_from_powercfg(output).is_err());
+    }
+
+    #[test]
+    fn fails_on_empty_string() {
+        assert!(extract_guid_from_powercfg("").is_err());
+    }
+
+    #[test]
+    fn ignores_non_hex_guid_format() {
+        let output = "GUID: zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz";
+        assert!(extract_guid_from_powercfg(output).is_err());
+    }
+
+    // ── bytes_to_mb (importado de health_check, testado aqui por conveniência) ──
+
+    #[test]
+    fn backup_info_returns_false_for_nonexistent() {
+        // backup_info deve retornar (false, None) para tweak que não existe no backup
+        let (has, ts) = backup_info("tweak_that_never_existed_12345");
+        assert!(!has);
+        assert!(ts.is_none());
+    }
 }

@@ -1,5 +1,6 @@
 // Informações do sistema (CPU, GPU, RAM, OS, status de features)
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 use sysinfo::System;
@@ -13,6 +14,9 @@ static HW_CACHE: OnceLock<StaticHwInfo> = OnceLock::new();
 
 /// Cache global para dados de GPU (pre-warm em setup(), query WMI lenta).
 static GPU_CACHE: OnceLock<GpuInfo> = OnceLock::new();
+
+/// Flag para evitar query dupla de GPU — `true` enquanto pre_warm ou get_gpu_info está coletando.
+static GPU_COLLECTING: AtomicBool = AtomicBool::new(false);
 
 /// Informações estáticas de CPU e RAM.
 /// Cacheadas na primeira chamada — retornam em <100ms (sysinfo, sem PowerShell).
@@ -85,19 +89,45 @@ pub async fn get_static_hw_info() -> Result<StaticHwInfo, String> {
 }
 
 /// Retorna dados da GPU (nome + VRAM). Pre-warmed em setup() via `pre_warm_gpu_cache`.
-/// Se o cache ainda não estiver pronto, executa a query WMI em background e aguarda.
+/// Se o pre-warm está em andamento, aguarda o resultado em vez de iniciar query duplicada.
 #[tauri::command]
 pub async fn get_gpu_info() -> Result<GpuInfo, String> {
     if let Some(cached) = GPU_CACHE.get() {
         return Ok(cached.clone());
     }
 
-    let info = tokio::task::spawn_blocking(collect_gpu_info)
-        .await
-        .map_err(|e| e.to_string())?;
+    // Se o pre-warm já está coletando, espera o resultado dele
+    if GPU_COLLECTING.load(Ordering::Acquire) {
+        for _ in 0..80 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            if let Some(cached) = GPU_CACHE.get() {
+                return Ok(cached.clone());
+            }
+        }
+    }
 
-    let _ = GPU_CACHE.set(info.clone());
-    Ok(info)
+    // Fallback: coleta diretamente (pre-warm não rodou ou falhou)
+    if GPU_COLLECTING
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        let info = tokio::task::spawn_blocking(collect_gpu_info)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let _ = GPU_CACHE.set(info.clone());
+        GPU_COLLECTING.store(false, Ordering::Release);
+        Ok(info)
+    } else {
+        // Outra task começou a coletar enquanto esperávamos — aguarda
+        for _ in 0..80 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            if let Some(cached) = GPU_CACHE.get() {
+                return Ok(cached.clone());
+            }
+        }
+        Err("Timeout aguardando dados de GPU".to_string())
+    }
 }
 
 /// Detecta vendors de GPU e CPU a partir dos nomes no cache.
@@ -168,11 +198,19 @@ pub(crate) fn detect_gpu_vendor_sync() -> String {
 
 /// Inicia coleta de GPU em background (chamado no setup do Tauri).
 /// Não bloqueia a abertura da janela — Dashboard mostra skeleton enquanto carrega.
+/// Usa `GPU_COLLECTING` para evitar query duplicada se `get_gpu_info()` for chamado
+/// antes do cache estar pronto.
 pub fn pre_warm_gpu_cache() {
+    if GPU_CACHE.get().is_some() {
+        return;
+    }
+    if GPU_COLLECTING
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return; // Já em andamento
+    }
     tokio::spawn(async {
-        if GPU_CACHE.get().is_some() {
-            return;
-        }
         let info = tokio::task::spawn_blocking(collect_gpu_info)
             .await
             .unwrap_or(GpuInfo {
@@ -180,6 +218,7 @@ pub fn pre_warm_gpu_cache() {
                 gpu_vram_gb: 0.0,
             });
         let _ = GPU_CACHE.set(info);
+        GPU_COLLECTING.store(false, Ordering::Release);
     });
 }
 

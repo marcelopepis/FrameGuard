@@ -749,30 +749,41 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 10px;
+  padding: 6px 10px;
   background: rgba(17, 24, 39, 0.5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  cursor: grab;
-  user-select: none;
-  touch-action: none;
   transition:
     border-color var(--transition-fast),
     background var(--transition-fast);
 }
 
-.orderItem:active {
-  cursor: grabbing;
-}
-
-.orderItemDragOver {
-  border-color: var(--color-accent) !important;
-  background: rgba(34, 211, 238, 0.09) !important;
-}
-
-.dragHandle {
-  color: var(--color-text-muted);
+.moveButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   flex-shrink: 0;
+}
+
+.moveBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 14px;
+  border-radius: 3px;
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.moveBtn:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.moveBtn:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 
 .orderNum {

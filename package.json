@@ -2,6 +2,9 @@
   "name": "frameguard",
   "private": true,
   "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "author": "Marcelo Pepis",
+  "repository": "https://github.com/marcelopepis/FrameGuard",
   "type": "module",
   "scripts": {
     "dev": "vite",

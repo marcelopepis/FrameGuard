@@ -1269,3 +1269,124 @@ pub async fn kill_process(pid: u32) -> Result<String, String> {
     .await
     .unwrap_or_else(|e| Err(e.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── bytes_to_mb ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn zero_bytes() {
+        assert_eq!(bytes_to_mb(0), 0);
+    }
+
+    #[test]
+    fn exactly_one_mb() {
+        assert_eq!(bytes_to_mb(1024 * 1024), 1);
+    }
+
+    #[test]
+    fn truncates_fractional_mb() {
+        assert_eq!(bytes_to_mb(1_572_864), 1);
+    }
+
+    #[test]
+    fn large_value() {
+        assert_eq!(bytes_to_mb(10 * 1024 * 1024 * 1024), 10240);
+    }
+
+    // ── dir_size_bytes ──────────────────────────────────────────────────────
+
+    #[test]
+    fn nonexistent_path_returns_zero() {
+        let path = Path::new(r"C:\FrameGuard_test_nonexistent_12345");
+        assert_eq!(dir_size_bytes(path), 0);
+    }
+
+    // ── DISM output parsing ─────────────────────────────────────────────────
+
+    fn parse_dism_checkhealth(stdout: &str, success: bool) -> CheckStatus {
+        let stdout_lower = stdout.to_lowercase();
+        if !success {
+            CheckStatus::Error
+        } else if stdout_lower.contains("no component store corruption detected")
+            || stdout_lower.contains("não está danificado")
+        {
+            CheckStatus::Success
+        } else if stdout_lower.contains("repairable") || stdout_lower.contains("reparável") {
+            CheckStatus::Warning
+        } else if stdout_lower.contains("corrupted")
+            || stdout_lower.contains("corrompido")
+            || stdout_lower.contains("danificado")
+        {
+            CheckStatus::Error
+        } else {
+            CheckStatus::Warning
+        }
+    }
+
+    #[test]
+    fn dism_ok_english() {
+        assert!(matches!(
+            parse_dism_checkhealth("No component store corruption detected.", true),
+            CheckStatus::Success
+        ));
+    }
+
+    #[test]
+    fn dism_ok_ptbr() {
+        assert!(matches!(
+            parse_dism_checkhealth("O repositório de componentes não está danificado.", true),
+            CheckStatus::Success
+        ));
+    }
+
+    #[test]
+    fn dism_repairable_english() {
+        assert!(matches!(
+            parse_dism_checkhealth("The component store is repairable.", true),
+            CheckStatus::Warning
+        ));
+    }
+
+    #[test]
+    fn dism_repairable_ptbr() {
+        assert!(matches!(
+            parse_dism_checkhealth("O repositório de componentes é reparável.", true),
+            CheckStatus::Warning
+        ));
+    }
+
+    #[test]
+    fn dism_corrupted_english() {
+        assert!(matches!(
+            parse_dism_checkhealth("The component store is corrupted.", true),
+            CheckStatus::Error
+        ));
+    }
+
+    #[test]
+    fn dism_corrupted_ptbr() {
+        assert!(matches!(
+            parse_dism_checkhealth("O repositório de componentes está corrompido.", true),
+            CheckStatus::Error
+        ));
+    }
+
+    #[test]
+    fn dism_failure_exit_code() {
+        assert!(matches!(
+            parse_dism_checkhealth("", false),
+            CheckStatus::Error
+        ));
+    }
+
+    #[test]
+    fn dism_unknown_output() {
+        assert!(matches!(
+            parse_dism_checkhealth("Some unexpected output from DISM", true),
+            CheckStatus::Warning
+        ));
+    }
+}

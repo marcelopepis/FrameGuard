@@ -4,11 +4,11 @@
 // subconjunto dos tweaks disponíveis, definindo a ordem de execução e
 // rodando tudo com um clique — com feedback em tempo real via eventos Tauri.
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  Plus, Play, Pencil, Trash2, GripVertical,
+  Plus, Play, Pencil, Trash2,
   CheckCircle2, XCircle, Clock, MinusCircle,
   Loader2, X, ChevronDown, ChevronUp,
   ClipboardList, Shield, Copy, CalendarClock, Users,
@@ -713,10 +713,6 @@ function PlanEditor({ initial, onSave, onCancel }: PlanEditorProps) {
   );
   const [saving, setSaving] = useState(false);
 
-  // Drag-and-drop state
-  const draggedRef = useRef<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-
   function toggleTweak(id: string, checked: boolean) {
     if (checked) {
       setCheckedIds(prev => new Set([...prev, id]));
@@ -727,41 +723,14 @@ function PlanEditor({ initial, onSave, onCancel }: PlanEditorProps) {
     }
   }
 
-  function handleDragStart(id: string) {
-    draggedRef.current = id;
-  }
-
-  function handleDragEnter(id: string) {
-    if (draggedRef.current && draggedRef.current !== id) {
-      setDragOverId(id);
-    }
-  }
-
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault();
-  }
-
-  function handleDrop(targetId: string) {
-    setDragOverId(null);
-    const source = draggedRef.current;
-    if (!source || source === targetId) return;
-
+  function moveItem(idx: number, direction: -1 | 1) {
     setOrderedIds(prev => {
+      const target = idx + direction;
+      if (target < 0 || target >= prev.length) return prev;
       const arr = [...prev];
-      const fromIdx = arr.indexOf(source);
-      const toIdx = arr.indexOf(targetId);
-      if (fromIdx < 0 || toIdx < 0) return prev;
-      arr.splice(fromIdx, 1);
-      arr.splice(toIdx, 0, source);
+      [arr[idx], arr[target]] = [arr[target], arr[idx]];
       return arr;
     });
-
-    draggedRef.current = null;
-  }
-
-  function handleDragEnd() {
-    draggedRef.current = null;
-    setDragOverId(null);
   }
 
   async function handleSave() {
@@ -884,17 +853,25 @@ function PlanEditor({ initial, onSave, onCancel }: PlanEditorProps) {
               {orderedIds.map((id, idx) => {
                 const tweak = TWEAK_MAP[id];
                 return (
-                  <div
-                    key={id}
-                    className={`${styles.orderItem} ${dragOverId === id ? styles.orderItemDragOver : ''}`}
-                    draggable
-                    onDragStart={() => handleDragStart(id)}
-                    onDragEnter={() => handleDragEnter(id)}
-                    onDragOver={handleDragOver}
-                    onDrop={() => handleDrop(id)}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <GripVertical size={14} strokeWidth={2} className={styles.dragHandle} />
+                  <div key={id} className={styles.orderItem}>
+                    <div className={styles.moveButtons}>
+                      <button
+                        className={styles.moveBtn}
+                        onClick={() => moveItem(idx, -1)}
+                        disabled={idx === 0}
+                        title="Mover para cima"
+                      >
+                        <ChevronUp size={14} strokeWidth={2.5} />
+                      </button>
+                      <button
+                        className={styles.moveBtn}
+                        onClick={() => moveItem(idx, 1)}
+                        disabled={idx === orderedIds.length - 1}
+                        title="Mover para baixo"
+                      >
+                        <ChevronDown size={14} strokeWidth={2.5} />
+                      </button>
+                    </div>
                     <span className={styles.orderNum}>{idx + 1}</span>
                     <span className={styles.orderName}>{tweak?.name ?? id}</span>
                   </div>

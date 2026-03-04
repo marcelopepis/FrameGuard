@@ -211,3 +211,68 @@ pub fn tweak_entry(
         skipped_count: None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── plan_execution_entry ────────────────────────────────────────────────
+
+    #[test]
+    fn all_completed_is_success() {
+        let entry = plan_execution_entry("Manutenção", 30, 5, 0, 0);
+        assert!(matches!(entry.result, ActivityResult::Success));
+        assert!(matches!(entry.activity_type, ActivityType::PlanExecution));
+        assert_eq!(entry.name, "Manutenção");
+        assert_eq!(entry.duration_seconds, 30);
+        assert_eq!(entry.completed_count, Some(5));
+        assert_eq!(entry.failed_count, Some(0));
+    }
+
+    #[test]
+    fn some_failed_is_partial() {
+        let entry = plan_execution_entry("Gaming", 60, 3, 2, 0);
+        assert!(matches!(entry.result, ActivityResult::Partial));
+    }
+
+    #[test]
+    fn all_failed_is_failed() {
+        let entry = plan_execution_entry("Privacidade", 10, 0, 4, 0);
+        assert!(matches!(entry.result, ActivityResult::Failed));
+    }
+
+    #[test]
+    fn zero_completed_with_skipped_is_failed() {
+        let entry = plan_execution_entry("Teste", 5, 0, 1, 3);
+        assert!(matches!(entry.result, ActivityResult::Failed));
+    }
+
+    // ── tweak_entry ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn apply_success() {
+        let entry = tweak_entry("Desabilitar VBS", true, true);
+        assert!(matches!(entry.activity_type, ActivityType::TweakApplied));
+        assert!(matches!(entry.result, ActivityResult::Success));
+        assert_eq!(entry.name, "Desabilitar VBS");
+        assert_eq!(entry.duration_seconds, 0);
+        assert!(entry.completed_count.is_none());
+    }
+
+    #[test]
+    fn revert_failure() {
+        let entry = tweak_entry("Desabilitar VBS", false, false);
+        assert!(matches!(entry.activity_type, ActivityType::TweakReverted));
+        assert!(matches!(entry.result, ActivityResult::Failed));
+    }
+
+    #[test]
+    fn timestamp_is_iso_format() {
+        let entry = tweak_entry("Test", true, true);
+        // Formato esperado: YYYY-MM-DDTHH:MM:SSZ
+        assert!(entry.timestamp.ends_with('Z'));
+        assert_eq!(entry.timestamp.len(), 20);
+        assert_eq!(&entry.timestamp[4..5], "-");
+        assert_eq!(&entry.timestamp[10..11], "T");
+    }
+}

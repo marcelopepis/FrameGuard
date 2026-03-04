@@ -7,9 +7,11 @@
 
 .content {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   position: relative;
+  min-height: 0;
   /* Fundo com gradiente radial sutil para dar profundidade */
   background:
     radial-gradient(ellipse 80% 50% at 60% -10%, rgba(34, 211, 238, 0.04) 0%, transparent 70%),

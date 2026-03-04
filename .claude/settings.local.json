@@ -20,7 +20,15 @@
       "Bash(dir:*)",
       "Bash(xargs grep -l \"invoke\\\\|commands\")",
       "Bash(npm run build)",
-      "Bash(grep -r \"0.1.0\" /i/FrameGuard/src*)"
+      "Bash(grep -r \"0.1.0\" /i/FrameGuard/src*)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "WebFetch(domain:www.gnu.org)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -sL \"https://www.gnu.org/licenses/gpl-3.0.txt\" -o /i/FrameGuard/LICENSE)",
+      "Bash(curl -v \"https://www.gnu.org/licenses/gpl-3.0.txt\")",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/spdx/license-list-data/main/text/GPL-3.0-or-later.txt\" -o /i/FrameGuard/LICENSE)",
+      "Bash(cargo test)"
     ]
   }
 }

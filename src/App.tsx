@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { BrowserRouter, useLocation, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import { Dashboard, Optimizations, Privacy, Maintenance, Cleanup, Services, Plans, Learn, About, Settings } from './pages';
@@ -20,24 +20,35 @@ const ROUTES = [
   { path: '/settings',      Page: Settings },
 ];
 
+// Estilos para cada wrapper de página — cada um tem seu próprio scroll container.
+// Páginas inativas ficam com visibility: hidden + height: 0 para manter o estado
+// React montado sem ocupar espaço nem capturar scroll.
+const activeStyle: React.CSSProperties = {
+  flex: 1,
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  minHeight: 0,
+};
+const hiddenStyle: React.CSSProperties = {
+  height: 0,
+  overflow: 'hidden',
+  visibility: 'hidden',
+};
+
 // Renderiza todas as páginas simultaneamente usando keep-alive:
-// páginas inativas ficam ocultas via CSS (display: none), mas permanecem
-// montadas — preservando estado React, execuções em andamento e listeners Tauri.
+// páginas inativas ficam ocultas mas permanecem montadas — preservando
+// estado React, execuções em andamento e listeners Tauri.
+// Cada wrapper é seu próprio scroll container, preservando a posição de scroll
+// ao alternar entre páginas.
 function Pages() {
   const { pathname } = useLocation();
   const isKnown = ROUTES.some(r => r.path === pathname);
-  const mainRef = useRef<HTMLElement>(null);
-
-  // Reseta o scroll do <main> ao trocar de página
-  useEffect(() => {
-    if (mainRef.current) mainRef.current.scrollTop = 0;
-  }, [pathname]);
 
   return (
-    <Layout mainRef={mainRef}>
+    <Layout>
       {!isKnown && <Navigate to="/" replace />}
       {ROUTES.map(({ path, Page }) => (
-        <div key={path} style={pathname === path ? { display: 'block', height: '100%' } : { display: 'none' }}>
+        <div key={path} style={pathname === path ? activeStyle : hiddenStyle}>
           <Page />
         </div>
       ))}
