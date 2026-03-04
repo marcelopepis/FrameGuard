@@ -12,6 +12,7 @@ Informações que o Claude Code precisa saber ao executar qualquer prompt:
 - Persistência: JSON em %APPDATA%\FrameGuard/ (plans.json, backups.json, activity_log.json)
 - O app roda em Windows PT-BR — detecção baseada em texto deve ser agnóstica de idioma
 - Correções recentes já aplicadas: activity log integration, dashboard cache com TTL/OnceLock, file locks com Restart Manager API
+- Features recentes: WelcomeModal (primeira execução), busca global na sidebar (Ctrl+K), filtro por hardware/vendor, remoção de bloatware UWP, ponto de restauração automático, página de cleanup categorizado, página educacional (Learn)
 
 Ao gerar código novo:
 - Rust: usar spawn_blocking para operações que envolvem PowerShell, WMI ou registry
@@ -40,10 +41,12 @@ Ao gerar código novo:
 ┌─────────────────────────────────────────────────────┐
 │  Frontend (React + TS)                              │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────────┐│
-│  │ Contexts  │ │  Hooks   │ │      7 Pages         ││
+│  │ Contexts  │ │  Hooks   │ │     10 Pages         ││
 │  │(Running,  │ │(Action,  │ │ Dashboard, Optim,    ││
-│  │ Toast)    │ │ Plan)    │ │ Privacy, Maint,      ││
-│  └──────────┘ └──────────┘ │ Services, Plans, Set  ││
+│  │ Toast)    │ │ Plan,    │ │ Privacy, Maint,      ││
+│  └──────────┘ │ HwFilter,│ │ Cleanup, Services,   ││
+│               │ Search)  │ │ Plans, Learn, About,  ││
+│               └──────────┘ │ Settings              ││
 │                             └──────────────────────┘│
 │          invoke() ↕ listen()                        │
 ├─────────────────────────────────────────────────────┤
@@ -52,8 +55,12 @@ Ao gerar código novo:
 │  │  Commands     │  │  Utils                       │ │
 │  │  (system_info,│  │  (registry, command_runner,  │ │
 │  │   optim, priv,│  │   backup, plan_manager,      │ │
-│  │   health, ...) │  │   activity_log, file_locks) │ │
-│  └──────────────┘  └──────────────────────────────┘ │
+│  │   health,     │  │   activity_log, file_locks,  │ │
+│  │   cleanup,    │  │   restore_point)             │ │
+│  │   bloatware,  │  └──────────────────────────────┘ │
+│  │   restore_pt, │                                   │
+│  │   about)      │                                   │
+│  └──────────────┘                                    │
 │          ↕ Win32 API / PowerShell / Registry        │
 ├─────────────────────────────────────────────────────┤
 │  Windows 11 (Elevação Admin via manifest.xml)       │
@@ -65,51 +72,68 @@ Ao gerar código novo:
 ```
 FrameGuard/
 ├── src/                           # Frontend React/TS
-│   ├── App.tsx                    # Router + keep-alive (todas as 7 páginas montadas)
+│   ├── App.tsx                    # Router + keep-alive (todas as 10 páginas montadas)
 │   ├── main.tsx                   # Entry point
 │   ├── components/
 │   │   ├── ActionCard/            # Card de ação com progresso, logs, resultado
-│   │   ├── Layout/                # Layout principal (Sidebar + content)
+│   │   ├── BloatwareSection/      # Seção de remoção de apps UWP (usado em Privacy)
+│   │   ├── Layout/                # Layout principal (Sidebar + content + SearchBar)
+│   │   ├── SearchBar/             # Busca global na sidebar (Ctrl+K)
 │   │   ├── Toast/                 # Notificações toast (portal)
+│   │   ├── WelcomeModal/          # Modal de boas-vindas (primeira execução)
 │   │   ├── TweakCard.tsx          # Card de tweak com apply/revert/restore
 │   │   └── index.ts
 │   ├── contexts/
 │   │   ├── RunningContext.tsx      # Estado global de execução (Set<string>)
 │   │   └── ToastContext.tsx        # Fila de toasts (max 3)
+│   ├── data/
+│   │   └── searchIndex.ts         # Índice estático para busca global (tweaks, ações, planos)
 │   ├── hooks/
 │   │   ├── useActionRunner.ts     # Execução de ações com streaming
-│   │   └── usePlanExecution.ts    # Execução de planos com progresso por item
+│   │   ├── useHardwareFilter.ts   # Filtragem de tweaks por vendor (GPU/CPU)
+│   │   ├── usePlanExecution.ts    # Execução de planos com progresso por item
+│   │   ├── useSearchHighlight.ts  # Scroll + highlight de itens encontrados via busca
+│   │   └── index.ts
 │   ├── pages/
 │   │   ├── Dashboard.tsx          # Hardware, status, atividade recente, planos rápidos
-│   │   ├── Optimizations.tsx      # 21 tweaks em 6 categorias
-│   │   ├── Privacy.tsx            # 4 tweaks de privacidade
-│   │   ├── Maintenance.tsx        # DISM, SFC, cleanup, disco
+│   │   ├── Optimizations.tsx      # 21 tweaks em 6 categorias (com filtro de hardware)
+│   │   ├── Privacy.tsx            # 4 tweaks de privacidade + remoção de bloatware UWP
+│   │   ├── Maintenance.tsx        # DISM, SFC, chkdsk, SSD trim, DNS
+│   │   ├── Cleanup.tsx            # Limpeza categorizada (temp, shader, browser, apps)
 │   │   ├── Services.tsx           # Serviços e tarefas agendadas
 │   │   ├── Plans.tsx              # CRUD de planos de execução
-│   │   └── Settings.tsx           # Export/import, backups, sobre
+│   │   ├── Learn.tsx              # Página educacional (mitos e snake oil)
+│   │   ├── About.tsx              # Versão, créditos, verificação de atualizações
+│   │   └── Settings.tsx           # Export/import, backups, config
 │   ├── services/
-│   │   └── systemInfo.ts          # Wrappers invoke() para system info
+│   │   └── systemInfo.ts          # Wrappers invoke() para system info + getDetectedVendors
 │   ├── styles/
 │   │   └── globals.css            # CSS vars do tema, reset, scrollbar
 │   ├── types/
-│   │   └── health.ts              # Interfaces compartilhadas
+│   │   ├── health.ts              # Interfaces compartilhadas (HealthCheckResult, etc.)
+│   │   ├── cleanup.ts             # Tipos do sistema de cleanup (CleanupItem, CleanupCategory)
+│   │   └── index.ts
 │   └── utils/
-│       └── formatters.ts          # formatDuration, formatDate, formatSpaceFreed
+│       ├── formatters.ts          # formatDuration, formatDate, formatSpaceFreed
+│       └── restorePoint.ts        # Lógica centralizada de ponto de restauração (cache 24h)
 │
 ├── src-tauri/                     # Backend Rust
 │   ├── src/
 │   │   ├── main.rs                # Entry point binário
-│   │   ├── lib.rs                 # Setup Tauri + registro de 153 comandos
+│   │   ├── lib.rs                 # Setup Tauri + registro de 121 comandos
 │   │   ├── commands/
 │   │   │   ├── mod.rs             # Declaração de módulos
-│   │   │   ├── system_info.rs     # HW info (cache), status (TTL 5s), usage, summary
+│   │   │   ├── system_info.rs     # HW info (cache), status (TTL 5s), usage, summary, vendors
 │   │   │   ├── optimizations.rs   # 21 tweaks (get_info, apply, revert, restore_default)
 │   │   │   ├── privacy.rs         # 4 tweaks de privacidade
 │   │   │   ├── health_check.rs    # DISM, SFC, chkdsk, SSD trim, DNS, temp cleanup
-│   │   │   ├── cleanup.rs         # analyze_cleanup, run_cleanup
+│   │   │   ├── cleanup.rs         # scan_cleanup, execute_cleanup (categorizado)
+│   │   │   ├── bloatware.rs       # get_installed_uwp_apps, remove_uwp_apps
+│   │   │   ├── restore_point.rs   # create_restore_point (via PowerShell)
 │   │   │   ├── plans.rs           # CRUD + execute_plan (emite plan_progress)
 │   │   │   ├── services.rs        # 33 serviços + 8 tarefas curadas
 │   │   │   ├── activity.rs        # log_tweak_activity, get_recent_activity
+│   │   │   ├── about.rs           # check_for_updates (GitHub API)
 │   │   │   └── export_import.rs   # Export/import .fg (JSON), validate_fg_file
 │   │   └── utils/
 │   │       ├── mod.rs
@@ -119,6 +143,7 @@ FrameGuard/
 │   │       ├── plan_manager.rs    # CRUD planos + 4 built-in (%APPDATA%\FrameGuard\plans.json)
 │   │       ├── activity_log.rs    # FIFO max 100 (%APPDATA%\FrameGuard\activity_log.json)
 │   │       ├── file_locks.rs      # Restart Manager API — detecta processos travando arquivos
+│   │       ├── restore_point.rs   # Criação de ponto de restauração Windows
 │   │       ├── wmi.rs             # Queries WMI
 │   │       └── elevated.rs        # is_elevated() via OpenProcessToken
 │   ├── Cargo.toml
@@ -152,6 +177,8 @@ FrameGuard/
 |----------------------------|-----------------------------------|
 | `frameguard:health:{id}`   | Último HealthCheckResult por ação |
 | `frameguard:cleanup:{id}`  | Último resultado de cleanup       |
+| `fg.firstRunSeen`          | Flag de primeira execução (WelcomeModal) |
+| `fg.restorePoint`          | Preferência de ponto de restauração automático |
 
 ### IDs dos Planos Built-in
 - `builtin_manutencao_basica` — Manutenção básica
@@ -226,15 +253,18 @@ interface TweakInfo {
 
 ## Rotas do Frontend
 
-| Rota             | Componente     | Descrição                                    |
-|------------------|----------------|----------------------------------------------|
-| `/`              | Dashboard      | Info HW, status, atividade, planos rápidos   |
-| `/optimizations` | Optimizations  | 21 tweaks gaming/GPU/CPU/storage/network/UX  |
-| `/privacy`       | Privacy        | 4 tweaks de privacidade/debloat              |
-| `/maintenance`   | Maintenance    | Cleanup, DISM, SFC, disco                    |
-| `/services`      | Services       | 33 serviços + 8 tarefas agendadas            |
-| `/plans`         | Plans          | CRUD + execução de planos                    |
-| `/settings`      | Settings       | Export/import .fg, backups, config            |
+| Rota             | Componente     | Descrição                                       |
+|------------------|----------------|--------------------------------------------------|
+| `/`              | Dashboard      | Info HW, status, atividade, planos rápidos       |
+| `/optimizations` | Optimizations  | 21 tweaks gaming/GPU/CPU/storage/network/UX      |
+| `/privacy`       | Privacy        | 4 tweaks de privacidade + remoção de bloatware   |
+| `/maintenance`   | Maintenance    | DISM, SFC, chkdsk, SSD trim, DNS                |
+| `/cleanup`       | Cleanup        | Limpeza categorizada (temp, shader, browser, apps)|
+| `/services`      | Services       | 33 serviços + 8 tarefas agendadas               |
+| `/plans`         | Plans          | CRUD + execução de planos                        |
+| `/learn`         | Learn          | Página educacional (mitos e snake oil)           |
+| `/about`         | About          | Versão, créditos, verificação de atualizações    |
+| `/settings`      | Settings       | Export/import .fg, backups, config               |
 
 **Keep-alive:** Todas as páginas ficam sempre montadas (`display: none` quando inativas) para preservar estado React, listeners e execuções em andamento.
 
@@ -252,6 +282,7 @@ interface TweakInfo {
 | `chkdsk_progress`           | run_chkdsk                 | CommandEvent     |
 | `ssd_trim_progress`         | run_ssd_trim               | CommandEvent     |
 | `plan_progress`             | execute_plan               | PlanProgressEvent|
+| `cleanup_progress`          | execute_cleanup            | CleanupProgressEvent|
 
 ```typescript
 // CommandEvent
@@ -298,6 +329,17 @@ struct ActivityEntry { timestamp, activity_type, name, result, duration_seconds,
 
 // Export
 struct FgExportFile { frameguard_export, version, app_version, exported_at, machine_info, backups, plans, settings, services_disabled, tasks_disabled }
+
+// Cleanup
+struct CleanupCategory { id, name, description, risk: CleanupRisk, items: Vec<CleanupItem> }
+struct CleanupItem { path, display_name, size_bytes, item_type }
+enum CleanupRisk { Safe, Moderate, Caution }
+
+// Bloatware
+struct UwpAppInfo { name, display_name, publisher, category, recommendation }
+
+// Ponto de Restauração
+enum RestorePointResult { Created, Skipped, Disabled, Failed(String) }
 ```
 
 ### Frontend (TypeScript)
@@ -310,6 +352,8 @@ interface ToastCtx { showToast(type, title, message?, duration?): void }
 // Hooks
 function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string): { states, handleRun, toggleLog, toggleDetails, isRunning }
 function usePlanExecution(): { executingPlan, execState, execute, closeModal, cleanup }
+function useHardwareFilter(tweaks: TweakDef[]): { filteredTweaks, detectedVendors, loading }
+function useSearchHighlight(): void  // auto-scroll + highlight via URL params (?section=&highlight=)
 
 // Ação
 interface ActionMeta { id, name, Icon, description, technicalDetails, estimatedDuration, eventChannel, command, invokeArgs?, requiresInternet?, requiresRestart?, category }
@@ -369,6 +413,57 @@ npm run tauri     # CLI Tauri (e.g., npm run tauri build)
 - Backup protege valores originais antes de qualquer modificação
 - File locks detection via Restart Manager API
 
+## Features Recentes
+
+### Busca Global (SearchBar)
+
+- Ativada via `Ctrl+K` ou clique no ícone da sidebar
+- Busca fuzzy no índice estático (`src/data/searchIndex.ts`) com tags bilíngues (PT + EN)
+- Resultados agrupados por página/tipo com navegação por teclado (↑↓↵)
+- Ao clicar, navega para a página e aplica highlight via `useSearchHighlight` (URL params `?section=&highlight=`)
+- Highlight com borda cyan por 2 segundos, auto-expande accordion sections
+
+### Filtro por Hardware/Vendor (useHardwareFilter)
+
+- `get_detected_vendors()` detecta fabricantes de GPU/CPU via PowerShell
+- `useHardwareFilter()` filtra tweaks incompatíveis (ex: `disable_nvidia_telemetry` só aparece para GPUs NVIDIA)
+- Mapeamento estático em `TWEAK_HARDWARE_MAP` — fallback seguro: mostra todos se detecção falhar
+- Usado em Optimizations e Plans
+
+### Ponto de Restauração Automático (restorePoint.ts)
+
+- Criação automática antes de tweaks/planos (se habilitado pelo usuário)
+- Preferência salva em `localStorage` (`fg.restorePoint`, padrão: habilitado)
+- Cache local de 24h para evitar duplicatas (`Mutex<Option<Instant>>` no backend)
+- Tratamento gracioso: não bloqueia execução se feature estiver desabilitada ou em cooldown
+
+### Remoção de Bloatware UWP (BloatwareSection)
+
+- Scan e remoção de apps UWP pré-instalados
+- Lista curada com ~35 apps em categorias: Microsoft Bloatware, Games/Xbox, OEM, Opcionais, Sistema (protegido)
+- Recomendações por app: remover / opcional / manter
+- Remoção em batch com tracking de erros
+- Integrado na página Privacy
+
+### WelcomeModal (primeira execução)
+
+- Modal de boas-vindas exibido na primeira execução do app
+- Apresenta os pilares do FrameGuard
+- Controlado via `localStorage` (`fg.firstRunSeen`)
+
+### Página Learn (educacional)
+
+- Desmistifica otimizações comuns do Windows
+- Badges: Mito, Perigoso, Obsoleto, Snake Oil
+- Tópicos: efeitos visuais, Windows Update, QoS bandwidth, prefetch, etc.
+- Explicações baseadas em evidências
+
+### Verificação de Atualizações (About)
+
+- `check_for_updates()` consulta GitHub Releases API
+- Comparação semântica de versões
+- Exibe release notes da versão mais recente
+
 ## Cache e Performance
 
 | Item                 | Estratégia                    | TTL      |
@@ -376,6 +471,8 @@ npm run tauri     # CLI Tauri (e.g., npm run tauri build)
 | StaticHwInfo         | `OnceLock` (cache permanente) | Sessão   |
 | SystemStatus         | `OnceLock<Mutex>` + TTL       | 5s       |
 | Backups/Plans/Log    | `OnceLock<Mutex>` + arquivo   | Persistente |
+| Restore Point        | `Mutex<Option<Instant>>`      | 24h      |
+| GPU pre-warm         | `OnceLock` (setup)            | Sessão   |
 | UI event buffer      | Flush a cada 80ms             | —        |
 | Log DOM              | Max 500 linhas                | —        |
 | CPU/RAM polling      | setInterval                   | 2s       |
