@@ -628,11 +628,23 @@ fn get_windows_version() -> Result<String, String> {
         .open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
         .map_err(|e| e.to_string())?;
 
-    let product: String = key
+    let mut product: String = key
         .get_value("ProductName")
         .unwrap_or_else(|_| "Windows".to_string());
 
-    // DisplayVersion contém o canal de lançamento (ex: "23H2")
+    // A Microsoft não atualizou ProductName no registro do Windows 11.
+    // Muitas instalações ainda retornam "Windows 10 Pro" mesmo sendo Win11.
+    // CurrentBuildNumber >= 22000 = Windows 11.
+    let build_number: String = key
+        .get_value("CurrentBuildNumber")
+        .unwrap_or_default();
+    let build_num: u32 = build_number.trim().parse().unwrap_or(0);
+
+    if build_num >= 22000 && product.contains("Windows 10") {
+        product = product.replace("Windows 10", "Windows 11");
+    }
+
+    // DisplayVersion contém o canal de lançamento (ex: "23H2", "24H2")
     let display_ver: String = key.get_value("DisplayVersion").unwrap_or_default();
 
     Ok(if display_ver.is_empty() {
