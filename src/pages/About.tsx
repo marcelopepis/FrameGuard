@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { openPath } from '@tauri-apps/plugin-opener';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   Github, ExternalLink, User,
   RefreshCw, CheckCircle2, AlertCircle, X as XIcon,
@@ -17,7 +17,7 @@ import FrameGuardIcon from '../components/FrameGuardIcon';
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.1.2';
 const GITHUB_URL = 'https://github.com/marcelopepis/FrameGuard';
 const AUTHOR_NAME = 'Marcelo Pepis';
 const AUTHOR_URL = 'https://github.com/marcelopepis';
@@ -40,7 +40,7 @@ export default function About() {
   >(null);
 
   async function handleOpenUrl(url: string) {
-    try { await openPath(url); } catch {}
+    try { await openUrl(url); } catch {}
   }
 
   async function handleCheckUpdates() {
