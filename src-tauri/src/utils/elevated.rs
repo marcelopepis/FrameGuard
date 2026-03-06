@@ -51,7 +51,9 @@ pub fn is_elevated() -> bool {
             return false;
         }
 
-        let mut elevation = TokenElevation { token_is_elevated: 0 };
+        let mut elevation = TokenElevation {
+            token_is_elevated: 0,
+        };
         let mut return_len: u32 = 0;
 
         let ok = ffi::GetTokenInformation(

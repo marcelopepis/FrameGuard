@@ -1,19 +1,41 @@
-// Comando para verificar atualizações via GitHub Releases API.
+//! Verificação de atualizações do FrameGuard via GitHub Releases API.
+//!
+//! Consulta a release mais recente do repositório GitHub e compara com a versão
+//! atual do aplicativo usando comparação semântica de versões (major.minor.patch).
 
 use serde::Serialize;
 
+/// Versão atual do aplicativo, extraída de `Cargo.toml` em tempo de compilação.
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Identificador do repositório GitHub no formato `owner/repo`.
 const GITHUB_REPO: &str = "marcelopepis/FrameGuard";
 
+/// Resultado da verificação de atualizações.
 #[derive(Debug, Serialize)]
 pub struct UpdateCheckResult {
+    /// Versão atual do aplicativo instalado (ex: `"0.1.2"`)
     pub current_version: String,
+    /// Versão mais recente disponível no GitHub (ex: `"0.2.0"`)
     pub latest_version: String,
+    /// `true` se a versão remota for mais recente que a instalada
     pub is_update_available: bool,
+    /// URL da página da release no GitHub para download manual
     pub release_url: String,
+    /// Corpo (markdown) das release notes da versão mais recente
     pub release_notes: String,
 }
 
+/// Consulta a GitHub Releases API para verificar se há uma versão mais recente.
+///
+/// Faz uma requisição HTTP bloqueante (via `spawn_blocking`) ao endpoint
+/// `GET /repos/{owner}/{repo}/releases/latest`. Se o repositório não tiver
+/// nenhuma release publicada (HTTP 404), retorna resultado indicando que não
+/// há atualização disponível.
+///
+/// # Erros
+/// Retorna `Err` se a requisição HTTP falhar (sem internet, DNS, timeout)
+/// ou se a API retornar um status inesperado (rate limit, erro do servidor).
 #[tauri::command]
 pub async fn check_for_updates() -> Result<UpdateCheckResult, String> {
     tokio::task::spawn_blocking(|| {
@@ -58,16 +80,17 @@ pub async fn check_for_updates() -> Result<UpdateCheckResult, String> {
             .unwrap_or(&format!("https://github.com/{}/releases", GITHUB_REPO))
             .to_string();
 
-        let release_notes = json["body"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let release_notes = json["body"].as_str().unwrap_or("").to_string();
 
         let is_update_available = version_is_newer(&tag, CURRENT_VERSION);
 
         Ok(UpdateCheckResult {
             current_version: CURRENT_VERSION.to_string(),
-            latest_version: if tag.is_empty() { CURRENT_VERSION.to_string() } else { tag },
+            latest_version: if tag.is_empty() {
+                CURRENT_VERSION.to_string()
+            } else {
+                tag
+            },
             is_update_available,
             release_url,
             release_notes,
@@ -79,11 +102,8 @@ pub async fn check_for_updates() -> Result<UpdateCheckResult, String> {
 
 /// Compara versões semver simples (major.minor.patch).
 fn version_is_newer(latest: &str, current: &str) -> bool {
-    let parse = |v: &str| -> Vec<u32> {
-        v.split('.')
-            .filter_map(|s| s.parse::<u32>().ok())
-            .collect()
-    };
+    let parse =
+        |v: &str| -> Vec<u32> { v.split('.').filter_map(|s| s.parse::<u32>().ok()).collect() };
     let l = parse(latest);
     let c = parse(current);
     for i in 0..3 {

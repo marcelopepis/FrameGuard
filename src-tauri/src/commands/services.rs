@@ -1,53 +1,82 @@
-// Comandos Tauri para gerenciamento de serviços e tarefas agendadas do Windows.
-//
-// Contém lista curada de serviços e tarefas seguros para desabilitar em PCs de gaming.
-// Operações em batch com backup automático para restauração.
+//! Gerenciamento de serviços e tarefas agendadas do Windows.
+//!
+//! Contém uma lista curada de serviços (~27) e tarefas agendadas (~8) que são
+//! seguros para desabilitar em PCs de gaming, organizados por categoria
+//! (telemetria, diagnósticos, hardware, acesso remoto, enterprise).
+//!
+//! Todas as operações fazem backup automático do estado original antes de
+//! alterar, permitindo restauração posterior via `restore_services`/`restore_tasks`.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::utils::backup::{
-    backup_before_apply, get_all_backups, restore_from_backup,
-    BackupStatus, OriginalValue, TweakCategory,
+    backup_before_apply, get_all_backups, restore_from_backup, BackupStatus, OriginalValue,
+    TweakCategory,
 };
 use crate::utils::command_runner::run_powershell;
 
 // ── Tipos serializáveis (retornados ao frontend) ─────────────────────────────
 
+/// Informações de um serviço Windows curado, com estado atual e metadados.
 #[derive(Debug, Serialize)]
 pub struct ServiceItem {
+    /// Nome interno do serviço (ex: `"DiagTrack"`)
     pub id: String,
+    /// Nome amigável para exibição na UI (ex: `"Connected User Experiences and Telemetry"`)
     pub display_name: String,
+    /// Descrição do que o serviço faz e por que é seguro desabilitar
     pub description: String,
+    /// Categoria de agrupamento: `"telemetry"`, `"diagnostics"`, `"hardware"`, `"remote"`, `"enterprise"`
     pub category: String,
+    /// Estado atual do serviço: `"Running"`, `"Stopped"`, `"NotFound"`, etc.
     pub status: String,
+    /// Tipo de inicialização: `"Automatic"`, `"Manual"`, `"Disabled"`, `"NotFound"`
     pub startup_type: String,
+    /// `true` se o serviço só deve ser desabilitado em condições específicas (ex: sem Bluetooth)
     pub is_conditional: bool,
+    /// Nota explicativa exibida quando `is_conditional` é `true`
     pub conditional_note: Option<String>,
+    /// `true` se existe backup Applied para este serviço (foi desabilitado pelo FrameGuard)
     pub has_backup: bool,
 }
 
+/// Informações de uma tarefa agendada curada, com estado atual e metadados.
 #[derive(Debug, Serialize)]
 pub struct TaskItem {
+    /// Nome interno da tarefa (ex: `"Microsoft Compatibility Appraiser"`)
     pub id: String,
+    /// Nome amigável para exibição na UI
     pub display_name: String,
+    /// Descrição do que a tarefa faz e por que é seguro desabilitar
     pub description: String,
+    /// Categoria de agrupamento: `"telemetry"`, `"ceip"`, `"diagnostics"`
     pub category: String,
+    /// Estado atual: `"Ready"`, `"Disabled"`, `"Running"`, `"NotFound"`
     pub state: String,
+    /// Caminho da tarefa no Task Scheduler (ex: `"\\Microsoft\\Windows\\Application Experience\\"`)
     pub task_path: String,
+    /// Nome da tarefa no Task Scheduler
     pub task_name: String,
+    /// `true` se existe backup Applied para esta tarefa
     pub has_backup: bool,
 }
 
+/// Resultado de uma operação em batch (desabilitar/restaurar múltiplos itens).
 #[derive(Debug, Serialize)]
 pub struct BatchResult {
+    /// IDs dos itens que foram processados com sucesso
     pub succeeded: Vec<String>,
+    /// Itens que falharam, com detalhes do erro
     pub failed: Vec<BatchError>,
 }
 
+/// Erro individual ocorrido durante uma operação em batch.
 #[derive(Debug, Serialize)]
 pub struct BatchError {
+    /// ID do serviço ou tarefa que falhou
     pub id: String,
+    /// Mensagem de erro descritiva
     pub error: String,
 }
 
@@ -334,7 +363,8 @@ const CURATED_TASKS: &[CuratedTask] = &[
         path: "\\Microsoft\\Windows\\Application Experience\\",
         name: "Microsoft Compatibility Appraiser",
         display_name: "Compatibility Appraiser",
-        description: "Coleta dados de compatibilidade de programas e envia para a Microsoft via CEIP.",
+        description:
+            "Coleta dados de compatibilidade de programas e envia para a Microsoft via CEIP.",
         category: "telemetry",
     },
     CuratedTask {
@@ -392,14 +422,17 @@ const CURATED_TASKS: &[CuratedTask] = &[
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/// Gera o ID de backup para um serviço (prefixo `svc_`).
 fn svc_backup_id(name: &str) -> String {
     format!("svc_{}", name)
 }
 
+/// Gera o ID de backup para uma tarefa agendada (prefixo `task_`).
 fn task_backup_id(name: &str) -> String {
     format!("task_{}", name)
 }
 
+/// Verifica se existe um backup com status `Applied` para o ID fornecido.
 fn has_applied_backup(backup_id: &str) -> bool {
     match get_all_backups() {
         Ok(backups) => matches!(
@@ -451,7 +484,10 @@ fn build_tasks_query_script() -> String {
     ps
 }
 
-/// Tenta parsear saída JSON como array; se for objeto único, encapsula em Vec.
+/// Tenta parsear saída JSON como array; se for objeto único, encapsula em `Vec`.
+///
+/// PowerShell retorna `[...]` para múltiplos resultados, mas `{...}` para
+/// resultado único. Esta função normaliza ambos os casos.
 fn parse_json_array<T: for<'de> Deserialize<'de>>(json_str: &str) -> Result<Vec<T>, String> {
     let trimmed = json_str.trim();
     if trimmed.starts_with('[') {
@@ -467,7 +503,14 @@ fn parse_json_array<T: for<'de> Deserialize<'de>>(json_str: &str) -> Result<Vec<
 
 // ── Comandos: Serviços ──────────────────────────────────────────────────────
 
-/// Retorna status atual de todos os serviços curados.
+/// Retorna o status atual de todos os serviços curados.
+///
+/// Executa uma única consulta PowerShell em batch para obter o estado
+/// de todos os serviços da lista curada, evitando múltiplas invocações.
+///
+/// # Erros
+/// Retorna `Err` se o PowerShell falhar ao executar ou se o JSON retornado
+/// não puder ser deserializado.
 #[tauri::command]
 pub async fn get_services_status() -> Result<Vec<ServiceItem>, String> {
     tokio::task::spawn_blocking(|| {
@@ -508,7 +551,19 @@ pub async fn get_services_status() -> Result<Vec<ServiceItem>, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// Desabilita os serviços selecionados (com backup do tipo de startup original).
+/// Desabilita os serviços selecionados, salvando o tipo de startup original em backup.
+///
+/// Para cada ID fornecido:
+/// 1. Verifica se está na lista curada (rejeita IDs desconhecidos)
+/// 2. Consulta o estado atual via PowerShell
+/// 3. Cria backup do `StartType` original
+/// 4. Define `StartupType = Disabled` e para o serviço
+///
+/// Serviços já desabilitados são contabilizados como sucesso sem ação.
+///
+/// # Erros
+/// Retorna `Err` apenas em falhas catastróficas. Falhas individuais são
+/// reportadas em `BatchResult.failed` sem interromper o processamento.
 #[tauri::command]
 pub fn disable_services(ids: Vec<String>) -> Result<BatchResult, String> {
     let mut result = BatchResult {
@@ -563,10 +618,7 @@ pub fn disable_services(ids: Vec<String>) -> Result<BatchResult, String> {
             }
         };
 
-        let original_type = data["StartType"]
-            .as_str()
-            .unwrap_or("Manual")
-            .to_string();
+        let original_type = data["StartType"].as_str().unwrap_or("Manual").to_string();
 
         // Já está desabilitado? Sucesso sem ação.
         if original_type == "Disabled" {
@@ -622,7 +674,14 @@ pub fn disable_services(ids: Vec<String>) -> Result<BatchResult, String> {
     Ok(result)
 }
 
-/// Restaura serviços selecionados ao tipo de startup original (do backup).
+/// Restaura serviços selecionados ao tipo de startup original salvo no backup.
+///
+/// Para cada ID, recupera o `StartType` original do backup e o reaplica via
+/// `Set-Service`. O backup é marcado como `Reverted`.
+///
+/// # Erros
+/// Retorna `Err` apenas em falhas catastróficas. Falhas individuais (ex: sem
+/// backup, serviço não encontrado) são reportadas em `BatchResult.failed`.
 #[tauri::command]
 pub fn restore_services(ids: Vec<String>) -> Result<BatchResult, String> {
     let mut result = BatchResult {
@@ -673,7 +732,14 @@ pub fn restore_services(ids: Vec<String>) -> Result<BatchResult, String> {
 
 // ── Comandos: Tarefas Agendadas ─────────────────────────────────────────────
 
-/// Retorna status atual de todas as tarefas agendadas curadas.
+/// Retorna o status atual de todas as tarefas agendadas curadas.
+///
+/// Executa uma única consulta PowerShell em batch para obter o estado
+/// de todas as tarefas da lista curada.
+///
+/// # Erros
+/// Retorna `Err` se o PowerShell falhar ao executar ou se o JSON retornado
+/// não puder ser deserializado.
 #[tauri::command]
 pub async fn get_tasks_status() -> Result<Vec<TaskItem>, String> {
     tokio::task::spawn_blocking(|| {
@@ -718,7 +784,19 @@ pub async fn get_tasks_status() -> Result<Vec<TaskItem>, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// Desabilita as tarefas agendadas selecionadas (com backup).
+/// Desabilita as tarefas agendadas selecionadas, salvando o estado original em backup.
+///
+/// Para cada ID fornecido:
+/// 1. Localiza a tarefa na lista curada (rejeita IDs desconhecidos)
+/// 2. Consulta o estado atual via `Get-ScheduledTask`
+/// 3. Cria backup do estado original
+/// 4. Desabilita via `Disable-ScheduledTask`
+///
+/// Tarefas já desabilitadas são contabilizadas como sucesso sem ação.
+///
+/// # Erros
+/// Retorna `Err` apenas em falhas catastróficas. Falhas individuais são
+/// reportadas em `BatchResult.failed`.
 #[tauri::command]
 pub fn disable_tasks(ids: Vec<String>) -> Result<BatchResult, String> {
     let mut result = BatchResult {
@@ -818,7 +896,14 @@ pub fn disable_tasks(ids: Vec<String>) -> Result<BatchResult, String> {
     Ok(result)
 }
 
-/// Restaura as tarefas agendadas selecionadas (reabilita).
+/// Restaura as tarefas agendadas selecionadas, reabilitando-as.
+///
+/// Para cada ID, marca o backup como `Reverted` e reabilita a tarefa via
+/// `Enable-ScheduledTask`.
+///
+/// # Erros
+/// Retorna `Err` apenas em falhas catastróficas. Falhas individuais (ex: sem
+/// backup, tarefa não encontrada) são reportadas em `BatchResult.failed`.
 #[tauri::command]
 pub fn restore_tasks(ids: Vec<String>) -> Result<BatchResult, String> {
     let mut result = BatchResult {

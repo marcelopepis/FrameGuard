@@ -48,6 +48,13 @@ export interface CleanupItemResult {
   errors: string[];
 }
 
+export interface BrowserCleanOptions {
+  cache: boolean;
+  cookies: boolean;
+  history: boolean;
+  sessions: boolean;
+}
+
 export interface CleanupResult {
   total_freed_bytes: number;
   total_files_removed: number;

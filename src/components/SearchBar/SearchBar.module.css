@@ -11,7 +11,7 @@
   align-items: center;
   gap: 8px;
   padding: 7px 12px;
-  background: rgba(148, 163, 184, 0.06);
+  background: rgba(var(--muted-rgb), 0.06);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   transition:
@@ -22,8 +22,8 @@
 
 .searchInputWrap:focus-within {
   border-color: var(--color-accent);
-  background: rgba(34, 211, 238, 0.04);
-  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.15);
+  background: rgba(var(--accent-rgb), 0.04);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.15);
 }
 
 .searchIcon {
@@ -73,7 +73,7 @@
 
 .clearBtn:hover {
   color: var(--color-text-primary);
-  background: rgba(148, 163, 184, 0.12);
+  background: rgba(var(--muted-rgb), 0.12);
 }
 
 /* ─── Dropdown ───────────────────────────────────────── */
@@ -88,9 +88,9 @@
   background: rgba(10, 14, 23, 0.97);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(34, 211, 238, 0.35);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
   box-shadow:
-    0 0 0 1px rgba(34, 211, 238, 0.08),
+    0 0 0 1px rgba(var(--accent-rgb), 0.08),
     0 16px 48px rgba(0, 0, 0, 0.55);
   border-radius: var(--radius-md);
   padding: 6px;
@@ -106,7 +106,7 @@
 }
 
 .dropdown::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(var(--muted-rgb), 0.2);
   border-radius: 2px;
 }
 
@@ -149,7 +149,7 @@
 
 .resultItem:hover,
 .resultItemActive {
-  background: rgba(34, 211, 238, 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .resultIcon {
@@ -206,9 +206,9 @@
   min-width: 18px;
   height: 16px;
   padding: 0 4px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(var(--muted-rgb), 0.18);
   border-radius: 3px;
-  background: rgba(148, 163, 184, 0.06);
+  background: rgba(var(--muted-rgb), 0.06);
   color: var(--color-text-muted);
   font-size: 9.5px;
   font-family: inherit;

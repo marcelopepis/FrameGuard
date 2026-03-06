@@ -205,15 +205,13 @@ pub fn run_command_with_progress(
     let start = Instant::now();
 
     // Usa o label explícito ou constrói a partir do comando + argumentos
-    let started_label = display_label
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-            if args.is_empty() {
-                command.to_string()
-            } else {
-                format!("{} {}", command, args.join(" "))
-            }
-        });
+    let started_label = display_label.map(|s| s.to_string()).unwrap_or_else(|| {
+        if args.is_empty() {
+            command.to_string()
+        } else {
+            format!("{} {}", command, args.join(" "))
+        }
+    });
     emit_event(app_handle, event_name, "started", &started_label);
 
     // Inicia o processo com pipes nos dois streams

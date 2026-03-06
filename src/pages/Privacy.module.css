@@ -1,0 +1,251 @@
+/* ─── Layout da página ────────────────────────────────────── */
+
+.page {
+  padding: 36px 40px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ─── Estados de carregamento e erro da página ───────────── */
+
+.pageLoading,
+.pageError {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+}
+
+.pageError {
+  color: var(--color-error);
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.btnRetry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.btnRetry:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+/* ─── Header ─────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+
+/* ─── Botão de refresh ───────────────────────────────────── */
+
+.btnRefresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.btnRefresh:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+/* ─── Expand/Collapse All ────────────────────────────────── */
+
+.toggleAllBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.toggleAllBtn:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+/* ─── Seções ─────────────────────────────────────────────── */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition-normal);
+}
+
+.section:hover {
+  border-color: var(--color-border-hover);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+
+.sectionHeader:hover {
+  background: rgba(var(--muted-rgb), 0.04);
+}
+
+.sectionHeaderLeft {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.sectionSubtitle {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.sectionStats {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sectionCount {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.sectionActive {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-success);
+}
+
+.sectionChevron {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.sectionChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* ─── Conteúdo colapsável da seção ───────────────────────── */
+
+.sectionContent {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
+}
+
+.sectionContentOpen {
+  grid-template-rows: 1fr;
+}
+
+.sectionContentInner {
+  overflow: hidden;
+}
+
+.sectionContentInner > .tweakList {
+  padding: 0 12px 12px;
+}
+
+/* ─── Lista de tweaks ────────────────────────────────────── */
+
+.tweakList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Spinner ────────────────────────────────────────────── */
+
+.spinner {
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

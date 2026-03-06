@@ -41,7 +41,12 @@ export async function ensureRestorePoint(
  */
 export function showRestorePointToast(
   result: RestorePointResponse | null,
-  showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string, duration?: number) => void,
+  showToast: (
+    type: 'success' | 'warning' | 'error' | 'info',
+    title: string,
+    message?: string,
+    duration?: number,
+  ) => void,
 ) {
   if (!result) return;
 

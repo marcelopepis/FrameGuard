@@ -38,8 +38,8 @@
   align-items: flex-start;
   gap: 10px;
   padding: 12px 22px;
-  background: rgba(34, 211, 238, 0.04);
-  border-bottom: 1px solid rgba(34, 211, 238, 0.08);
+  background: rgba(var(--accent-rgb), 0.04);
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.08);
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--color-text-muted);
@@ -61,13 +61,13 @@
   padding: 10px 22px;
   cursor: pointer;
   user-select: none;
-  background: rgba(34, 211, 238, 0.02);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  background: rgba(var(--accent-rgb), 0.02);
+  border-bottom: 1px solid rgba(var(--muted-rgb), 0.06);
   transition: background var(--transition-fast);
 }
 
 .categoryHeader:hover {
-  background: rgba(34, 211, 238, 0.05);
+  background: rgba(var(--accent-rgb), 0.05);
 }
 
 .chevron {
@@ -133,14 +133,14 @@
 }
 
 .tableRow:hover {
-  background: rgba(34, 211, 238, 0.03);
+  background: rgba(var(--accent-rgb), 0.03);
 }
 
 .tableRow td {
   padding: 10px 14px;
   font-size: 13px;
   color: var(--color-text-secondary);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.05);
+  border-bottom: 1px solid rgba(var(--muted-rgb), 0.05);
   vertical-align: top;
 }
 
@@ -165,7 +165,7 @@
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
-  border: 1.5px solid rgba(148, 163, 184, 0.3);
+  border: 1.5px solid rgba(var(--muted-rgb), 0.3);
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
@@ -190,7 +190,7 @@
   left: 5px;
   width: 4px;
   height: 8px;
-  border: solid #0a0e17;
+  border: solid var(--bg-base);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
@@ -241,15 +241,15 @@
 }
 
 .badgeRemove {
-  background: rgba(34, 211, 238, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
   color: var(--color-accent);
-  border: 1px solid rgba(34, 211, 238, 0.25);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
 }
 
 .badgeOptional {
-  background: rgba(148, 163, 184, 0.08);
+  background: rgba(var(--muted-rgb), 0.08);
   color: var(--color-text-muted);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(var(--muted-rgb), 0.2);
 }
 
 .badgeKeep {
@@ -293,7 +293,9 @@
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .btnConfirm:hover {
@@ -313,7 +315,9 @@
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .btnCancel:hover {
@@ -344,7 +348,7 @@
   gap: 6px;
   padding: 7px 16px;
   background: var(--color-accent);
-  color: #0a0e17;
+  color: var(--bg-base);
   border: none;
   border-radius: var(--radius-md);
   font-size: 12.5px;
@@ -456,7 +460,9 @@
   font-size: 12px;
   cursor: pointer;
   margin-left: 8px;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .btnRetry:hover {
@@ -470,8 +476,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── Resultado da remoção ────────────────────────────────── */

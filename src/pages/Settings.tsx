@@ -8,12 +8,21 @@ import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { dataDir as getDataDir } from '@tauri-apps/api/path';
 import {
-  Download, Upload, FolderOpen,
-  ChevronDown, ChevronUp,
-  Loader2, MonitorCog, Database,
+  Download,
+  Upload,
+  FolderOpen,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  MonitorCog,
+  Database,
+  Palette,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import styles from './Settings.module.css';
 import { useToast } from '../contexts/ToastContext';
+import { type Theme, applyTheme, getStoredTheme } from '../utils/theme';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -67,8 +76,11 @@ const TWEAK_INFO_COMMANDS = [
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -89,7 +101,9 @@ interface SectionHeadingProps {
 function SectionHeading({ Icon, title, description }: SectionHeadingProps) {
   return (
     <div className={styles.sectionHeading}>
-      <div className={styles.sectionIcon}><Icon size={15} /></div>
+      <div className={styles.sectionIcon}>
+        <Icon size={15} />
+      </div>
       <div>
         <div className={styles.sectionTitle}>{title}</div>
         {description && <div className={styles.sectionSubtitle}>{description}</div>}
@@ -139,12 +153,27 @@ function SettingRow({ label, description, children }: SettingRowProps) {
 // ── Componente principal ───────────────────────────────────────────────────────
 
 export default function Settings() {
+  // ── Estado: Aparência
+  const [theme, setTheme] = useState<Theme>(getStoredTheme);
+
+  function handleThemeChange(t: Theme) {
+    setTheme(t);
+    applyTheme(t);
+  }
 
   // ── Estado: Geral (localStorage)
-  const [language,         setLanguageState        ] = useState(() => localStorage.getItem('fg.language')      || 'pt-BR');
-  const [minimizeToTray,   setMinimizeToTrayState  ] = useState(() => localStorage.getItem('fg.minimizeTray')  === 'true');
-  const [startWithWindows, setStartWithWindowsState] = useState(() => localStorage.getItem('fg.startWindows')  === 'true');
-  const [restorePoint,     setRestorePointState    ] = useState(() => localStorage.getItem('fg.restorePoint')  !== 'false');
+  const [language, setLanguageState] = useState(
+    () => localStorage.getItem('fg.language') || 'pt-BR',
+  );
+  const [minimizeToTray, setMinimizeToTrayState] = useState(
+    () => localStorage.getItem('fg.minimizeTray') === 'true',
+  );
+  const [startWithWindows, setStartWithWindowsState] = useState(
+    () => localStorage.getItem('fg.startWindows') === 'true',
+  );
+  const [restorePoint, setRestorePointState] = useState(
+    () => localStorage.getItem('fg.restorePoint') !== 'false',
+  );
 
   // ── Estado: Pasta de dados
   const [dataDirPath, setDataDirPath] = useState('');
@@ -159,8 +188,8 @@ export default function Settings() {
   const [importMode, setImportMode] = useState<'replace' | 'merge'>('merge');
 
   // ── Estado: Backups
-  const [showBackups,    setShowBackups   ] = useState(false);
-  const [backups,        setBackups       ] = useState<TweakInfo[]>([]);
+  const [showBackups, setShowBackups] = useState(false);
+  const [backups, setBackups] = useState<TweakInfo[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
 
   const { showToast } = useToast();
@@ -168,15 +197,27 @@ export default function Settings() {
   // ── Inicialização: carrega caminho da pasta de dados
   useEffect(() => {
     getDataDir()
-      .then(dir => setDataDirPath(dir.replace(/[/\\]$/, '') + '\\FrameGuard'))
+      .then((dir) => setDataDirPath(dir.replace(/[/\\]$/, '') + '\\FrameGuard'))
       .catch(() => setDataDirPath('%APPDATA%\\FrameGuard'));
   }, []);
 
   // ── Helpers: Geral (persiste no localStorage)
-  function setLanguage(v: string)       { setLanguageState(v);         localStorage.setItem('fg.language',     v); }
-  function setMinimizeTray(v: boolean)  { setMinimizeToTrayState(v);   localStorage.setItem('fg.minimizeTray', String(v)); }
-  function setStartWindows(v: boolean)  { setStartWithWindowsState(v); localStorage.setItem('fg.startWindows', String(v)); }
-  function setRestorePoint(v: boolean)  { setRestorePointState(v);     localStorage.setItem('fg.restorePoint', String(v)); }
+  function setLanguage(v: string) {
+    setLanguageState(v);
+    localStorage.setItem('fg.language', v);
+  }
+  function setMinimizeTray(v: boolean) {
+    setMinimizeToTrayState(v);
+    localStorage.setItem('fg.minimizeTray', String(v));
+  }
+  function setStartWindows(v: boolean) {
+    setStartWithWindowsState(v);
+    localStorage.setItem('fg.startWindows', String(v));
+  }
+  function setRestorePoint(v: boolean) {
+    setRestorePointState(v);
+    localStorage.setItem('fg.restorePoint', String(v));
+  }
 
   // ── Exportar
   async function handleExport() {
@@ -206,7 +247,10 @@ export default function Settings() {
         multiple: false,
         filters: [{ name: 'Configuração FrameGuard', extensions: ['fg'] }],
       });
-      if (!selected) { setImportStep('idle'); return; }
+      if (!selected) {
+        setImportStep('idle');
+        return;
+      }
 
       // Em Tauri v2, plugin-dialog retorna o path como string diretamente
       const filePath = typeof selected === 'string' ? selected : String(selected);
@@ -235,7 +279,10 @@ export default function Settings() {
       resetImport();
     } catch (e) {
       const msg = String(e);
-      if (msg.toLowerCase().includes('cancelad')) { setImportStep('preview'); return; }
+      if (msg.toLowerCase().includes('cancelad')) {
+        setImportStep('preview');
+        return;
+      }
       showToast('error', 'Erro ao importar', msg);
       resetImport();
     }
@@ -250,9 +297,7 @@ export default function Settings() {
   async function loadBackups() {
     setBackupsLoading(true);
     try {
-      const results = await Promise.all(
-        TWEAK_INFO_COMMANDS.map(cmd => invoke<TweakInfo>(cmd))
-      );
+      const results = await Promise.all(TWEAK_INFO_COMMANDS.map((cmd) => invoke<TweakInfo>(cmd)));
       setBackups(results);
     } catch (e) {
       console.error('Erro ao carregar backups:', e);
@@ -269,14 +314,15 @@ export default function Settings() {
 
   // ── Abrir pasta de dados no Explorer
   async function handleOpenDataDir() {
-    try { await openPath(dataDirPath); } catch {}
+    try {
+      await openPath(dataDirPath);
+    } catch {}
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className={styles.page}>
-
       {/* ── Header ── */}
       <div className={styles.header}>
         <h1 className={styles.title}>Configurações</h1>
@@ -284,6 +330,39 @@ export default function Settings() {
       </div>
 
       <div className={styles.sections}>
+        {/* ════════ SEÇÃO: APARÊNCIA ════════ */}
+        <section className={styles.section}>
+          <SectionHeading
+            Icon={Palette}
+            title="Aparência"
+            description="Tema visual do aplicativo"
+          />
+
+          <div className={styles.card}>
+            <div className={styles.settingRow}>
+              <div className={styles.settingLabel}>
+                <span className={styles.settingName}>Tema</span>
+                <span className={styles.settingDesc}>Escolha entre modo escuro e claro</span>
+              </div>
+              <div className={styles.themeSwitch}>
+                <button
+                  className={`${styles.themeSwitchBtn} ${theme === 'dark' ? styles.themeSwitchActive : ''}`}
+                  onClick={() => handleThemeChange('dark')}
+                >
+                  <Moon size={14} />
+                  <span>Escuro</span>
+                </button>
+                <button
+                  className={`${styles.themeSwitchBtn} ${theme === 'light' ? styles.themeSwitchActive : ''}`}
+                  onClick={() => handleThemeChange('light')}
+                >
+                  <Sun size={14} />
+                  <span>Claro</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* ════════ SEÇÃO: GERAL ════════ */}
         <section className={styles.section}>
@@ -298,7 +377,7 @@ export default function Settings() {
               <select
                 className={styles.select}
                 value={language}
-                onChange={e => setLanguage(e.target.value)}
+                onChange={(e) => setLanguage(e.target.value)}
                 disabled
               >
                 <option value="pt-BR">Português (Brasil)</option>
@@ -380,8 +459,8 @@ export default function Settings() {
               <div className={styles.rowInfo}>
                 <span className={styles.rowName}>Importar Configurações</span>
                 <span className={styles.rowDesc}>
-                  Restaura backups e planos de um arquivo{' '}
-                  <code className={styles.code}>.fg</code> exportado anteriormente
+                  Restaura backups e planos de um arquivo <code className={styles.code}>.fg</code>{' '}
+                  exportado anteriormente
                 </span>
               </div>
               <div className={styles.rowAction}>
@@ -410,11 +489,15 @@ export default function Settings() {
                   </div>
                   <div className={styles.previewField}>
                     <span className={styles.previewLabel}>Sistema</span>
-                    <span className={styles.previewValue}>{importInfo.machine_info.os_version}</span>
+                    <span className={styles.previewValue}>
+                      {importInfo.machine_info.os_version}
+                    </span>
                   </div>
                   <div className={styles.previewField}>
                     <span className={styles.previewLabel}>Exportado em</span>
-                    <span className={styles.previewValue}>{formatDate(importInfo.exported_at)}</span>
+                    <span className={styles.previewValue}>
+                      {formatDate(importInfo.exported_at)}
+                    </span>
                   </div>
                   <div className={styles.previewField}>
                     <span className={styles.previewLabel}>Conteúdo</span>
@@ -449,7 +532,9 @@ export default function Settings() {
                 <div className={styles.modeSection}>
                   <div className={styles.modeTitle}>Modo de importação</div>
                   <div className={styles.modeOptions}>
-                    <label className={`${styles.modeOption} ${importMode === 'merge' ? styles.modeSelected : ''}`}>
+                    <label
+                      className={`${styles.modeOption} ${importMode === 'merge' ? styles.modeSelected : ''}`}
+                    >
                       <input
                         type="radio"
                         name="importMode"
@@ -465,7 +550,9 @@ export default function Settings() {
                       </div>
                     </label>
 
-                    <label className={`${styles.modeOption} ${importMode === 'replace' ? styles.modeDanger : ''}`}>
+                    <label
+                      className={`${styles.modeOption} ${importMode === 'replace' ? styles.modeDanger : ''}`}
+                    >
                       <input
                         type="radio"
                         name="importMode"
@@ -501,11 +588,17 @@ export default function Settings() {
                       disabled={importStep === 'importing'}
                     >
                       {importStep === 'importing' ? (
-                        <><Loader2 size={13} className={styles.spinner} /> Importando...</>
+                        <>
+                          <Loader2 size={13} className={styles.spinner} /> Importando...
+                        </>
                       ) : importMode === 'replace' ? (
-                        <><Upload size={13} /> Substituir e importar</>
+                        <>
+                          <Upload size={13} /> Substituir e importar
+                        </>
                       ) : (
-                        <><Upload size={13} /> Mesclar e importar</>
+                        <>
+                          <Upload size={13} /> Mesclar e importar
+                        </>
                       )}
                     </button>
                   </div>
@@ -519,9 +612,7 @@ export default function Settings() {
             <div className={styles.cardRow}>
               <div className={styles.rowInfo}>
                 <span className={styles.rowName}>Backups de Tweaks</span>
-                <span className={styles.rowDesc}>
-                  Estado dos backups das otimizações aplicadas
-                </span>
+                <span className={styles.rowDesc}>Estado dos backups das otimizações aplicadas</span>
               </div>
               <div className={styles.rowAction}>
                 <button className={styles.btnSecondary} onClick={toggleBackups}>
@@ -550,16 +641,20 @@ export default function Settings() {
                         </tr>
                       </thead>
                       <tbody>
-                        {backups.map(t => (
+                        {backups.map((t) => (
                           <tr key={t.id}>
                             <td className={styles.tweakCell}>{t.name}</td>
                             <td>
-                              <span className={`${styles.pill} ${t.is_applied ? styles.pillGreen : styles.pillGray}`}>
+                              <span
+                                className={`${styles.pill} ${t.is_applied ? styles.pillGreen : styles.pillGray}`}
+                              >
                                 {t.is_applied ? 'Ativo' : 'Inativo'}
                               </span>
                             </td>
                             <td>
-                              <span className={`${styles.pill} ${t.has_backup ? styles.pillCyan : styles.pillGray}`}>
+                              <span
+                                className={`${styles.pill} ${t.has_backup ? styles.pillCyan : styles.pillGray}`}
+                              >
                                 {t.has_backup ? 'Disponível' : 'Sem backup'}
                               </span>
                             </td>
@@ -599,8 +694,6 @@ export default function Settings() {
             </div>
           </div>
         </section>
-
-
       </div>
     </div>
   );

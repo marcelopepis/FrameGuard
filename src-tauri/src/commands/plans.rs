@@ -111,7 +111,7 @@ fn now_utc() -> String {
 /// - `"disable_reserved_storage"`, `"enable_reserved_storage"`
 /// - `"disable_delivery_optimization"`, `"revert_delivery_optimization"`
 async fn execute_single_tweak(app: tauri::AppHandle, tweak_id: &str) -> ItemResult {
-    use super::{health_check, optimizations, privacy};
+    use super::{health, privacy, tweaks};
 
     // Tenta executar o tweak e converte o resultado para Option<serde_json::Value>
     // Ok(Some(json)) = sucesso com dados retornados (ex: HealthCheckResult)
@@ -119,130 +119,111 @@ async fn execute_single_tweak(app: tauri::AppHandle, tweak_id: &str) -> ItemResu
     // Err(msg)       = falha — item marcado como "failed" no resumo
     let outcome: Result<Option<serde_json::Value>, String> = match tweak_id {
         // ── Saúde: DISM ──────────────────────────────────────────────────────
-        "dism_cleanup" => health_check::run_dism_cleanup(app.clone())
-            .await.map(|r| Some(to_json(r))),
+        "dism_cleanup" => health::run_dism_cleanup(app.clone())
+            .await
+            .map(|r| Some(to_json(r))),
 
-        "dism_checkhealth" => health_check::run_dism_checkhealth(app.clone())
-            .await.map(|r| Some(to_json(r))),
+        "dism_checkhealth" => health::run_dism_checkhealth(app.clone())
+            .await
+            .map(|r| Some(to_json(r))),
 
-        "dism_scanhealth" => health_check::run_dism_scanhealth(app.clone())
-            .await.map(|r| Some(to_json(r))),
+        "dism_scanhealth" => health::run_dism_scanhealth(app.clone())
+            .await
+            .map(|r| Some(to_json(r))),
 
-        "dism_restorehealth" => health_check::run_dism_restorehealth(app.clone())
-            .await.map(|r| Some(to_json(r))),
+        "dism_restorehealth" => health::run_dism_restorehealth(app.clone())
+            .await
+            .map(|r| Some(to_json(r))),
 
         // ── Saúde: Verificações ──────────────────────────────────────────────
-        "sfc_scannow" => health_check::run_sfc(app.clone())
-            .await.map(|r| Some(to_json(r))),
+        "sfc_scannow" => health::run_sfc(app.clone()).await.map(|r| Some(to_json(r))),
 
         // chkdsk sem drive_letter especificado → padrão C:
-        "chkdsk" => health_check::run_chkdsk(app.clone(), None)
-            .await.map(|r| Some(to_json(r))),
+        "chkdsk" => health::run_chkdsk(app.clone(), None)
+            .await
+            .map(|r| Some(to_json(r))),
 
-        "ssd_trim" => health_check::run_ssd_trim(app.clone())
-            .await.map(|r| Some(to_json(r))),
+        "ssd_trim" => health::run_ssd_trim(app.clone())
+            .await
+            .map(|r| Some(to_json(r))),
 
         // ── Saúde: Manutenção ────────────────────────────────────────────────
-        "flush_dns" => health_check::flush_dns(app.clone())
-            .await.map(|r| Some(to_json(r))),
+        "flush_dns" => health::flush_dns(app.clone())
+            .await
+            .map(|r| Some(to_json(r))),
 
-        "temp_cleanup" => health_check::run_temp_cleanup(app.clone())
-            .await.map(|r| Some(to_json(r))),
+        "temp_cleanup" => health::run_temp_cleanup(app.clone())
+            .await
+            .map(|r| Some(to_json(r))),
 
         // ── Otimizações: Wallpaper ────────────────────────────────────────────
-        "disable_wallpaper_compression" => optimizations::disable_wallpaper_compression()
-            .map(|_| None),
+        "disable_wallpaper_compression" => tweaks::disable_wallpaper_compression().map(|_| None),
 
-        "revert_wallpaper_compression" => optimizations::revert_wallpaper_compression()
-            .map(|_| None),
+        "revert_wallpaper_compression" => tweaks::revert_wallpaper_compression().map(|_| None),
 
         // ── Otimizações: Armazenamento Reservado ─────────────────────────────
-        "disable_reserved_storage" => optimizations::disable_reserved_storage(app.clone())
-            .map(|_| None),
+        "disable_reserved_storage" => tweaks::disable_reserved_storage(app.clone()).map(|_| None),
 
-        "enable_reserved_storage" => optimizations::enable_reserved_storage(app.clone())
-            .map(|_| None),
+        "enable_reserved_storage" => tweaks::enable_reserved_storage(app.clone()).map(|_| None),
 
         // ── Otimizações: Delivery Optimization ──────────────────────────────
-        "disable_delivery_optimization" => optimizations::disable_delivery_optimization()
-            .map(|_| None),
+        "disable_delivery_optimization" => tweaks::disable_delivery_optimization().map(|_| None),
 
-        "revert_delivery_optimization" => optimizations::revert_delivery_optimization()
-            .map(|_| None),
+        "revert_delivery_optimization" => tweaks::revert_delivery_optimization().map(|_| None),
 
         // ── Gamer ────────────────────────────────────────────────────────────
-        "enable_hags" => optimizations::enable_hags()
-            .map(|_| None),
+        "enable_hags" => tweaks::enable_hags().map(|_| None),
 
-        "enable_game_mode" => optimizations::enable_game_mode()
-            .map(|_| None),
+        "enable_game_mode" => tweaks::enable_game_mode().map(|_| None),
 
-        "disable_vbs" => optimizations::disable_vbs()
-            .map(|_| None),
+        "disable_vbs" => tweaks::disable_vbs().map(|_| None),
 
         // ── GPU & Display ────────────────────────────────────────────────────
-        "disable_game_dvr" => optimizations::disable_game_dvr()
-            .map(|_| None),
+        "disable_game_dvr" => tweaks::disable_game_dvr().map(|_| None),
 
-        "disable_xbox_overlay" => optimizations::disable_xbox_overlay()
-            .map(|_| None),
+        "disable_xbox_overlay" => tweaks::disable_xbox_overlay().map(|_| None),
 
-        "enable_msi_mode_gpu" => optimizations::enable_msi_mode_gpu()
-            .map(|_| None),
+        "enable_msi_mode_gpu" => tweaks::enable_msi_mode_gpu().map(|_| None),
 
-        "disable_mpo" => optimizations::disable_mpo()
-            .map(|_| None),
+        "disable_mpo" => tweaks::disable_mpo().map(|_| None),
 
-        "disable_nvidia_telemetry" => optimizations::disable_nvidia_telemetry()
-            .map(|_| None),
+        "disable_nvidia_telemetry" => tweaks::disable_nvidia_telemetry().map(|_| None),
 
         // ── Gaming ───────────────────────────────────────────────────────────
-        "enable_timer_resolution" => optimizations::enable_timer_resolution()
-            .map(|_| None),
+        "enable_timer_resolution" => tweaks::enable_timer_resolution().map(|_| None),
 
-        "disable_mouse_acceleration" => optimizations::disable_mouse_acceleration()
-            .map(|_| None),
+        "disable_mouse_acceleration" => tweaks::disable_mouse_acceleration().map(|_| None),
 
-        "disable_fullscreen_optimizations" => optimizations::disable_fullscreen_optimizations()
-            .map(|_| None),
+        "disable_fullscreen_optimizations" => {
+            tweaks::disable_fullscreen_optimizations().map(|_| None)
+        }
 
         // ── Energia & CPU ────────────────────────────────────────────────────
-        "enable_ultimate_performance" => optimizations::enable_ultimate_performance()
-            .map(|_| None),
+        "enable_ultimate_performance" => tweaks::enable_ultimate_performance().map(|_| None),
 
-        "disable_power_throttling" => optimizations::disable_power_throttling()
-            .map(|_| None),
+        "disable_power_throttling" => tweaks::disable_power_throttling().map(|_| None),
 
         // ── Armazenamento ────────────────────────────────────────────────────
-        "disable_hibernation" => optimizations::disable_hibernation()
-            .map(|_| None),
+        "disable_hibernation" => tweaks::disable_hibernation().map(|_| None),
 
-        "disable_ntfs_last_access" => optimizations::disable_ntfs_last_access()
-            .map(|_| None),
+        "disable_ntfs_last_access" => tweaks::disable_ntfs_last_access().map(|_| None),
 
         // ── Rede ─────────────────────────────────────────────────────────────
-        "disable_nagle" => optimizations::disable_nagle()
-            .map(|_| None),
+        "disable_nagle" => tweaks::disable_nagle().map(|_| None),
 
         // ── Visual & Experiência ─────────────────────────────────────────────
-        "disable_sticky_keys" => optimizations::disable_sticky_keys()
-            .map(|_| None),
+        "disable_sticky_keys" => tweaks::disable_sticky_keys().map(|_| None),
 
-        "disable_bing_search" => optimizations::disable_bing_search()
-            .map(|_| None),
+        "disable_bing_search" => tweaks::disable_bing_search().map(|_| None),
 
         // ── Privacidade ──────────────────────────────────────────────────────
-        "disable_telemetry_registry" => privacy::disable_telemetry_registry()
-            .map(|_| None),
+        "disable_telemetry_registry" => privacy::disable_telemetry_registry().map(|_| None),
 
-        "disable_copilot" => privacy::disable_copilot()
-            .map(|_| None),
+        "disable_copilot" => privacy::disable_copilot().map(|_| None),
 
-        "disable_content_delivery" => privacy::disable_content_delivery()
-            .map(|_| None),
+        "disable_content_delivery" => privacy::disable_content_delivery().map(|_| None),
 
-        "disable_background_apps" => privacy::disable_background_apps()
-            .map(|_| None),
+        "disable_background_apps" => privacy::disable_background_apps().map(|_| None),
 
         // ── Desconhecido ─────────────────────────────────────────────────────
         other => Err(format!(
@@ -271,9 +252,9 @@ async fn execute_single_tweak(app: tauri::AppHandle, tweak_id: &str) -> ItemResu
 /// Serializa qualquer tipo `Serialize` em `serde_json::Value`.
 /// Em caso de falha de serialização (não deve ocorrer na prática), retorna um objeto de erro.
 fn to_json<T: serde::Serialize>(value: T) -> serde_json::Value {
-    serde_json::to_value(&value).unwrap_or_else(|e| {
-        json!({ "serialization_error": format!("Falha ao serializar resultado: {}", e) })
-    })
+    serde_json::to_value(&value).unwrap_or_else(
+        |e| json!({ "serialization_error": format!("Falha ao serializar resultado: {}", e) }),
+    )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -421,7 +402,9 @@ pub async fn execute_plan(
             restore_point::create_restore_point(&format!("Antes do plano: {}", plan_name))
         })
         .await
-        .unwrap_or_else(|_| restore_point::RestorePointResult::Failed("spawn_blocking falhou".to_string()));
+        .unwrap_or_else(|_| {
+            restore_point::RestorePointResult::Failed("spawn_blocking falhou".to_string())
+        });
 
         // Emite evento para o frontend mostrar toast
         let rp_status = match &rp_result {
@@ -432,23 +415,29 @@ pub async fn execute_plan(
         };
         let rp_message = match &rp_result {
             restore_point::RestorePointResult::Created => "Ponto de restauração criado".to_string(),
-            restore_point::RestorePointResult::Skipped => "Ponto de restauração recente já existe".to_string(),
+            restore_point::RestorePointResult::Skipped => {
+                "Ponto de restauração recente já existe".to_string()
+            }
             restore_point::RestorePointResult::Disabled(msg) => msg.clone(),
             restore_point::RestorePointResult::Failed(msg) => msg.clone(),
         };
-        let _ = app_handle.emit("restore_point_status", serde_json::json!({
-            "status": rp_status,
-            "message": rp_message,
-        }));
+        let _ = app_handle.emit(
+            "restore_point_status",
+            serde_json::json!({
+                "status": rp_status,
+                "message": rp_message,
+            }),
+        );
     }
 
     // Detecta hardware uma vez para validar compatibilidade de tweaks vendor-specific
-    let detected_vendors = super::system_info::get_detected_vendors()
-        .await
-        .unwrap_or(DetectedVendors {
-            gpu_vendor: "unknown".to_string(),
-            cpu_vendor: "unknown".to_string(),
-        });
+    let detected_vendors =
+        super::system_info::get_detected_vendors()
+            .await
+            .unwrap_or(DetectedVendors {
+                gpu_vendor: "unknown".to_string(),
+                cpu_vendor: "unknown".to_string(),
+            });
 
     // Ordena itens por `order` ascendente para garantir sequência correta
     let mut items = plan.items.clone();
@@ -573,7 +562,10 @@ pub async fn execute_plan(
         skipped_count,
     );
     if let Err(e) = activity_log::log_activity(log_entry) {
-        eprintln!("[FrameGuard] Aviso: falha ao registrar atividade do plano: {}", e);
+        eprintln!(
+            "[FrameGuard] Aviso: falha ao registrar atividade do plano: {}",
+            e
+        );
     }
 
     Ok(PlanExecutionSummary {

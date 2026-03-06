@@ -157,9 +157,7 @@ pub async fn get_detected_vendors() -> Result<DetectedVendors, String> {
     } else if gpu_lower.contains("amd") || gpu_lower.contains("radeon") {
         "amd"
     } else if gpu_lower.contains("intel")
-        && (gpu_lower.contains("arc")
-            || gpu_lower.contains("iris")
-            || gpu_lower.contains("uhd"))
+        && (gpu_lower.contains("arc") || gpu_lower.contains("iris") || gpu_lower.contains("uhd"))
     {
         "intel"
     } else {
@@ -201,8 +199,6 @@ pub(crate) fn detect_gpu_vendor_sync() -> String {
         && (gpu_name.contains("arc") || gpu_name.contains("iris") || gpu_name.contains("uhd"))
     {
         "intel".to_string()
-    } else if gpu_name.is_empty() {
-        "unknown".to_string()
     } else {
         "unknown".to_string()
     }
@@ -258,8 +254,7 @@ fn collect_gpu_info() -> GpuInfo {
     use winreg::RegKey;
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let class_path =
-        r"SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    let class_path = r"SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
 
     let mut best_name = String::new();
     let mut best_vram: u64 = 0;
@@ -434,9 +429,7 @@ pub async fn get_system_status() -> Result<SystemStatus, String> {
             .ok()
             .and_then(|k| k.get_value::<u32, _>("AllowGameDVR").ok());
 
-        let game_dvr_status = if policy_dvr == Some(0) {
-            "disabled"
-        } else if dvr_enabled == 0 {
+        let game_dvr_status = if policy_dvr == Some(0) || dvr_enabled == 0 {
             "disabled"
         } else if historical == 1 {
             "recording"
@@ -466,9 +459,11 @@ pub async fn get_system_status() -> Result<SystemStatus, String> {
         let power_plan_name = powercfg_output
             .rfind('(')
             .and_then(|start| {
-                powercfg_output[start + 1..]
-                    .find(')')
-                    .map(|end| powercfg_output[start + 1..start + 1 + end].trim().to_string())
+                powercfg_output[start + 1..].find(')').map(|end| {
+                    powercfg_output[start + 1..start + 1 + end]
+                        .trim()
+                        .to_string()
+                })
             })
             .unwrap_or_else(|| "Desconhecido".to_string());
 
@@ -591,16 +586,13 @@ pub async fn get_system_summary() -> Result<SystemSummary, String> {
     }
 
     let info = tokio::task::spawn_blocking(|| {
-        let os_version = get_windows_version()
-            .unwrap_or_else(|_| {
-                sysinfo::System::long_os_version()
-                    .unwrap_or_else(|| "Windows 11".to_string())
-            });
+        let os_version = get_windows_version().unwrap_or_else(|_| {
+            sysinfo::System::long_os_version().unwrap_or_else(|| "Windows 11".to_string())
+        });
 
-        let hostname = sysinfo::System::host_name()
-            .unwrap_or_else(|| {
-                std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Desconhecido".to_string())
-            });
+        let hostname = sysinfo::System::host_name().unwrap_or_else(|| {
+            std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Desconhecido".to_string())
+        });
 
         let is_elevated = crate::utils::elevated::is_elevated();
 
@@ -635,9 +627,7 @@ fn get_windows_version() -> Result<String, String> {
     // A Microsoft não atualizou ProductName no registro do Windows 11.
     // Muitas instalações ainda retornam "Windows 10 Pro" mesmo sendo Win11.
     // CurrentBuildNumber >= 22000 = Windows 11.
-    let build_number: String = key
-        .get_value("CurrentBuildNumber")
-        .unwrap_or_default();
+    let build_number: String = key.get_value("CurrentBuildNumber").unwrap_or_default();
     let build_num: u32 = build_number.trim().parse().unwrap_or(0);
 
     if build_num >= 22000 && product.contains("Windows 10") {

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri::Emitter;
 
-use crate::commands::health_check::LockingProcessInfo;
+use crate::commands::health::LockingProcessInfo;
 use crate::commands::system_info;
 use crate::utils::command_runner::run_powershell;
 use crate::utils::file_locks;
@@ -95,6 +95,51 @@ pub struct CleanupResult {
     pub locking_processes: Vec<LockingProcessInfo>,
 }
 
+/// Controla quais tipos de dados serão limpos para cada browser.
+///
+/// Quando passado para `execute_cleanup`, filtra itens de browser da lista
+/// `item_ids`: mesmo que um item esteja na lista, ele só será executado se
+/// o campo correspondente estiver `true`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserCleanOptions {
+    /// Limpa arquivos de cache (imagens, scripts, dados temporários).
+    /// Sempre regenerado automaticamente pelo browser.
+    pub cache: bool,
+    /// Limpa cookies — requer reautenticação nos sites.
+    pub cookies: bool,
+    /// Limpa histórico de navegação.
+    pub history: bool,
+    /// Limpa arquivos de sessão (abas salvas, formulários).
+    pub sessions: bool,
+}
+
+impl Default for BrowserCleanOptions {
+    fn default() -> Self {
+        Self {
+            cache: true,
+            cookies: false,
+            history: false,
+            sessions: false,
+        }
+    }
+}
+
+/// Mapeia sufixo de item_id de browser ao campo de `BrowserCleanOptions`.
+fn browser_item_allowed(item_id: &str, opts: &BrowserCleanOptions) -> bool {
+    if item_id.ends_with("_cache") {
+        opts.cache
+    } else if item_id.ends_with("_cookies") {
+        opts.cookies
+    } else if item_id.ends_with("_history") {
+        opts.history
+    } else if item_id.ends_with("_sessions") {
+        opts.sessions
+    } else {
+        true
+    }
+}
+
 // ─── Estruturas internas ─────────────────────────────────────────────────────
 
 /// Resultado da remoção de conteúdo de um diretório.
@@ -148,14 +193,24 @@ fn delete_dir_contents(path: &Path, freed: &mut u64) -> DeleteResult {
     let mut files_skipped: u32 = 0;
 
     if !path.exists() {
-        return DeleteResult { errors, locked_paths, files_removed, files_skipped };
+        return DeleteResult {
+            errors,
+            locked_paths,
+            files_removed,
+            files_skipped,
+        };
     }
 
     let entries = match std::fs::read_dir(path) {
         Ok(e) => e,
         Err(e) => {
             errors.push(format!("Erro ao abrir {}: {}", path.display(), e));
-            return DeleteResult { errors, locked_paths, files_removed, files_skipped };
+            return DeleteResult {
+                errors,
+                locked_paths,
+                files_removed,
+                files_skipped,
+            };
         }
     };
 
@@ -200,7 +255,12 @@ fn delete_dir_contents(path: &Path, freed: &mut u64) -> DeleteResult {
         }
     }
 
-    DeleteResult { errors, locked_paths, files_removed, files_skipped }
+    DeleteResult {
+        errors,
+        locked_paths,
+        files_removed,
+        files_skipped,
+    }
 }
 
 /// Deleta conteúdo de múltiplos paths, acumulando resultados.
@@ -283,8 +343,11 @@ fn scan_sistema_windows() -> CleanupCategory {
     let (s, c) = scan_dir_stats(&temp);
     if s > 0 {
         items.push(CleanupItem {
-            id: "temp_user".into(), name: "Temp do Usuário".into(),
-            path_display: temp.to_string_lossy().into(), size_bytes: s, file_count: c,
+            id: "temp_user".into(),
+            name: "Temp do Usuário".into(),
+            path_display: temp.to_string_lossy().into(),
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
@@ -294,8 +357,11 @@ fn scan_sistema_windows() -> CleanupCategory {
     let (s, c) = scan_dir_stats(&win_temp);
     if s > 0 {
         items.push(CleanupItem {
-            id: "temp_windows".into(), name: "Windows Temp".into(),
-            path_display: r"C:\Windows\Temp".into(), size_bytes: s, file_count: c,
+            id: "temp_windows".into(),
+            name: "Windows Temp".into(),
+            path_display: r"C:\Windows\Temp".into(),
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
@@ -309,8 +375,11 @@ fn scan_sistema_windows() -> CleanupCategory {
     let (s, c) = scan_paths_stats(&wer_paths);
     if s > 0 {
         items.push(CleanupItem {
-            id: "wer_reports".into(), name: "Windows Error Reports".into(),
-            path_display: "WER ReportArchive + ReportQueue".into(), size_bytes: s, file_count: c,
+            id: "wer_reports".into(),
+            name: "Windows Error Reports".into(),
+            path_display: "WER ReportArchive + ReportQueue".into(),
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
@@ -320,21 +389,27 @@ fn scan_sistema_windows() -> CleanupCategory {
     let (s, c) = scan_dir_stats(&wu_path);
     if s > 0 {
         items.push(CleanupItem {
-            id: "wu_cache".into(), name: "Windows Update Cache".into(),
-            path_display: r"SoftwareDistribution\Download".into(), size_bytes: s, file_count: c,
+            id: "wu_cache".into(),
+            name: "Windows Update Cache".into(),
+            path_display: r"SoftwareDistribution\Download".into(),
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
 
     // Delivery Optimization Cache
     let do_path = PathBuf::from(
-        r"C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache"
+        r"C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache",
     );
     let (s, c) = scan_dir_stats(&do_path);
     if s > 0 {
         items.push(CleanupItem {
-            id: "delivery_optim".into(), name: "Delivery Optimization Cache".into(),
-            path_display: "DeliveryOptimization Cache".into(), size_bytes: s, file_count: c,
+            id: "delivery_optim".into(),
+            name: "Delivery Optimization Cache".into(),
+            path_display: "DeliveryOptimization Cache".into(),
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
@@ -344,9 +419,11 @@ fn scan_sistema_windows() -> CleanupCategory {
     let (thumb_size, thumb_count) = scan_thumbcache(&explorer_dir);
     if thumb_size > 0 {
         items.push(CleanupItem {
-            id: "thumbcache".into(), name: "Thumbnail Cache".into(),
+            id: "thumbcache".into(),
+            name: "Thumbnail Cache".into(),
             path_display: "thumbcache_*.db + iconcache_*.db".into(),
-            size_bytes: thumb_size, file_count: thumb_count,
+            size_bytes: thumb_size,
+            file_count: thumb_count,
             default_selected: true,
         });
     }
@@ -359,24 +436,47 @@ fn scan_sistema_windows() -> CleanupCategory {
     let (s, c) = scan_paths_stats(&dump_paths);
     if s > 0 {
         items.push(CleanupItem {
-            id: "memory_dumps".into(), name: "Memory Dumps".into(),
-            path_display: "MEMORY.DMP + Minidump".into(), size_bytes: s, file_count: c,
+            id: "memory_dumps".into(),
+            name: "Memory Dumps".into(),
+            path_display: "MEMORY.DMP + Minidump".into(),
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
 
-    // CBS/DISM/Upgrade Logs
-    let log_paths = vec![
+    // CBS/DISM Logs
+    let cbs_paths = vec![
         PathBuf::from(r"C:\Windows\Logs\CBS"),
         PathBuf::from(r"C:\Windows\Logs\DISM"),
-        PathBuf::from(r"C:\Windows\Logs\WindowsUpdate"),
     ];
-    let (s, c) = scan_paths_stats(&log_paths);
+    let (s, c) = scan_paths_stats(&cbs_paths);
     if s > 0 {
         items.push(CleanupItem {
-            id: "cbs_logs".into(), name: "CBS/DISM/Upgrade Logs".into(),
-            path_display: r"Windows\Logs\CBS + DISM + WindowsUpdate".into(),
-            size_bytes: s, file_count: c,
+            id: "cbs_logs".into(),
+            name: "CBS/DISM Logs".into(),
+            path_display: r"Windows\Logs\CBS + DISM".into(),
+            size_bytes: s,
+            file_count: c,
+            default_selected: true,
+        });
+    }
+
+    // Logs de Atualização do Windows (inclui Panther, $Windows.~BT, WindowsUpdate logs)
+    let update_log_paths = vec![
+        PathBuf::from(r"C:\Windows\Logs\WindowsUpdate"),
+        PathBuf::from(r"C:\Windows\Panther"),
+        PathBuf::from(r"C:\$Windows.~BT"),
+        PathBuf::from(r"C:\Windows\SoftwareDistribution\DataStore\Logs"),
+    ];
+    let (s, c) = scan_paths_stats(&update_log_paths);
+    if s > 0 {
+        items.push(CleanupItem {
+            id: "update_logs".into(),
+            name: "Logs de Atualização do Windows".into(),
+            path_display: r"Panther + $Windows.~BT + WindowsUpdate Logs".into(),
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
@@ -385,9 +485,11 @@ fn scan_sistema_windows() -> CleanupCategory {
     let recycle_size = get_recycle_bin_size();
     if recycle_size > 0 {
         items.push(CleanupItem {
-            id: "recycle_bin".into(), name: "Lixeira".into(),
+            id: "recycle_bin".into(),
+            name: "Lixeira".into(),
             path_display: "Lixeira do Windows".into(),
-            size_bytes: recycle_size, file_count: 0,
+            size_bytes: recycle_size,
+            file_count: 0,
             default_selected: true,
         });
     }
@@ -397,9 +499,11 @@ fn scan_sistema_windows() -> CleanupCategory {
     let (s, c) = scan_dir_stats(&dpf);
     if s > 0 {
         items.push(CleanupItem {
-            id: "downloaded_programs".into(), name: "Downloaded Program Files".into(),
+            id: "downloaded_programs".into(),
+            name: "Downloaded Program Files".into(),
             path_display: r"C:\Windows\Downloaded Program Files".into(),
-            size_bytes: s, file_count: c,
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
@@ -429,7 +533,9 @@ fn scan_thumbcache(explorer_dir: &Path) -> (u64, u32) {
             if name.starts_with("thumbcache_") && name.ends_with(".db")
                 || name.starts_with("iconcache_") && name.ends_with(".db")
             {
-                size += std::fs::metadata(entry.path()).map(|m| m.len()).unwrap_or(0);
+                size += std::fs::metadata(entry.path())
+                    .map(|m| m.len())
+                    .unwrap_or(0);
                 count += 1;
             }
         }
@@ -468,17 +574,31 @@ fn scan_gpu_shader_cache() -> CleanupCategory {
     // NVIDIA
     if vendor == "nvidia" || vendor == "unknown" {
         let nvidia_paths = vec![
-            ("nvidia_dxcache", "NVIDIA DXCache", local.join(r"NVIDIA\DXCache")),
-            ("nvidia_glcache", "NVIDIA GLCache", local.join(r"NVIDIA\GLCache")),
-            ("nvidia_computecache", "NVIDIA ComputeCache", appdata.join(r"NVIDIA\ComputeCache")),
+            (
+                "nvidia_dxcache",
+                "NVIDIA DXCache",
+                local.join(r"NVIDIA\DXCache"),
+            ),
+            (
+                "nvidia_glcache",
+                "NVIDIA GLCache",
+                local.join(r"NVIDIA\GLCache"),
+            ),
+            (
+                "nvidia_computecache",
+                "NVIDIA ComputeCache",
+                appdata.join(r"NVIDIA\ComputeCache"),
+            ),
         ];
         for (id, name, path) in nvidia_paths {
             let (s, c) = scan_dir_stats(&path);
             if s > 0 {
                 items.push(CleanupItem {
-                    id: id.into(), name: name.into(),
+                    id: id.into(),
+                    name: name.into(),
                     path_display: path.to_string_lossy().into(),
-                    size_bytes: s, file_count: c,
+                    size_bytes: s,
+                    file_count: c,
                     default_selected: true,
                 });
             }
@@ -497,9 +617,11 @@ fn scan_gpu_shader_cache() -> CleanupCategory {
             let (s, c) = scan_dir_stats(&path);
             if s > 0 {
                 items.push(CleanupItem {
-                    id: id.into(), name: name.into(),
+                    id: id.into(),
+                    name: name.into(),
                     path_display: path.to_string_lossy().into(),
-                    size_bytes: s, file_count: c,
+                    size_bytes: s,
+                    file_count: c,
                     default_selected: true,
                 });
             }
@@ -512,9 +634,11 @@ fn scan_gpu_shader_cache() -> CleanupCategory {
         let (s, c) = scan_dir_stats(&path);
         if s > 0 {
             items.push(CleanupItem {
-                id: "intel_shadercache".into(), name: "Intel ShaderCache".into(),
+                id: "intel_shadercache".into(),
+                name: "Intel ShaderCache".into(),
                 path_display: path.to_string_lossy().into(),
-                size_bytes: s, file_count: c,
+                size_bytes: s,
+                file_count: c,
                 default_selected: true,
             });
         }
@@ -525,9 +649,11 @@ fn scan_gpu_shader_cache() -> CleanupCategory {
     let (s, c) = scan_dir_stats(&d3ds);
     if s > 0 {
         items.push(CleanupItem {
-            id: "dx_d3dscache".into(), name: "DirectX D3DSCache".into(),
+            id: "dx_d3dscache".into(),
+            name: "DirectX D3DSCache".into(),
             path_display: d3ds.to_string_lossy().into(),
-            size_bytes: s, file_count: c,
+            size_bytes: s,
+            file_count: c,
             default_selected: true,
         });
     }
@@ -547,50 +673,125 @@ fn scan_gpu_shader_cache() -> CleanupCategory {
     }
 }
 
-/// Escaneia caches de browsers Chromium (Chrome, Edge, Brave, Opera).
-fn scan_chromium_browser(
-    id_prefix: &str, name: &str, user_data_dir: &Path,
-) -> Vec<CleanupItem> {
+/// Escaneia dados de browsers Chromium (Chrome, Edge, Brave).
+///
+/// Retorna itens separados para cache, cookies, histórico e sessões,
+/// permitindo seleção granular na UI.
+fn scan_chromium_browser(id_prefix: &str, name: &str, user_data_dir: &Path) -> Vec<CleanupItem> {
     let mut items = Vec::new();
     if !user_data_dir.exists() {
         return items;
     }
 
-    // Encontra perfis: Default, Profile 1, Profile 2, etc.
     let profiles = find_chromium_profiles(user_data_dir);
-    let mut total_size: u64 = 0;
-    let mut total_count: u32 = 0;
-    let mut cache_paths: Vec<PathBuf> = Vec::new();
+    let profile_label = format!(
+        "{} ({} perfil/perfis)",
+        user_data_dir.to_string_lossy(),
+        profiles.len()
+    );
 
+    // Cache: Cache_Data, Code Cache, GPUCache, Service Worker
+    let mut cache_size: u64 = 0;
+    let mut cache_count: u32 = 0;
     for profile_dir in &profiles {
-        let cache_dirs = vec![
-            profile_dir.join(r"Cache\Cache_Data"),
-            profile_dir.join("Code Cache"),
-            profile_dir.join("GPUCache"),
-            profile_dir.join(r"Service Worker\CacheStorage"),
-        ];
-        for cd in cache_dirs {
-            let (s, c) = scan_dir_stats(&cd);
-            total_size += s;
-            total_count += c;
-            if s > 0 {
-                cache_paths.push(cd);
-            }
+        for sub in &[
+            r"Cache\Cache_Data",
+            "Code Cache",
+            "GPUCache",
+            r"Service Worker\CacheStorage",
+        ] {
+            let (s, c) = scan_dir_stats(&profile_dir.join(sub));
+            cache_size += s;
+            cache_count += c;
         }
     }
-
-    if total_size > 0 {
+    if cache_size > 0 {
         items.push(CleanupItem {
             id: format!("{}_cache", id_prefix),
             name: format!("{} Cache", name),
-            path_display: format!("{} ({} perfil/perfis)", user_data_dir.to_string_lossy(), profiles.len()),
-            size_bytes: total_size,
-            file_count: total_count,
+            path_display: profile_label.clone(),
+            size_bytes: cache_size,
+            file_count: cache_count,
             default_selected: true,
         });
     }
 
+    // Cookies: arquivo "Cookies" em cada perfil (SQLite)
+    let mut cookies_size: u64 = 0;
+    let mut cookies_count: u32 = 0;
+    for profile_dir in &profiles {
+        let (s, c) = scan_dir_stats(&profile_dir.join("Cookies"));
+        cookies_size += s;
+        cookies_count += c;
+    }
+    if cookies_size > 0 {
+        items.push(CleanupItem {
+            id: format!("{}_cookies", id_prefix),
+            name: format!("{} Cookies", name),
+            path_display: "Cookies em cada perfil".into(),
+            size_bytes: cookies_size,
+            file_count: cookies_count,
+            default_selected: false,
+        });
+    }
+
+    // Histórico: arquivo "History" em cada perfil (SQLite)
+    let mut history_size: u64 = 0;
+    let mut history_count: u32 = 0;
+    for profile_dir in &profiles {
+        let (s, c) = scan_dir_stats(&profile_dir.join("History"));
+        history_size += s;
+        history_count += c;
+    }
+    if history_size > 0 {
+        items.push(CleanupItem {
+            id: format!("{}_history", id_prefix),
+            name: format!("{} Histórico", name),
+            path_display: "History em cada perfil".into(),
+            size_bytes: history_size,
+            file_count: history_count,
+            default_selected: false,
+        });
+    }
+
+    // Sessões: "Sessions/", "Current Session", "Last Session" em cada perfil
+    let mut sessions_size: u64 = 0;
+    let mut sessions_count: u32 = 0;
+    for profile_dir in &profiles {
+        for sub in &["Sessions", "Current Session", "Last Session"] {
+            let (s, c) = scan_dir_stats(&profile_dir.join(sub));
+            sessions_size += s;
+            sessions_count += c;
+        }
+    }
+    if sessions_size > 0 {
+        items.push(CleanupItem {
+            id: format!("{}_sessions", id_prefix),
+            name: format!("{} Sessions", name),
+            path_display: "Sessions em cada perfil".into(),
+            size_bytes: sessions_size,
+            file_count: sessions_count,
+            default_selected: false,
+        });
+    }
+
     items
+}
+
+/// Encontra diretórios de perfil do Firefox dentro de `Profiles/`.
+///
+/// Perfis Firefox têm nomes dinâmicos como `abc123.default-release` ou
+/// `xyz789.default`. Retorna todos os subdiretórios (cada um é um perfil).
+fn find_firefox_profiles(profiles_dir: &Path) -> Vec<PathBuf> {
+    let mut profiles = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(profiles_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                profiles.push(entry.path());
+            }
+        }
+    }
+    profiles
 }
 
 fn find_chromium_profiles(user_data_dir: &Path) -> Vec<PathBuf> {
@@ -640,10 +841,36 @@ fn scan_browsers() -> Option<CleanupCategory> {
         let (s, c) = scan_paths_stats(&opera_cache_dirs);
         if s > 0 {
             items.push(CleanupItem {
-                id: "opera_cache".into(), name: "Opera Cache".into(),
+                id: "opera_cache".into(),
+                name: "Opera Cache".into(),
                 path_display: opera_dir.to_string_lossy().into(),
-                size_bytes: s, file_count: c,
+                size_bytes: s,
+                file_count: c,
                 default_selected: true,
+            });
+        }
+        // Opera Cookies
+        let (s, c) = scan_dir_stats(&opera_dir.join("Cookies"));
+        if s > 0 {
+            items.push(CleanupItem {
+                id: "opera_cookies".into(),
+                name: "Opera Cookies".into(),
+                path_display: opera_dir.join("Cookies").to_string_lossy().into(),
+                size_bytes: s,
+                file_count: c,
+                default_selected: false,
+            });
+        }
+        // Opera Histórico
+        let (s, c) = scan_dir_stats(&opera_dir.join("History"));
+        if s > 0 {
+            items.push(CleanupItem {
+                id: "opera_history".into(),
+                name: "Opera Histórico".into(),
+                path_display: opera_dir.join("History").to_string_lossy().into(),
+                size_bytes: s,
+                file_count: c,
+                default_selected: false,
             });
         }
     }
@@ -659,35 +886,118 @@ fn scan_browsers() -> Option<CleanupCategory> {
         let (s, c) = scan_paths_stats(&gx_cache_dirs);
         if s > 0 {
             items.push(CleanupItem {
-                id: "opera_gx_cache".into(), name: "Opera GX Cache".into(),
+                id: "opera_gx_cache".into(),
+                name: "Opera GX Cache".into(),
                 path_display: opera_gx_dir.to_string_lossy().into(),
-                size_bytes: s, file_count: c,
+                size_bytes: s,
+                file_count: c,
                 default_selected: true,
+            });
+        }
+        // Opera GX Cookies
+        let (s, c) = scan_dir_stats(&opera_gx_dir.join("Cookies"));
+        if s > 0 {
+            items.push(CleanupItem {
+                id: "opera_gx_cookies".into(),
+                name: "Opera GX Cookies".into(),
+                path_display: opera_gx_dir.join("Cookies").to_string_lossy().into(),
+                size_bytes: s,
+                file_count: c,
+                default_selected: false,
+            });
+        }
+        // Opera GX Histórico
+        let (s, c) = scan_dir_stats(&opera_gx_dir.join("History"));
+        if s > 0 {
+            items.push(CleanupItem {
+                id: "opera_gx_history".into(),
+                name: "Opera GX Histórico".into(),
+                path_display: opera_gx_dir.join("History").to_string_lossy().into(),
+                size_bytes: s,
+                file_count: c,
+                default_selected: false,
             });
         }
     }
 
-    // Firefox
+    // Firefox — perfis dinâmicos (ex: abc123.default-release)
     let firefox_profiles = appdata.join(r"Mozilla\Firefox\Profiles");
     if firefox_profiles.exists() {
-        let mut ff_size: u64 = 0;
-        let mut ff_count: u32 = 0;
-        if let Ok(entries) = std::fs::read_dir(&firefox_profiles) {
-            for entry in entries.flatten() {
-                if entry.path().is_dir() {
-                    let cache = entry.path().join(r"cache2\entries");
-                    let (s, c) = scan_dir_stats(&cache);
-                    ff_size += s;
-                    ff_count += c;
-                }
-            }
+        let ff_profile_dirs = find_firefox_profiles(&firefox_profiles);
+
+        // Cache: cache2/entries de cada perfil
+        let mut ff_cache_size: u64 = 0;
+        let mut ff_cache_count: u32 = 0;
+        for dir in &ff_profile_dirs {
+            let (s, c) = scan_dir_stats(&dir.join(r"cache2\entries"));
+            ff_cache_size += s;
+            ff_cache_count += c;
         }
-        if ff_size > 0 {
+        if ff_cache_size > 0 {
             items.push(CleanupItem {
-                id: "firefox_cache".into(), name: "Firefox Cache".into(),
+                id: "firefox_cache".into(),
+                name: "Firefox Cache".into(),
                 path_display: firefox_profiles.to_string_lossy().into(),
-                size_bytes: ff_size, file_count: ff_count,
+                size_bytes: ff_cache_size,
+                file_count: ff_cache_count,
                 default_selected: true,
+            });
+        }
+
+        // Cookies: cookies.sqlite de cada perfil
+        let mut ff_cookies_size: u64 = 0;
+        let mut ff_cookies_count: u32 = 0;
+        for dir in &ff_profile_dirs {
+            let (s, c) = scan_dir_stats(&dir.join("cookies.sqlite"));
+            ff_cookies_size += s;
+            ff_cookies_count += c;
+        }
+        if ff_cookies_size > 0 {
+            items.push(CleanupItem {
+                id: "firefox_cookies".into(),
+                name: "Firefox Cookies".into(),
+                path_display: "cookies.sqlite em cada perfil".into(),
+                size_bytes: ff_cookies_size,
+                file_count: ff_cookies_count,
+                default_selected: false,
+            });
+        }
+
+        // Histórico: places.sqlite de cada perfil
+        let mut ff_history_size: u64 = 0;
+        let mut ff_history_count: u32 = 0;
+        for dir in &ff_profile_dirs {
+            let (s, c) = scan_dir_stats(&dir.join("places.sqlite"));
+            ff_history_size += s;
+            ff_history_count += c;
+        }
+        if ff_history_size > 0 {
+            items.push(CleanupItem {
+                id: "firefox_history".into(),
+                name: "Firefox Histórico".into(),
+                path_display: "places.sqlite em cada perfil".into(),
+                size_bytes: ff_history_size,
+                file_count: ff_history_count,
+                default_selected: false,
+            });
+        }
+
+        // Sessions: sessionstore-backups de cada perfil
+        let mut ff_sessions_size: u64 = 0;
+        let mut ff_sessions_count: u32 = 0;
+        for dir in &ff_profile_dirs {
+            let (s, c) = scan_dir_stats(&dir.join("sessionstore-backups"));
+            ff_sessions_size += s;
+            ff_sessions_count += c;
+        }
+        if ff_sessions_size > 0 {
+            items.push(CleanupItem {
+                id: "firefox_sessions".into(),
+                name: "Firefox Sessions".into(),
+                path_display: "sessionstore-backups em cada perfil".into(),
+                size_bytes: ff_sessions_size,
+                file_count: ff_sessions_count,
+                default_selected: false,
             });
         }
     }
@@ -702,8 +1012,8 @@ fn scan_browsers() -> Option<CleanupCategory> {
     Some(CleanupCategory {
         id: "browsers".into(),
         name: "Browsers".into(),
-        description: "Cache de navegadores — nunca toca em senhas, bookmarks ou cookies".into(),
-        risk: CleanupRisk::Safe,
+        description: "Cache, cookies, histórico e sessões de navegadores — senhas e bookmarks nunca são tocados".into(),
+        risk: CleanupRisk::Moderate,
         default_selected: true,
         items,
         total_size_bytes: total_size,
@@ -722,9 +1032,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&spotify);
     if s > 0 {
         items.push(CleanupItem {
-            id: "spotify_cache".into(), name: "Spotify Cache".into(),
+            id: "spotify_cache".into(),
+            name: "Spotify Cache".into(),
             path_display: spotify.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: true,
+            size_bytes: s,
+            file_count: c,
+            default_selected: true,
         });
     }
 
@@ -736,9 +1049,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_paths_stats(&discord_paths);
     if s > 0 {
         items.push(CleanupItem {
-            id: "discord_cache".into(), name: "Discord Cache".into(),
+            id: "discord_cache".into(),
+            name: "Discord Cache".into(),
             path_display: "discord\\Cache + Code Cache".into(),
-            size_bytes: s, file_count: c, default_selected: true,
+            size_bytes: s,
+            file_count: c,
+            default_selected: true,
         });
     }
 
@@ -747,9 +1063,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&bnet);
     if s > 0 {
         items.push(CleanupItem {
-            id: "battlenet_cache".into(), name: "Battle.net Cache".into(),
+            id: "battlenet_cache".into(),
+            name: "Battle.net Cache".into(),
             path_display: bnet.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: true,
+            size_bytes: s,
+            file_count: c,
+            default_selected: true,
         });
     }
 
@@ -758,9 +1077,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&epic);
     if s > 0 {
         items.push(CleanupItem {
-            id: "epic_webcache".into(), name: "Epic Games Launcher".into(),
+            id: "epic_webcache".into(),
+            name: "Epic Games Launcher".into(),
             path_display: epic.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -769,9 +1091,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&steam_http);
     if s > 0 {
         items.push(CleanupItem {
-            id: "steam_httpcache".into(), name: "Steam HTTP Cache".into(),
+            id: "steam_httpcache".into(),
+            name: "Steam HTTP Cache".into(),
             path_display: steam_http.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -785,9 +1110,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let sc = c2 + c3;
     if ss > 0 {
         items.push(CleanupItem {
-            id: "steam_shadercache".into(), name: "Steam Shader Cache".into(),
+            id: "steam_shadercache".into(),
+            name: "Steam Shader Cache".into(),
             path_display: "Steam\\shadercache (stutter pesado ao recompilar)".into(),
-            size_bytes: ss, file_count: sc, default_selected: false,
+            size_bytes: ss,
+            file_count: sc,
+            default_selected: false,
         });
     }
 
@@ -796,9 +1124,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&npm);
     if s > 0 {
         items.push(CleanupItem {
-            id: "npm_cache".into(), name: "npm Cache".into(),
+            id: "npm_cache".into(),
+            name: "npm Cache".into(),
             path_display: npm.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -807,9 +1138,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&pip);
     if s > 0 {
         items.push(CleanupItem {
-            id: "pip_cache".into(), name: "pip Cache".into(),
+            id: "pip_cache".into(),
+            name: "pip Cache".into(),
             path_display: pip.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -818,9 +1152,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&yarn);
     if s > 0 {
         items.push(CleanupItem {
-            id: "yarn_cache".into(), name: "Yarn Cache".into(),
+            id: "yarn_cache".into(),
+            name: "Yarn Cache".into(),
             path_display: yarn.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -832,9 +1169,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_paths_stats(&vscode_paths);
     if s > 0 {
         items.push(CleanupItem {
-            id: "vscode_cache".into(), name: "VS Code Cache".into(),
+            id: "vscode_cache".into(),
+            name: "VS Code Cache".into(),
             path_display: "Code\\CachedExtensions + Cache".into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -843,9 +1183,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&adobe);
     if s > 0 {
         items.push(CleanupItem {
-            id: "adobe_cache".into(), name: "Adobe Media Cache".into(),
+            id: "adobe_cache".into(),
+            name: "Adobe Media Cache".into(),
             path_display: adobe.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -854,9 +1197,12 @@ fn scan_aplicativos() -> Option<CleanupCategory> {
     let (s, c) = scan_dir_stats(&obs);
     if s > 0 {
         items.push(CleanupItem {
-            id: "obs_logs".into(), name: "OBS Logs".into(),
+            id: "obs_logs".into(),
+            name: "OBS Logs".into(),
             path_display: obs.to_string_lossy().into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -894,9 +1240,12 @@ fn scan_avancado() -> CleanupCategory {
             Err(_) => "Windows.old".into(),
         };
         items.push(CleanupItem {
-            id: "windows_old".into(), name: age_desc,
+            id: "windows_old".into(),
+            name: age_desc,
             path_display: r"C:\Windows.old (irreversível)".into(),
-            size_bytes: s, file_count: c, default_selected: false,
+            size_bytes: s,
+            file_count: c,
+            default_selected: false,
         });
     }
 
@@ -947,43 +1296,58 @@ pub async fn scan_cleanup(app: tauri::AppHandle) -> Result<CleanupScanResult, St
         let mut categories: Vec<CleanupCategory> = Vec::new();
         let total: u32 = 5;
 
-        let _ = handle.emit("scan_progress", ScanProgressEvent {
-            category_name: "Sistema Windows".to_string(),
-            category_index: 1,
-            total_categories: total,
-        });
+        let _ = handle.emit(
+            "scan_progress",
+            ScanProgressEvent {
+                category_name: "Sistema Windows".to_string(),
+                category_index: 1,
+                total_categories: total,
+            },
+        );
         categories.push(scan_sistema_windows());
 
-        let _ = handle.emit("scan_progress", ScanProgressEvent {
-            category_name: "GPU Shader Cache".to_string(),
-            category_index: 2,
-            total_categories: total,
-        });
+        let _ = handle.emit(
+            "scan_progress",
+            ScanProgressEvent {
+                category_name: "GPU Shader Cache".to_string(),
+                category_index: 2,
+                total_categories: total,
+            },
+        );
         categories.push(scan_gpu_shader_cache());
 
-        let _ = handle.emit("scan_progress", ScanProgressEvent {
-            category_name: "Browsers".to_string(),
-            category_index: 3,
-            total_categories: total,
-        });
+        let _ = handle.emit(
+            "scan_progress",
+            ScanProgressEvent {
+                category_name: "Browsers".to_string(),
+                category_index: 3,
+                total_categories: total,
+            },
+        );
         if let Some(cat) = scan_browsers() {
             categories.push(cat);
         }
 
-        let _ = handle.emit("scan_progress", ScanProgressEvent {
-            category_name: "Aplicativos".to_string(),
-            category_index: 4,
-            total_categories: total,
-        });
+        let _ = handle.emit(
+            "scan_progress",
+            ScanProgressEvent {
+                category_name: "Aplicativos".to_string(),
+                category_index: 4,
+                total_categories: total,
+            },
+        );
         if let Some(cat) = scan_aplicativos() {
             categories.push(cat);
         }
 
-        let _ = handle.emit("scan_progress", ScanProgressEvent {
-            category_name: "Avançado".to_string(),
-            category_index: 5,
-            total_categories: total,
-        });
+        let _ = handle.emit(
+            "scan_progress",
+            ScanProgressEvent {
+                category_name: "Avançado".to_string(),
+                category_index: 5,
+                total_categories: total,
+            },
+        );
         categories.push(scan_avancado());
 
         // Remove categorias vazias (exceto avançado que sempre mostra WinSxS)
@@ -1011,9 +1375,24 @@ pub async fn scan_cleanup(app: tauri::AppHandle) -> Result<CleanupScanResult, St
 pub async fn execute_cleanup(
     app: tauri::AppHandle,
     item_ids: Vec<String>,
+    browser_options: Option<BrowserCleanOptions>,
 ) -> Result<CleanupResult, String> {
     tokio::task::spawn_blocking(move || {
         let start = Instant::now();
+        let browser_opts = browser_options.unwrap_or_default();
+
+        // Filtra itens de browser com base nas opções granulares
+        let item_ids: Vec<String> = item_ids
+            .into_iter()
+            .filter(|id| {
+                if get_item_category(id) == "Browsers" {
+                    browser_item_allowed(id, &browser_opts)
+                } else {
+                    true
+                }
+            })
+            .collect();
+
         let total_items = item_ids.len();
         let mut item_results: Vec<CleanupItemResult> = Vec::new();
         let mut all_locked_paths: Vec<String> = Vec::new();
@@ -1024,13 +1403,16 @@ pub async fn execute_cleanup(
 
             // Emitir progresso
             let progress = (idx as f64 / total_items as f64) * 100.0;
-            let _ = app.emit("cleanup_progress", CleanupProgressEvent {
-                current_category: get_item_category(item_id).to_string(),
-                current_item: item_name.clone(),
-                progress_percent: progress,
-                freed_bytes_so_far: global_freed,
-                message: format!("Limpando: {}", item_name),
-            });
+            let _ = app.emit(
+                "cleanup_progress",
+                CleanupProgressEvent {
+                    current_category: get_item_category(item_id).to_string(),
+                    current_item: item_name.clone(),
+                    progress_percent: progress,
+                    freed_bytes_so_far: global_freed,
+                    message: format!("Limpando: {}", item_name),
+                },
+            );
 
             let result = execute_single_item(&app, item_id);
             global_freed += result.freed_bytes;
@@ -1047,13 +1429,16 @@ pub async fn execute_cleanup(
         }
 
         // Progresso 100%
-        let _ = app.emit("cleanup_progress", CleanupProgressEvent {
-            current_category: String::new(),
-            current_item: "Concluído".into(),
-            progress_percent: 100.0,
-            freed_bytes_so_far: global_freed,
-            message: "Limpeza concluída".into(),
-        });
+        let _ = app.emit(
+            "cleanup_progress",
+            CleanupProgressEvent {
+                current_category: String::new(),
+                current_item: "Concluído".into(),
+                progress_percent: 100.0,
+                freed_bytes_so_far: global_freed,
+                message: "Limpeza concluída".into(),
+            },
+        );
 
         let total_removed: u32 = item_results.iter().map(|r| r.files_removed).sum();
         let total_skipped: u32 = item_results.iter().map(|r| r.files_skipped).sum();
@@ -1111,10 +1496,17 @@ fn execute_single_item(_app: &tauri::AppHandle, item_id: &str) -> ItemExecResult
         "cbs_logs" => delete_item_dirs(&[
             PathBuf::from(r"C:\Windows\Logs\CBS"),
             PathBuf::from(r"C:\Windows\Logs\DISM"),
+        ]),
+        "update_logs" => delete_item_dirs(&[
             PathBuf::from(r"C:\Windows\Logs\WindowsUpdate"),
+            PathBuf::from(r"C:\Windows\Panther"),
+            PathBuf::from(r"C:\$Windows.~BT"),
+            PathBuf::from(r"C:\Windows\SoftwareDistribution\DataStore\Logs"),
         ]),
         "recycle_bin" => execute_recycle_bin_cleanup(),
-        "downloaded_programs" => delete_item_dirs(&[PathBuf::from(r"C:\Windows\Downloaded Program Files")]),
+        "downloaded_programs" => {
+            delete_item_dirs(&[PathBuf::from(r"C:\Windows\Downloaded Program Files")])
+        }
 
         // ── GPU Shader Cache ──
         "nvidia_dxcache" => delete_item_dirs(&[local_app_data().join(r"NVIDIA\DXCache")]),
@@ -1127,10 +1519,42 @@ fn execute_single_item(_app: &tauri::AppHandle, item_id: &str) -> ItemExecResult
         "intel_shadercache" => delete_item_dirs(&[local_app_data().join(r"Intel\ShaderCache")]),
         "dx_d3dscache" => delete_item_dirs(&[local_app_data().join("D3DSCache")]),
 
-        // ── Browsers ──
+        // ── Browsers: Chromium (Chrome, Edge, Brave) ──
         "chrome_cache" => delete_chromium_cache(&local_app_data().join(r"Google\Chrome\User Data")),
+        "chrome_cookies" => {
+            delete_chromium_file(&local_app_data().join(r"Google\Chrome\User Data"), "Cookies")
+        }
+        "chrome_history" => {
+            delete_chromium_file(&local_app_data().join(r"Google\Chrome\User Data"), "History")
+        }
+        "chrome_sessions" => {
+            delete_chromium_sessions(&local_app_data().join(r"Google\Chrome\User Data"))
+        }
         "edge_cache" => delete_chromium_cache(&local_app_data().join(r"Microsoft\Edge\User Data")),
-        "brave_cache" => delete_chromium_cache(&local_app_data().join(r"BraveSoftware\Brave-Browser\User Data")),
+        "edge_cookies" => {
+            delete_chromium_file(&local_app_data().join(r"Microsoft\Edge\User Data"), "Cookies")
+        }
+        "edge_history" => {
+            delete_chromium_file(&local_app_data().join(r"Microsoft\Edge\User Data"), "History")
+        }
+        "edge_sessions" => {
+            delete_chromium_sessions(&local_app_data().join(r"Microsoft\Edge\User Data"))
+        }
+        "brave_cache" => {
+            delete_chromium_cache(&local_app_data().join(r"BraveSoftware\Brave-Browser\User Data"))
+        }
+        "brave_cookies" => delete_chromium_file(
+            &local_app_data().join(r"BraveSoftware\Brave-Browser\User Data"),
+            "Cookies",
+        ),
+        "brave_history" => delete_chromium_file(
+            &local_app_data().join(r"BraveSoftware\Brave-Browser\User Data"),
+            "History",
+        ),
+        "brave_sessions" => delete_chromium_sessions(
+            &local_app_data().join(r"BraveSoftware\Brave-Browser\User Data"),
+        ),
+        // ── Browsers: Opera ──
         "opera_cache" => {
             let dir = app_data().join(r"Opera Software\Opera Stable");
             delete_item_dirs(&[
@@ -1138,6 +1562,12 @@ fn execute_single_item(_app: &tauri::AppHandle, item_id: &str) -> ItemExecResult
                 dir.join("Code Cache"),
                 dir.join("GPUCache"),
             ])
+        }
+        "opera_cookies" => {
+            delete_single_file(&app_data().join(r"Opera Software\Opera Stable\Cookies"))
+        }
+        "opera_history" => {
+            delete_single_file(&app_data().join(r"Opera Software\Opera Stable\History"))
         }
         "opera_gx_cache" => {
             let dir = app_data().join(r"Opera Software\Opera GX Stable");
@@ -1147,7 +1577,17 @@ fn execute_single_item(_app: &tauri::AppHandle, item_id: &str) -> ItemExecResult
                 dir.join("GPUCache"),
             ])
         }
+        "opera_gx_cookies" => {
+            delete_single_file(&app_data().join(r"Opera Software\Opera GX Stable\Cookies"))
+        }
+        "opera_gx_history" => {
+            delete_single_file(&app_data().join(r"Opera Software\Opera GX Stable\History"))
+        }
+        // ── Browsers: Firefox ──
         "firefox_cache" => execute_firefox_cache_cleanup(),
+        "firefox_cookies" => execute_firefox_file_cleanup("cookies.sqlite"),
+        "firefox_history" => execute_firefox_file_cleanup("places.sqlite"),
+        "firefox_sessions" => execute_firefox_dir_cleanup("sessionstore-backups"),
 
         // ── Aplicativos ──
         "spotify_cache" => delete_item_dirs(&[local_app_data().join(r"Spotify\Storage")]),
@@ -1156,7 +1596,9 @@ fn execute_single_item(_app: &tauri::AppHandle, item_id: &str) -> ItemExecResult
             app_data().join(r"discord\Code Cache"),
         ]),
         "battlenet_cache" => delete_item_dirs(&[local_app_data().join(r"Battle.net\Cache")]),
-        "epic_webcache" => delete_item_dirs(&[local_app_data().join(r"EpicGamesLauncher\Saved\webcache")]),
+        "epic_webcache" => {
+            delete_item_dirs(&[local_app_data().join(r"EpicGamesLauncher\Saved\webcache")])
+        }
         "steam_httpcache" => delete_item_dirs(&[local_app_data().join(r"Steam\htmlcache\Cache")]),
         "steam_shadercache" => delete_item_dirs(&[
             local_app_data().join(r"Steam\shadercache"),
@@ -1169,7 +1611,9 @@ fn execute_single_item(_app: &tauri::AppHandle, item_id: &str) -> ItemExecResult
             app_data().join(r"Code\CachedExtensions"),
             app_data().join(r"Code\Cache"),
         ]),
-        "adobe_cache" => delete_item_dirs(&[local_app_data().join(r"Adobe\Common\Media Cache Files")]),
+        "adobe_cache" => {
+            delete_item_dirs(&[local_app_data().join(r"Adobe\Common\Media Cache Files")])
+        }
         "obs_logs" => delete_item_dirs(&[app_data().join(r"obs-studio\logs")]),
 
         // ── Avançado ──
@@ -1177,7 +1621,9 @@ fn execute_single_item(_app: &tauri::AppHandle, item_id: &str) -> ItemExecResult
         "winsxs_cleanup" => execute_winsxs_cleanup(_app),
 
         _ => ItemExecResult {
-            freed_bytes: 0, files_removed: 0, files_skipped: 0,
+            freed_bytes: 0,
+            files_removed: 0,
+            files_skipped: 0,
             errors: vec![format!("Item desconhecido: {}", item_id)],
             locked_paths: Vec::new(),
         },
@@ -1201,18 +1647,26 @@ fn delete_item_dirs(paths: &[PathBuf]) -> ItemExecResult {
 fn delete_single_file(path: &Path) -> ItemExecResult {
     if !path.exists() {
         return ItemExecResult {
-            freed_bytes: 0, files_removed: 0, files_skipped: 0,
-            errors: Vec::new(), locked_paths: Vec::new(),
+            freed_bytes: 0,
+            files_removed: 0,
+            files_skipped: 0,
+            errors: Vec::new(),
+            locked_paths: Vec::new(),
         };
     }
     let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     match std::fs::remove_file(path) {
         Ok(()) => ItemExecResult {
-            freed_bytes: size, files_removed: 1, files_skipped: 0,
-            errors: Vec::new(), locked_paths: Vec::new(),
+            freed_bytes: size,
+            files_removed: 1,
+            files_skipped: 0,
+            errors: Vec::new(),
+            locked_paths: Vec::new(),
         },
         Err(e) => ItemExecResult {
-            freed_bytes: 0, files_removed: 0, files_skipped: 1,
+            freed_bytes: 0,
+            files_removed: 0,
+            files_skipped: 1,
             errors: vec![format!("{}: {}", path.display(), e)],
             locked_paths: vec![path.to_string_lossy().into()],
         },
@@ -1233,7 +1687,7 @@ fn execute_wu_cache_cleanup() -> ItemExecResult {
 fn execute_delivery_optim_cleanup() -> ItemExecResult {
     // Medir tamanho antes
     let cache_path = PathBuf::from(
-        r"C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache"
+        r"C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache",
     );
     let (size_before, _) = scan_dir_stats(&cache_path);
 
@@ -1290,7 +1744,13 @@ fn execute_thumbcache_cleanup() -> ItemExecResult {
         }
     }
 
-    ItemExecResult { freed_bytes: freed, files_removed: removed, files_skipped: skipped, errors, locked_paths: locked }
+    ItemExecResult {
+        freed_bytes: freed,
+        files_removed: removed,
+        files_skipped: skipped,
+        errors,
+        locked_paths: locked,
+    }
 }
 
 /// Lixeira — usa PowerShell Clear-RecycleBin.
@@ -1322,41 +1782,158 @@ fn delete_chromium_cache(user_data_dir: &Path) -> ItemExecResult {
     delete_item_dirs(&all_paths)
 }
 
-/// Limpa cache do Firefox (múltiplos perfis).
-fn execute_firefox_cache_cleanup() -> ItemExecResult {
-    let profiles_dir = app_data().join(r"Mozilla\Firefox\Profiles");
-    let mut cache_paths: Vec<PathBuf> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&profiles_dir) {
-        for entry in entries.flatten() {
-            if entry.path().is_dir() {
-                cache_paths.push(entry.path().join(r"cache2\entries"));
-            }
+/// Remove um arquivo específico de todos os perfis Chromium.
+///
+/// Usado para `Cookies` e `History` — cada perfil tem seu próprio arquivo
+/// SQLite em `{User Data}\{perfil}\{filename}`.
+fn delete_chromium_file(user_data_dir: &Path, filename: &str) -> ItemExecResult {
+    let profiles = find_chromium_profiles(user_data_dir);
+    let mut total = ItemExecResult {
+        freed_bytes: 0,
+        files_removed: 0,
+        files_skipped: 0,
+        errors: Vec::new(),
+        locked_paths: Vec::new(),
+    };
+    for profile in &profiles {
+        let r = delete_single_file(&profile.join(filename));
+        total.freed_bytes += r.freed_bytes;
+        total.files_removed += r.files_removed;
+        total.files_skipped += r.files_skipped;
+        total.errors.extend(r.errors);
+        total.locked_paths.extend(r.locked_paths);
+    }
+    total
+}
+
+/// Remove dados de sessão de todos os perfis Chromium.
+///
+/// Inclui `Sessions/`, `Current Session` e `Last Session` de cada perfil.
+fn delete_chromium_sessions(user_data_dir: &Path) -> ItemExecResult {
+    let profiles = find_chromium_profiles(user_data_dir);
+    let mut all_paths: Vec<PathBuf> = Vec::new();
+    for profile in &profiles {
+        all_paths.push(profile.join("Sessions"));
+    }
+    let mut result = delete_item_dirs(&all_paths);
+
+    // Arquivos soltos de sessão
+    for profile in &profiles {
+        for name in &["Current Session", "Last Session"] {
+            let r = delete_single_file(&profile.join(name));
+            result.freed_bytes += r.freed_bytes;
+            result.files_removed += r.files_removed;
+            result.files_skipped += r.files_skipped;
+            result.errors.extend(r.errors);
+            result.locked_paths.extend(r.locked_paths);
         }
     }
+    result
+}
+
+/// Limpa cache do Firefox (múltiplos perfis).
+///
+/// Percorre `%APPDATA%\Mozilla\Firefox\Profiles\*\cache2\entries\`
+/// removendo conteúdo de cache de todos os perfis encontrados.
+fn execute_firefox_cache_cleanup() -> ItemExecResult {
+    let profiles_dir = app_data().join(r"Mozilla\Firefox\Profiles");
+    let profile_dirs = find_firefox_profiles(&profiles_dir);
+    let cache_paths: Vec<PathBuf> = profile_dirs
+        .iter()
+        .map(|d| d.join(r"cache2\entries"))
+        .collect();
     delete_item_dirs(&cache_paths)
 }
 
-/// Remove Windows.old via PowerShell com força.
+/// Remove um arquivo específico de todos os perfis do Firefox.
+///
+/// Usado para `cookies.sqlite` e `places.sqlite` — cada perfil tem seu
+/// próprio arquivo em `%APPDATA%\Mozilla\Firefox\Profiles\<perfil>\<filename>`.
+fn execute_firefox_file_cleanup(filename: &str) -> ItemExecResult {
+    let profiles_dir = app_data().join(r"Mozilla\Firefox\Profiles");
+    let profile_dirs = find_firefox_profiles(&profiles_dir);
+    let mut total = ItemExecResult {
+        freed_bytes: 0,
+        files_removed: 0,
+        files_skipped: 0,
+        errors: Vec::new(),
+        locked_paths: Vec::new(),
+    };
+    for dir in &profile_dirs {
+        let file = dir.join(filename);
+        let r = delete_single_file(&file);
+        total.freed_bytes += r.freed_bytes;
+        total.files_removed += r.files_removed;
+        total.files_skipped += r.files_skipped;
+        total.errors.extend(r.errors);
+        total.locked_paths.extend(r.locked_paths);
+    }
+    total
+}
+
+/// Remove um diretório específico de todos os perfis do Firefox.
+///
+/// Usado para `sessionstore-backups/` — cada perfil tem seu próprio
+/// diretório em `%APPDATA%\Mozilla\Firefox\Profiles\<perfil>\<dirname>\`.
+fn execute_firefox_dir_cleanup(dirname: &str) -> ItemExecResult {
+    let profiles_dir = app_data().join(r"Mozilla\Firefox\Profiles");
+    let profile_dirs = find_firefox_profiles(&profiles_dir);
+    let paths: Vec<PathBuf> = profile_dirs.iter().map(|d| d.join(dirname)).collect();
+    delete_item_dirs(&paths)
+}
+
+/// Remove Windows.old usando takeown + icacls + rd (Remove-Item falha em arquivos protegidos).
 fn execute_windows_old_cleanup() -> ItemExecResult {
     let win_old = PathBuf::from(r"C:\Windows.old");
+    if !win_old.exists() {
+        return ItemExecResult {
+            freed_bytes: 0,
+            files_removed: 0,
+            files_skipped: 0,
+            errors: Vec::new(),
+            locked_paths: Vec::new(),
+        };
+    }
+
     let (size_before, _) = scan_dir_stats(&win_old);
 
-    match run_powershell("Remove-Item -Path 'C:\\Windows.old' -Recurse -Force -ErrorAction SilentlyContinue") {
+    // Tomar posse e dar permissão total antes de deletar
+    let script = r#"
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $ErrorActionPreference = 'SilentlyContinue'
+        takeown /f 'C:\Windows.old' /r /d S 2>&1 | Out-Null
+        icacls 'C:\Windows.old' /grant administrators:F /t /q 2>&1 | Out-Null
+        cmd /c 'rd /s /q C:\Windows.old' 2>&1
+        if (Test-Path 'C:\Windows.old') {
+            Remove-Item -Path 'C:\Windows.old' -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    "#;
+
+    match run_powershell(script) {
         Ok(_) => {
-            let still_exists = win_old.exists();
-            let freed = if still_exists {
+            let freed = if win_old.exists() {
                 let (size_after, _) = scan_dir_stats(&win_old);
                 size_before.saturating_sub(size_after)
             } else {
                 size_before
             };
+            let removed = if freed > 0 || !win_old.exists() { 1 } else { 0 };
             ItemExecResult {
-                freed_bytes: freed, files_removed: 1, files_skipped: 0,
-                errors: Vec::new(), locked_paths: Vec::new(),
+                freed_bytes: freed,
+                files_removed: removed,
+                files_skipped: if removed == 0 { 1 } else { 0 },
+                errors: if removed == 0 && win_old.exists() {
+                    vec!["Windows.old: não foi possível remover — arquivos em uso ou protegidos".into()]
+                } else {
+                    Vec::new()
+                },
+                locked_paths: Vec::new(),
             }
         }
         Err(e) => ItemExecResult {
-            freed_bytes: 0, files_removed: 0, files_skipped: 0,
+            freed_bytes: 0,
+            files_removed: 0,
+            files_skipped: 1,
             errors: vec![format!("Windows.old: {}", e)],
             locked_paths: Vec::new(),
         },
@@ -1364,25 +1941,66 @@ fn execute_windows_old_cleanup() -> ItemExecResult {
 }
 
 /// WinSxS Cleanup via DISM StartComponentCleanup.
+/// Mede espaço livre no disco antes/depois para calcular bytes liberados.
 fn execute_winsxs_cleanup(_app: &tauri::AppHandle) -> ItemExecResult {
+    // Medir espaço livre antes do DISM
+    let free_before = get_drive_free_bytes("C:\\");
+
     let script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; dism.exe /Online /Cleanup-Image /StartComponentCleanup";
     match run_powershell(script) {
         Ok(out) => {
             let success = out.exit_code == 0;
+            let freed = if success {
+                let free_after = get_drive_free_bytes("C:\\");
+                free_after.saturating_sub(free_before)
+            } else {
+                0
+            };
             ItemExecResult {
-                freed_bytes: 0, // DISM não reporta bytes exatos facilmente
+                freed_bytes: freed,
                 files_removed: if success { 1 } else { 0 },
-                files_skipped: 0,
-                errors: if success { Vec::new() } else { vec![out.stderr.clone()] },
+                files_skipped: if success { 0 } else { 1 },
+                errors: if success {
+                    Vec::new()
+                } else {
+                    vec![out.stderr.clone()]
+                },
                 locked_paths: Vec::new(),
             }
         }
         Err(e) => ItemExecResult {
-            freed_bytes: 0, files_removed: 0, files_skipped: 0,
+            freed_bytes: 0,
+            files_removed: 0,
+            files_skipped: 1,
             errors: vec![format!("DISM WinSxS: {}", e)],
             locked_paths: Vec::new(),
         },
     }
+}
+
+/// Retorna bytes livres na unidade especificada (ex: "C:\\").
+fn get_drive_free_bytes(root: &str) -> u64 {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ffi::OsStr;
+
+    let wide: Vec<u16> = OsStr::new(root).encode_wide().chain(std::iter::once(0)).collect();
+    let mut free_bytes: u64 = 0;
+
+    unsafe {
+        // GetDiskFreeSpaceExW(lpDirectoryName, lpFreeBytesAvailableToCaller, NULL, NULL)
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetDiskFreeSpaceExW(
+                lp_directory_name: *const u16,
+                lp_free_bytes_available_to_caller: *mut u64,
+                lp_total_number_of_bytes: *mut u64,
+                lp_total_number_of_free_bytes: *mut u64,
+            ) -> i32;
+        }
+        GetDiskFreeSpaceExW(wide.as_ptr(), &mut free_bytes, std::ptr::null_mut(), std::ptr::null_mut());
+    }
+
+    free_bytes
 }
 
 // ─── Mapeamento de nomes e categorias ────────────────────────────────────────
@@ -1396,7 +2014,8 @@ fn get_item_display_name(item_id: &str) -> String {
         "delivery_optim" => "Delivery Optimization Cache",
         "thumbcache" => "Thumbnail Cache",
         "memory_dumps" => "Memory Dumps",
-        "cbs_logs" => "CBS/DISM/Upgrade Logs",
+        "cbs_logs" => "CBS/DISM Logs",
+        "update_logs" => "Logs de Atualização do Windows",
         "recycle_bin" => "Lixeira",
         "downloaded_programs" => "Downloaded Program Files",
         "nvidia_dxcache" => "NVIDIA DXCache",
@@ -1409,11 +2028,27 @@ fn get_item_display_name(item_id: &str) -> String {
         "intel_shadercache" => "Intel ShaderCache",
         "dx_d3dscache" => "DirectX D3DSCache",
         "chrome_cache" => "Chrome Cache",
+        "chrome_cookies" => "Chrome Cookies",
+        "chrome_history" => "Chrome Histórico",
+        "chrome_sessions" => "Chrome Sessions",
         "edge_cache" => "Edge Cache",
+        "edge_cookies" => "Edge Cookies",
+        "edge_history" => "Edge Histórico",
+        "edge_sessions" => "Edge Sessions",
         "brave_cache" => "Brave Cache",
+        "brave_cookies" => "Brave Cookies",
+        "brave_history" => "Brave Histórico",
+        "brave_sessions" => "Brave Sessions",
         "opera_cache" => "Opera Cache",
+        "opera_cookies" => "Opera Cookies",
+        "opera_history" => "Opera Histórico",
         "opera_gx_cache" => "Opera GX Cache",
+        "opera_gx_cookies" => "Opera GX Cookies",
+        "opera_gx_history" => "Opera GX Histórico",
         "firefox_cache" => "Firefox Cache",
+        "firefox_cookies" => "Firefox Cookies",
+        "firefox_history" => "Firefox Histórico",
+        "firefox_sessions" => "Firefox Sessions",
         "spotify_cache" => "Spotify Cache",
         "discord_cache" => "Discord Cache",
         "battlenet_cache" => "Battle.net Cache",
@@ -1429,21 +2064,38 @@ fn get_item_display_name(item_id: &str) -> String {
         "windows_old" => "Windows.old",
         "winsxs_cleanup" => "WinSxS Cleanup (DISM)",
         _ => item_id,
-    }.to_string()
+    }
+    .to_string()
 }
 
 fn get_item_category(item_id: &str) -> &'static str {
     match item_id {
-        "temp_user" | "temp_windows" | "wer_reports" | "wu_cache" | "delivery_optim"
-        | "thumbcache" | "memory_dumps" | "cbs_logs" | "recycle_bin" | "downloaded_programs" => {
-            "Sistema Windows"
-        }
-        s if s.starts_with("nvidia_") || s.starts_with("amd_") || s.starts_with("intel_")
-            || s == "dx_d3dscache" => {
+        "temp_user"
+        | "temp_windows"
+        | "wer_reports"
+        | "wu_cache"
+        | "delivery_optim"
+        | "thumbcache"
+        | "memory_dumps"
+        | "cbs_logs"
+        | "update_logs"
+        | "recycle_bin"
+        | "downloaded_programs" => "Sistema Windows",
+        s if s.starts_with("nvidia_")
+            || s.starts_with("amd_")
+            || s.starts_with("intel_")
+            || s == "dx_d3dscache" =>
+        {
             "GPU Shader Cache"
         }
-        "chrome_cache" | "edge_cache" | "brave_cache" | "opera_cache" | "opera_gx_cache"
-        | "firefox_cache" => "Browsers",
+        "chrome_cache" | "chrome_cookies" | "chrome_history" | "chrome_sessions"
+        | "edge_cache" | "edge_cookies" | "edge_history" | "edge_sessions"
+        | "brave_cache" | "brave_cookies" | "brave_history" | "brave_sessions"
+        | "opera_cache" | "opera_cookies" | "opera_history"
+        | "opera_gx_cache" | "opera_gx_cookies" | "opera_gx_history"
+        | "firefox_cache" | "firefox_cookies" | "firefox_history" | "firefox_sessions" => {
+            "Browsers"
+        }
         "spotify_cache" | "discord_cache" | "battlenet_cache" | "epic_webcache"
         | "steam_httpcache" | "steam_shadercache" | "npm_cache" | "pip_cache" | "yarn_cache"
         | "vscode_cache" | "adobe_cache" | "obs_logs" => "Aplicativos",

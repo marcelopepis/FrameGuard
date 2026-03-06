@@ -4,7 +4,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #0b0f1a 0%, #090c16 100%);
+  background: linear-gradient(180deg, var(--sidebar-top) 0%, var(--sidebar-bottom) 100%);
   position: relative;
   z-index: 10;
 
@@ -23,8 +23,8 @@
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(34, 211, 238, 0.18) 25%,
-    rgba(34, 211, 238, 0.18) 75%,
+    rgba(var(--accent-rgb), 0.18) 25%,
+    rgba(var(--accent-rgb), 0.18) 75%,
     transparent 100%
   );
   pointer-events: none;
@@ -72,7 +72,10 @@
   text-decoration: none;
   font-size: 13.5px;
   font-weight: 500;
-  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
   border-left: 2px solid transparent;
   user-select: none;
   outline: none;
@@ -81,8 +84,8 @@
 /* Hover: apenas em itens não-ativos */
 .navItem:hover:not(.navItemActive) {
   color: var(--color-text-primary);
-  background: rgba(34, 211, 238, 0.05);
-  border-left-color: rgba(34, 211, 238, 0.25);
+  background: rgba(var(--accent-rgb), 0.05);
+  border-left-color: rgba(var(--accent-rgb), 0.25);
 }
 
 .navItem:hover:not(.navItemActive) .navIcon {
@@ -92,23 +95,25 @@
 /* Estado ativo */
 .navItemActive {
   color: var(--color-accent);
-  background: rgba(34, 211, 238, 0.09);
+  background: rgba(var(--accent-rgb), 0.09);
   border-left-color: var(--color-accent);
 }
 
 .navItemActive:hover {
-  background: rgba(34, 211, 238, 0.13);
+  background: rgba(var(--accent-rgb), 0.13);
 }
 
 .navItemActive .navIcon {
   color: var(--color-accent);
-  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.45));
+  filter: drop-shadow(0 0 5px rgba(var(--accent-rgb), 0.45));
 }
 
 /* Ícone base */
 .navIcon {
   flex-shrink: 0;
-  transition: color var(--transition-fast), filter var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    filter var(--transition-fast);
 }
 
 .navLabel {

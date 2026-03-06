@@ -87,69 +87,102 @@ const TASK_CATEGORIES = [
 
 function statusDotClass(status: string): string {
   switch (status) {
-    case 'Running': return styles.statusRunning;
-    case 'Stopped': return styles.statusStopped;
-    case 'Disabled': return styles.statusDisabled;
-    default: return styles.statusNotFound;
+    case 'Running':
+      return styles.statusRunning;
+    case 'Stopped':
+      return styles.statusStopped;
+    case 'Disabled':
+      return styles.statusDisabled;
+    default:
+      return styles.statusNotFound;
   }
 }
 
 function statusLabelClass(status: string): string {
   switch (status) {
-    case 'Running': return styles.statusLabelRunning;
-    case 'Stopped': return styles.statusLabelStopped;
-    case 'Disabled': return styles.statusLabelDisabled;
-    default: return styles.statusLabelNotFound;
+    case 'Running':
+      return styles.statusLabelRunning;
+    case 'Stopped':
+      return styles.statusLabelStopped;
+    case 'Disabled':
+      return styles.statusLabelDisabled;
+    default:
+      return styles.statusLabelNotFound;
   }
 }
 
 function statusLabel(status: string): string {
   switch (status) {
-    case 'Running': return 'Rodando';
-    case 'Stopped': return 'Parado';
-    case 'Disabled': return 'Desabilitado';
-    case 'NotFound': return 'N/A';
-    default: return status;
+    case 'Running':
+      return 'Rodando';
+    case 'Stopped':
+      return 'Parado';
+    case 'Disabled':
+      return 'Desabilitado';
+    case 'NotFound':
+      return 'N/A';
+    default:
+      return status;
   }
 }
 
 function startupLabel(type: string): string {
   switch (type) {
-    case 'Automatic': return 'Automático';
-    case 'Manual': return 'Manual';
-    case 'Disabled': return 'Desabilitado';
-    case 'Boot': return 'Boot';
-    case 'System': return 'Sistema';
-    case 'NotFound': return 'N/A';
-    default: return type;
+    case 'Automatic':
+      return 'Automático';
+    case 'Manual':
+      return 'Manual';
+    case 'Disabled':
+      return 'Desabilitado';
+    case 'Boot':
+      return 'Boot';
+    case 'System':
+      return 'Sistema';
+    case 'NotFound':
+      return 'N/A';
+    default:
+      return type;
   }
 }
 
 function taskStateClass(state: string): string {
   switch (state) {
-    case 'Ready': return styles.stateReady;
-    case 'Disabled': return styles.stateDisabled;
-    case 'Running': return styles.stateRunning;
-    default: return styles.stateNotFound;
+    case 'Ready':
+      return styles.stateReady;
+    case 'Disabled':
+      return styles.stateDisabled;
+    case 'Running':
+      return styles.stateRunning;
+    default:
+      return styles.stateNotFound;
   }
 }
 
 function taskStateLabel(state: string): string {
   switch (state) {
-    case 'Ready': return 'Ativa';
-    case 'Disabled': return 'Desabilitada';
-    case 'Running': return 'Executando';
-    case 'NotFound': return 'N/A';
-    default: return state;
+    case 'Ready':
+      return 'Ativa';
+    case 'Disabled':
+      return 'Desabilitada';
+    case 'Running':
+      return 'Executando';
+    case 'NotFound':
+      return 'N/A';
+    default:
+      return state;
   }
 }
 
 function taskStateDotClass(state: string): string {
   switch (state) {
-    case 'Ready': return styles.statusRunning;
-    case 'Disabled': return styles.statusDisabled;
-    case 'Running': return styles.statusRunning;
-    default: return styles.statusNotFound;
+    case 'Ready':
+      return styles.statusRunning;
+    case 'Disabled':
+      return styles.statusDisabled;
+    case 'Running':
+      return styles.statusRunning;
+    default:
+      return styles.statusNotFound;
   }
 }
 
@@ -200,12 +233,14 @@ export default function Services() {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // ── Toggle de categoria ──
 
   function toggleCategory(catId: string) {
-    setCollapsed(prev => {
+    setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(catId)) next.delete(catId);
       else next.add(catId);
@@ -216,7 +251,7 @@ export default function Services() {
   // ── Toggle de checkbox (serviços) ──
 
   function toggleService(id: string) {
-    setSelectedServices(prev => {
+    setSelectedServices((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -225,7 +260,7 @@ export default function Services() {
   }
 
   function toggleTask(id: string) {
-    setSelectedTasks(prev => {
+    setSelectedTasks((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -243,10 +278,15 @@ export default function Services() {
     try {
       const result = await invoke<BatchResult>('disable_services', { ids });
       if (result.succeeded.length > 0) {
-        showToast('success', 'Serviços desabilitados', `${result.succeeded.length} serviço(s) desabilitado(s) com sucesso.`);
+        showToast(
+          'success',
+          'Serviços desabilitados',
+          `${result.succeeded.length} serviço(s) desabilitado(s) com sucesso.`,
+        );
         invoke('log_tweak_activity', {
           name: `Desabilitar ${result.succeeded.length} serviço(s)`,
-          applied: true, success: true,
+          applied: true,
+          success: true,
         }).catch(() => {});
       }
       for (const f of result.failed) {
@@ -255,20 +295,25 @@ export default function Services() {
       if (result.failed.length > 0 && result.succeeded.length === 0) {
         invoke('log_tweak_activity', {
           name: `Desabilitar serviços (${result.failed.length} falha(s))`,
-          applied: true, success: false,
+          applied: true,
+          success: false,
         }).catch(() => {});
       }
       await loadData();
     } catch (e) {
       showToast('error', 'Erro ao desabilitar serviços', String(e));
-      invoke('log_tweak_activity', { name: 'Desabilitar serviços', applied: true, success: false }).catch(() => {});
+      invoke('log_tweak_activity', {
+        name: 'Desabilitar serviços',
+        applied: true,
+        success: false,
+      }).catch(() => {});
     } finally {
       setSvcLoading(false);
     }
   }
 
   async function handleRestoreServices() {
-    const ids = services.filter(s => s.has_backup).map(s => s.id);
+    const ids = services.filter((s) => s.has_backup).map((s) => s.id);
     if (ids.length === 0) {
       showToast('warning', 'Nenhum backup', 'Nenhum serviço foi modificado pelo FrameGuard.');
       return;
@@ -278,10 +323,15 @@ export default function Services() {
     try {
       const result = await invoke<BatchResult>('restore_services', { ids });
       if (result.succeeded.length > 0) {
-        showToast('success', 'Serviços restaurados', `${result.succeeded.length} serviço(s) restaurado(s) ao padrão original.`);
+        showToast(
+          'success',
+          'Serviços restaurados',
+          `${result.succeeded.length} serviço(s) restaurado(s) ao padrão original.`,
+        );
         invoke('log_tweak_activity', {
           name: `Restaurar ${result.succeeded.length} serviço(s)`,
-          applied: false, success: true,
+          applied: false,
+          success: true,
         }).catch(() => {});
       }
       for (const f of result.failed) {
@@ -290,7 +340,11 @@ export default function Services() {
       await loadData();
     } catch (e) {
       showToast('error', 'Erro ao restaurar serviços', String(e));
-      invoke('log_tweak_activity', { name: 'Restaurar serviços', applied: false, success: false }).catch(() => {});
+      invoke('log_tweak_activity', {
+        name: 'Restaurar serviços',
+        applied: false,
+        success: false,
+      }).catch(() => {});
     } finally {
       setSvcLoading(false);
     }
@@ -306,10 +360,15 @@ export default function Services() {
     try {
       const result = await invoke<BatchResult>('disable_tasks', { ids });
       if (result.succeeded.length > 0) {
-        showToast('success', 'Tarefas desabilitadas', `${result.succeeded.length} tarefa(s) desabilitada(s) com sucesso.`);
+        showToast(
+          'success',
+          'Tarefas desabilitadas',
+          `${result.succeeded.length} tarefa(s) desabilitada(s) com sucesso.`,
+        );
         invoke('log_tweak_activity', {
           name: `Desabilitar ${result.succeeded.length} tarefa(s)`,
-          applied: true, success: true,
+          applied: true,
+          success: true,
         }).catch(() => {});
       }
       for (const f of result.failed) {
@@ -318,20 +377,25 @@ export default function Services() {
       if (result.failed.length > 0 && result.succeeded.length === 0) {
         invoke('log_tweak_activity', {
           name: `Desabilitar tarefas (${result.failed.length} falha(s))`,
-          applied: true, success: false,
+          applied: true,
+          success: false,
         }).catch(() => {});
       }
       await loadData();
     } catch (e) {
       showToast('error', 'Erro ao desabilitar tarefas', String(e));
-      invoke('log_tweak_activity', { name: 'Desabilitar tarefas', applied: true, success: false }).catch(() => {});
+      invoke('log_tweak_activity', {
+        name: 'Desabilitar tarefas',
+        applied: true,
+        success: false,
+      }).catch(() => {});
     } finally {
       setTaskLoading(false);
     }
   }
 
   async function handleRestoreTasks() {
-    const ids = tasks.filter(t => t.has_backup).map(t => t.id);
+    const ids = tasks.filter((t) => t.has_backup).map((t) => t.id);
     if (ids.length === 0) {
       showToast('warning', 'Nenhum backup', 'Nenhuma tarefa foi modificada pelo FrameGuard.');
       return;
@@ -341,10 +405,15 @@ export default function Services() {
     try {
       const result = await invoke<BatchResult>('restore_tasks', { ids });
       if (result.succeeded.length > 0) {
-        showToast('success', 'Tarefas restauradas', `${result.succeeded.length} tarefa(s) restaurada(s).`);
+        showToast(
+          'success',
+          'Tarefas restauradas',
+          `${result.succeeded.length} tarefa(s) restaurada(s).`,
+        );
         invoke('log_tweak_activity', {
           name: `Restaurar ${result.succeeded.length} tarefa(s)`,
-          applied: false, success: true,
+          applied: false,
+          success: true,
         }).catch(() => {});
       }
       for (const f of result.failed) {
@@ -353,7 +422,11 @@ export default function Services() {
       await loadData();
     } catch (e) {
       showToast('error', 'Erro ao restaurar tarefas', String(e));
-      invoke('log_tweak_activity', { name: 'Restaurar tarefas', applied: false, success: false }).catch(() => {});
+      invoke('log_tweak_activity', {
+        name: 'Restaurar tarefas',
+        applied: false,
+        success: false,
+      }).catch(() => {});
     } finally {
       setTaskLoading(false);
     }
@@ -386,12 +459,11 @@ export default function Services() {
     );
   }
 
-  const svcWithBackup = services.filter(s => s.has_backup).length;
-  const taskWithBackup = tasks.filter(t => t.has_backup).length;
+  const svcWithBackup = services.filter((s) => s.has_backup).length;
+  const taskWithBackup = tasks.filter((t) => t.has_backup).length;
 
   return (
     <div className={styles.page}>
-
       {/* ── Header ── */}
       <div className={styles.header}>
         <div>
@@ -414,35 +486,29 @@ export default function Services() {
       <div className={styles.warningBanner}>
         <AlertTriangle size={18} />
         <span>
-          Desabilitar serviços incorretos pode causar instabilidade.
-          Os serviços listados aqui foram curados para serem seguros em PCs de gaming.
-          Serviços marcados com <strong>(!)</strong> dependem do seu hardware — leia a descrição antes.
+          Desabilitar serviços incorretos pode causar instabilidade. Os serviços listados aqui foram
+          curados para serem seguros em PCs de gaming. Serviços marcados com <strong>(!)</strong>{' '}
+          dependem do seu hardware — leia a descrição antes.
         </span>
       </div>
 
       <div className={styles.sections}>
-
         {/* ── Seção: Serviços do Windows ── */}
         <div className={styles.sectionCard}>
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTitle}>Serviços do Windows</span>
-            <span className={styles.sectionSubtitle}>
-              {services.length} serviços curados
-            </span>
+            <span className={styles.sectionSubtitle}>{services.length} serviços curados</span>
           </div>
 
-          {SERVICE_CATEGORIES.map(cat => {
-            const catServices = services.filter(s => s.category === cat.id);
+          {SERVICE_CATEGORIES.map((cat) => {
+            const catServices = services.filter((s) => s.category === cat.id);
             if (catServices.length === 0) return null;
             const catKey = `svc_${cat.id}`;
             const isCollapsed = collapsed.has(catKey);
 
             return (
               <div key={cat.id}>
-                <div
-                  className={styles.categoryHeader}
-                  onClick={() => toggleCategory(catKey)}
-                >
+                <div className={styles.categoryHeader} onClick={() => toggleCategory(catKey)}>
                   <ChevronDown
                     size={14}
                     className={`${styles.chevron} ${isCollapsed ? styles.chevronCollapsed : ''}`}
@@ -463,7 +529,7 @@ export default function Services() {
                       </tr>
                     </thead>
                     <tbody>
-                      {catServices.map(svc => {
+                      {catServices.map((svc) => {
                         const isNotFound = svc.status === 'NotFound';
                         return (
                           <tr
@@ -484,7 +550,10 @@ export default function Services() {
                                 <span className={styles.displayName}>
                                   {svc.display_name}
                                   {svc.is_conditional && (
-                                    <span className={styles.conditionalBadge} title={svc.conditional_note || ''}>
+                                    <span
+                                      className={styles.conditionalBadge}
+                                      title={svc.conditional_note || ''}
+                                    >
                                       !
                                       {svc.conditional_note && (
                                         <span className={styles.conditionalTip}>
@@ -500,15 +569,15 @@ export default function Services() {
                             <td className={styles.descCell}>{svc.description}</td>
                             <td>
                               <div className={styles.statusCell}>
-                                <span className={`${styles.statusDot} ${statusDotClass(svc.status)}`} />
+                                <span
+                                  className={`${styles.statusDot} ${statusDotClass(svc.status)}`}
+                                />
                                 <span className={statusLabelClass(svc.status)}>
                                   {statusLabel(svc.status)}
                                 </span>
                               </div>
                             </td>
-                            <td className={styles.startupCell}>
-                              {startupLabel(svc.startup_type)}
-                            </td>
+                            <td className={styles.startupCell}>{startupLabel(svc.startup_type)}</td>
                           </tr>
                         );
                       })}
@@ -526,8 +595,7 @@ export default function Services() {
                 ? `${selectedServices.size} selecionado(s)`
                 : svcWithBackup > 0
                   ? `${svcWithBackup} modificado(s) pelo FrameGuard`
-                  : 'Nenhum selecionado'
-              }
+                  : 'Nenhum selecionado'}
             </span>
             <button
               className={styles.btnPrimary}
@@ -551,23 +619,18 @@ export default function Services() {
         <div className={styles.sectionCard}>
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTitle}>Tarefas Agendadas</span>
-            <span className={styles.sectionSubtitle}>
-              {tasks.length} tarefas curadas
-            </span>
+            <span className={styles.sectionSubtitle}>{tasks.length} tarefas curadas</span>
           </div>
 
-          {TASK_CATEGORIES.map(cat => {
-            const catTasks = tasks.filter(t => t.category === cat.id);
+          {TASK_CATEGORIES.map((cat) => {
+            const catTasks = tasks.filter((t) => t.category === cat.id);
             if (catTasks.length === 0) return null;
             const catKey = `task_${cat.id}`;
             const isCollapsed = collapsed.has(catKey);
 
             return (
               <div key={cat.id}>
-                <div
-                  className={styles.categoryHeader}
-                  onClick={() => toggleCategory(catKey)}
-                >
+                <div className={styles.categoryHeader} onClick={() => toggleCategory(catKey)}>
                   <ChevronDown
                     size={14}
                     className={`${styles.chevron} ${isCollapsed ? styles.chevronCollapsed : ''}`}
@@ -587,7 +650,7 @@ export default function Services() {
                       </tr>
                     </thead>
                     <tbody>
-                      {catTasks.map(task => {
+                      {catTasks.map((task) => {
                         const isNotFound = task.state === 'NotFound';
                         return (
                           <tr
@@ -605,16 +668,16 @@ export default function Services() {
                             </td>
                             <td>
                               <div className={styles.nameCell}>
-                                <span className={styles.displayName}>
-                                  {task.display_name}
-                                </span>
+                                <span className={styles.displayName}>{task.display_name}</span>
                                 <span className={styles.techName}>{task.task_name}</span>
                               </div>
                             </td>
                             <td className={styles.descCell}>{task.description}</td>
                             <td>
                               <div className={styles.statusCell}>
-                                <span className={`${styles.statusDot} ${taskStateDotClass(task.state)}`} />
+                                <span
+                                  className={`${styles.statusDot} ${taskStateDotClass(task.state)}`}
+                                />
                                 <span className={taskStateClass(task.state)}>
                                   {taskStateLabel(task.state)}
                                 </span>
@@ -637,8 +700,7 @@ export default function Services() {
                 ? `${selectedTasks.size} selecionada(s)`
                 : taskWithBackup > 0
                   ? `${taskWithBackup} modificada(s) pelo FrameGuard`
-                  : 'Nenhuma selecionada'
-              }
+                  : 'Nenhuma selecionada'}
             </span>
             <button
               className={styles.btnPrimary}

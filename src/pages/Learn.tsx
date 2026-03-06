@@ -5,8 +5,13 @@
 
 import { useState } from 'react';
 import {
-  ChevronDown, ExternalLink, Info,
-  Ban, AlertTriangle, Clock, FlaskConical,
+  ChevronDown,
+  ExternalLink,
+  Info,
+  Ban,
+  AlertTriangle,
+  Clock,
+  FlaskConical,
 } from 'lucide-react';
 import styles from './Learn.module.css';
 
@@ -25,10 +30,10 @@ interface MythEntry {
 // ── Badge config ─────────────────────────────────────────────────────────────
 
 const BADGE_CONFIG: Record<BadgeType, { Icon: typeof Ban; className: string }> = {
-  mito:       { Icon: Ban,           className: 'badgeMito' },
-  perigoso:   { Icon: AlertTriangle, className: 'badgePerigoso' },
-  obsoleto:   { Icon: Clock,         className: 'badgeObsoleto' },
-  snake_oil:  { Icon: FlaskConical,  className: 'badgeSnakeOil' },
+  mito: { Icon: Ban, className: 'badgeMito' },
+  perigoso: { Icon: AlertTriangle, className: 'badgePerigoso' },
+  obsoleto: { Icon: Clock, className: 'badgeObsoleto' },
+  snake_oil: { Icon: FlaskConical, className: 'badgeSnakeOil' },
 };
 
 // ── Dados dos mitos ──────────────────────────────────────────────────────────
@@ -84,12 +89,12 @@ const MYTHS: MythEntry[] = [
     badge: { type: 'perigoso', label: 'Perigoso' },
     paragraphs: [
       'Em CPUs modernas (Intel 10ª gen+, Ryzen 3000+), o impacto das mitigações Spectre/Meltdown é imperceptível em games — menos de 1% de diferença no FPS. As mitigações afetam principalmente workloads de I/O intensivo (servidores, databases), não renderização 3D.',
-      'Desabilitar as mitigações expõe o sistema a ataques JavaScript em navegadores e outros vetores de exploração. Tom\'s Hardware testou 10 CPUs diferentes e não encontrou diferença significativa em nenhum jogo testado.',
+      "Desabilitar as mitigações expõe o sistema a ataques JavaScript em navegadores e outros vetores de exploração. Tom's Hardware testou 10 CPUs diferentes e não encontrou diferença significativa em nenhum jogo testado.",
       'O "dobrar FPS" era exagero mesmo em CPUs antigas. Na época do lançamento dos patches (2018), a diferença real era de 2-5% em cenários específicos de I/O — nunca em rendering de jogos.',
     ],
     source: {
       url: 'https://www.tomshardware.com/news/meltdown-spectre-cpu-performance-impacts,36585.html',
-      label: 'Tom\'s Hardware — Meltdown/Spectre Performance Impact',
+      label: "Tom's Hardware — Meltdown/Spectre Performance Impact",
     },
   },
   {
@@ -120,16 +125,16 @@ export default function Learn() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggle(id: string) {
-    setExpanded(prev => {
+    setExpanded((prev) => {
       const s = new Set(prev);
-      if (s.has(id)) s.delete(id); else s.add(id);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
       return s;
     });
   }
 
   return (
     <div className={styles.page}>
-
       {/* Header */}
       <div className={styles.header}>
         <div>
@@ -144,21 +149,24 @@ export default function Learn() {
       <div className={styles.infoBanner}>
         <Info size={15} />
         <span>
-          Muitos "tweaks" populares na internet não têm base técnica ou são obsoletos.
-          Aqui explicamos por que o FrameGuard não inclui esses ajustes — e por que
-          você também não deveria aplicá-los manualmente.
+          Muitos "tweaks" populares na internet não têm base técnica ou são obsoletos. Aqui
+          explicamos por que o FrameGuard não inclui esses ajustes — e por que você também não
+          deveria aplicá-los manualmente.
         </span>
       </div>
 
       {/* Lista de mitos */}
       <div className={styles.mythList}>
-        {MYTHS.map(myth => {
+        {MYTHS.map((myth) => {
           const isOpen = expanded.has(myth.id);
           const cfg = BADGE_CONFIG[myth.badge.type];
           const BIcon = cfg.Icon;
 
           return (
-            <div key={myth.id} className={`${styles.mythCard} ${isOpen ? styles.mythCardOpen : ''}`}>
+            <div
+              key={myth.id}
+              className={`${styles.mythCard} ${isOpen ? styles.mythCardOpen : ''}`}
+            >
               <button className={styles.mythToggle} onClick={() => toggle(myth.id)}>
                 <div className={styles.mythToggleLeft}>
                   <span className={`${styles.badge} ${styles[cfg.className]}`}>
@@ -177,7 +185,9 @@ export default function Learn() {
               {isOpen && (
                 <div className={styles.mythContent}>
                   {myth.paragraphs.map((p, i) => (
-                    <p key={i} className={styles.mythParagraph}>{p}</p>
+                    <p key={i} className={styles.mythParagraph}>
+                      {p}
+                    </p>
                   ))}
                   {myth.source && (
                     <a

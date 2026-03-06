@@ -14,7 +14,10 @@ import styles from './SearchBar.module.css';
 
 /** Remove acentos e converte para minúsculas. */
 function normalize(text: string): string {
-  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 /** Labels legíveis para o tipo de item. */
@@ -43,23 +46,21 @@ export default function SearchBar() {
 
     const tokens = normalize(q).split(/\s+/);
 
-    const scored = SEARCH_INDEX
-      .map(item => {
-        const haystack = normalize(`${item.name} ${item.description} ${item.tags.join(' ')}`);
+    const scored = SEARCH_INDEX.map((item) => {
+      const haystack = normalize(`${item.name} ${item.description} ${item.tags.join(' ')}`);
 
-        // Todos os tokens devem estar presentes (AND)
-        if (!tokens.every(t => haystack.includes(t))) return null;
+      // Todos os tokens devem estar presentes (AND)
+      if (!tokens.every((t) => haystack.includes(t))) return null;
 
-        // Score: nome > tags > description
-        const nq = normalize(q);
-        const nameScore = normalize(item.name).includes(nq) ? 2 : 0;
-        const tagScore = item.tags.some(t => normalize(t).includes(nq)) ? 1 : 0;
-        return { item, score: nameScore + tagScore };
-      })
-      .filter(Boolean) as { item: SearchItem; score: number }[];
+      // Score: nome > tags > description
+      const nq = normalize(q);
+      const nameScore = normalize(item.name).includes(nq) ? 2 : 0;
+      const tagScore = item.tags.some((t) => normalize(t).includes(nq)) ? 1 : 0;
+      return { item, score: nameScore + tagScore };
+    }).filter(Boolean) as { item: SearchItem; score: number }[];
 
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 10).map(r => r.item);
+    return scored.slice(0, 10).map((r) => r.item);
   }, [query]);
 
   // ── Agrupamento por página ──
@@ -105,13 +106,13 @@ export default function SearchBar() {
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
+      setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
       return;
     }
 
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prev => Math.max(prev - 1, 0));
+      setSelectedIndex((prev) => Math.max(prev - 1, 0));
       return;
     }
 
@@ -161,7 +162,7 @@ export default function SearchBar() {
           className={styles.searchInput}
           placeholder="Buscar..."
           value={query}
-          onChange={e => {
+          onChange={(e) => {
             setQuery(e.target.value);
             setIsOpen(true);
             setSelectedIndex(0);
@@ -172,7 +173,10 @@ export default function SearchBar() {
         {query ? (
           <button
             className={styles.clearBtn}
-            onClick={() => { setQuery(''); setSelectedIndex(0); }}
+            onClick={() => {
+              setQuery('');
+              setSelectedIndex(0);
+            }}
             tabIndex={-1}
           >
             <X size={12} strokeWidth={2} />
@@ -191,7 +195,7 @@ export default function SearchBar() {
           {Array.from(grouped.entries()).map(([pageLabel, items]) => (
             <div key={pageLabel} className={styles.group}>
               <div className={styles.groupLabel}>{pageLabel}</div>
-              {items.map(item => {
+              {items.map((item) => {
                 const flatIdx = results.indexOf(item);
                 return (
                   <button
@@ -203,7 +207,9 @@ export default function SearchBar() {
                     <Search size={13} strokeWidth={2} className={styles.resultIcon} />
                     <div className={styles.resultInfo}>
                       <span className={styles.resultName}>{item.name}</span>
-                      <span className={styles.resultType}>{TYPE_LABELS[item.type] ?? item.type}</span>
+                      <span className={styles.resultType}>
+                        {TYPE_LABELS[item.type] ?? item.type}
+                      </span>
                     </div>
                   </button>
                 );

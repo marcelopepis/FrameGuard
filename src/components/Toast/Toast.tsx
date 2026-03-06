@@ -14,9 +14,9 @@ interface ToastContainerProps {
 
 const ICONS = {
   success: CheckCircle2,
-  error:   XCircle,
+  error: XCircle,
   warning: AlertTriangle,
-  info:    Info,
+  info: Info,
 } as const;
 
 export default function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
@@ -24,7 +24,7 @@ export default function ToastContainer({ toasts, onDismiss }: ToastContainerProp
 
   return (
     <div className={styles.container}>
-      {toasts.map(toast => {
+      {toasts.map((toast) => {
         const Icon = ICONS[toast.type];
         return (
           <div
@@ -36,15 +36,9 @@ export default function ToastContainer({ toasts, onDismiss }: ToastContainerProp
             <Icon size={16} className={styles.icon} />
             <div className={styles.body}>
               <div className={styles.title}>{toast.title}</div>
-              {toast.message && (
-                <div className={styles.message}>{toast.message}</div>
-              )}
+              {toast.message && <div className={styles.message}>{toast.message}</div>}
             </div>
-            <button
-              className={styles.btnClose}
-              onClick={() => onDismiss(toast.id)}
-              title="Fechar"
-            >
+            <button className={styles.btnClose} onClick={() => onDismiss(toast.id)} title="Fechar">
               <X size={13} />
             </button>
           </div>

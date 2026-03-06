@@ -1,7 +1,7 @@
 {
   "name": "frameguard",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.2.0",
   "license": "GPL-3.0-or-later",
   "author": "Marcelo Pepis",
   "repository": "https://github.com/marcelopepis/FrameGuard",
@@ -10,7 +10,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -25,7 +29,13 @@
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.39.3",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "prettier": "^3.8.1",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }

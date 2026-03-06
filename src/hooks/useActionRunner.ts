@@ -1,35 +1,88 @@
-// Hook compartilhado para execução de ações com streaming de saída em tempo real.
-//
-// Encapsula toda a lógica de execução comum às páginas de Saúde do Sistema e
-// Limpeza: buffer de linhas pendentes com flush a cada 80ms, listen/unlisten de
-// eventos Tauri, persistência no localStorage e integração com GlobalRunningProvider.
+/**
+ * Hook compartilhado para execução de ações com streaming de saída em tempo real.
+ *
+ * Encapsula toda a lógica de execução comum às páginas de Saúde do Sistema e
+ * Limpeza: buffer de linhas pendentes com flush a cada 80ms, listen/unlisten de
+ * eventos Tauri, persistência no localStorage e integração com GlobalRunningProvider.
+ *
+ * @module useActionRunner
+ */
 
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { ActionMeta, ActionState, CommandEvent, HealthCheckResult, LogLine } from '../types/health';
+import type {
+  ActionMeta,
+  ActionState,
+  CommandEvent,
+  HealthCheckResult,
+  LogLine,
+} from '../types/health';
 import { useGlobalRunning } from '../contexts/RunningContext';
 
-/** Extrai percentual de linhas como " 42.0%" → 42. Usado pelo DISM. */
+/**
+ * Extrai percentual de linhas como `" 42.0%"` → `42`.
+ *
+ * Usado para parsear output de progresso do DISM e outros comandos
+ * que emitem percentual em stdout.
+ */
 function extractProgress(text: string): number | null {
   const m = text.trim().match(/^(\d+(?:\.\d+)?)%$/);
   return m ? Math.min(100, parseFloat(m[1])) : null;
 }
 
+/** Cria o estado inicial de uma ação, restaurando o último resultado do localStorage. */
 function makeActionState(id: string, lsKey: (id: string) => string): ActionState {
   let lastResult: HealthCheckResult | null = null;
   try {
     const saved = localStorage.getItem(lsKey(id));
     if (saved) lastResult = JSON.parse(saved) as HealthCheckResult;
-  } catch { /* ignora */ }
-  return { running: false, log: [], progress: null, lastResult, showLog: false, showDetails: false };
+  } catch {
+    /* ignora */
+  }
+  return {
+    running: false,
+    log: [],
+    progress: null,
+    lastResult,
+    showLog: false,
+    showDetails: false,
+  };
+}
+
+/** Retorno do hook `useActionRunner`. */
+export interface UseActionRunnerReturn {
+  /** Estado de cada ação indexado por `ActionMeta.id` */
+  states: Record<string, ActionState>;
+  /** Executa uma ação (streaming de output + persistência de resultado) */
+  handleRun: (meta: ActionMeta) => Promise<void>;
+  /** Alterna a visibilidade do log de uma ação */
+  toggleLog: (id: string) => void;
+  /** Alterna a visibilidade dos detalhes técnicos de uma ação */
+  toggleDetails: (id: string) => void;
+  /** `true` quando alguma tarefa global está em execução (via RunningContext) */
+  isRunning: boolean;
 }
 
 /**
- * @param actions  Lista de ações da página.
- * @param lsKeyPrefix  Prefixo do localStorage, ex: "frameguard:health" ou "frameguard:cleanup".
+ * Hook que gerencia a execução de ações com streaming de output em tempo real.
+ *
+ * Para cada ação, mantém um `ActionState` com log, progresso, resultado
+ * e flags de visibilidade. O output é bufferizado e flushado a cada 80ms
+ * para evitar centenas de re-renders por segundo.
+ *
+ * @param actions - Lista de metadados das ações da página
+ * @param lsKeyPrefix - Prefixo do localStorage para persistir últimos resultados
+ *   (ex: `"frameguard:health"` ou `"frameguard:cleanup"`)
+ * @returns Objeto com `states`, `handleRun`, `toggleLog`, `toggleDetails` e `isRunning`
+ *
+ * @example
+ * ```tsx
+ * const { states, handleRun, toggleLog, toggleDetails, isRunning } =
+ *   useActionRunner(actions, 'frameguard:health');
+ * ```
  */
-export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
+export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string, pagePath?: string) {
   const lsKey = (id: string) => `${lsKeyPrefix}:${id}`;
 
   const [states, setStates] = useState<Record<string, ActionState>>(() => {
@@ -41,8 +94,8 @@ export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
   const { isRunning, startTask, endTask } = useGlobalRunning();
 
   async function handleRun(meta: ActionMeta) {
-    startTask(meta.id);
-    setStates(prev => ({
+    startTask(meta.id, pagePath);
+    setStates((prev) => ({
       ...prev,
       [meta.id]: { ...prev[meta.id], running: true, log: [], progress: null, showLog: true },
     }));
@@ -58,7 +111,7 @@ export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
       const lines = pendingLines.splice(0);
       const p = pendingProgress;
       pendingProgress = null;
-      setStates(prev => {
+      setStates((prev) => {
         const cur = prev[meta.id];
         // Limita a 500 linhas para não sobrecarregar o DOM
         const nextLog = lines.length > 0 ? [...cur.log, ...lines].slice(-500) : cur.log;
@@ -69,7 +122,7 @@ export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
       });
     }, 80);
 
-    const unlisten = await listen<CommandEvent>(meta.eventChannel, event => {
+    const unlisten = await listen<CommandEvent>(meta.eventChannel, (event) => {
       const { event_type, data } = event.payload;
       pendingLines.push({ type: event_type, text: data });
       if (event_type === 'stdout') {
@@ -82,13 +135,24 @@ export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
       const result = await invoke<HealthCheckResult>(meta.command, meta.invokeArgs ?? {});
       clearInterval(flushTimer);
       const remaining = pendingLines.splice(0);
-      try { localStorage.setItem(lsKey(meta.id), JSON.stringify(result)); } catch { /* ignora */ }
-      setStates(prev => {
+      try {
+        localStorage.setItem(lsKey(meta.id), JSON.stringify(result));
+      } catch {
+        /* ignora */
+      }
+      setStates((prev) => {
         const cur = prev[meta.id];
         const nextLog = remaining.length > 0 ? [...cur.log, ...remaining].slice(-500) : cur.log;
         return {
           ...prev,
-          [meta.id]: { ...cur, running: false, progress: null, lastResult: result, showLog: true, log: nextLog },
+          [meta.id]: {
+            ...cur,
+            running: false,
+            progress: null,
+            lastResult: result,
+            showLog: true,
+            log: nextLog,
+          },
         };
       });
       // Registra atividade (warning = parcialmente bem-sucedido, conta como sucesso)
@@ -100,12 +164,14 @@ export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
     } catch (e) {
       clearInterval(flushTimer);
       const remaining = pendingLines.splice(0);
-      setStates(prev => {
+      setStates((prev) => {
         const cur = prev[meta.id];
         const nextLog = [...cur.log, ...remaining, { type: 'error', text: String(e) }].slice(-500);
         return { ...prev, [meta.id]: { ...cur, running: false, progress: null, log: nextLog } };
       });
-      invoke('log_tweak_activity', { name: meta.name, applied: true, success: false }).catch(() => {});
+      invoke('log_tweak_activity', { name: meta.name, applied: true, success: false }).catch(
+        () => {},
+      );
     } finally {
       endTask(meta.id);
       unlisten();
@@ -113,12 +179,12 @@ export function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string) {
   }
 
   function toggleLog(id: string) {
-    setStates(prev => ({ ...prev, [id]: { ...prev[id], showLog: !prev[id].showLog } }));
+    setStates((prev) => ({ ...prev, [id]: { ...prev[id], showLog: !prev[id].showLog } }));
   }
 
   function toggleDetails(id: string) {
-    setStates(prev => ({ ...prev, [id]: { ...prev[id], showDetails: !prev[id].showDetails } }));
+    setStates((prev) => ({ ...prev, [id]: { ...prev[id], showDetails: !prev[id].showDetails } }));
   }
 
-  return { states, handleRun, toggleLog, toggleDetails, isRunning };
+  return { states, handleRun, toggleLog, toggleDetails, isRunning } satisfies UseActionRunnerReturn;
 }

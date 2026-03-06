@@ -2,7 +2,10 @@
 mod commands;
 mod utils;
 
-use commands::{about, activity, bloatware, cleanup, export_import, health_check, optimizations, plans, privacy, restore_point, services, system_info};
+use commands::{
+    about, activity, bloatware, cleanup, export_import, health, plans, privacy, restore_point,
+    services, system_info, tweaks, window,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,88 +27,85 @@ pub fn run() {
             system_info::get_system_status,
             system_info::get_system_usage,
             system_info::get_system_summary,
-            // Otimizações — Compressão de Wallpaper
-            optimizations::get_wallpaper_compression_status,
-            optimizations::get_wallpaper_compression_info,
-            optimizations::disable_wallpaper_compression,
-            optimizations::revert_wallpaper_compression,
-            // Otimizações — Armazenamento Reservado
-            optimizations::get_reserved_storage_status,
-            optimizations::get_reserved_storage_info,
-            optimizations::disable_reserved_storage,
-            optimizations::enable_reserved_storage,
-            // Otimizações — Otimização de Entrega
-            optimizations::get_delivery_optimization_status,
-            optimizations::get_delivery_optimization_info,
-            optimizations::disable_delivery_optimization,
-            optimizations::revert_delivery_optimization,
-            // Otimizações — HAGS
-            optimizations::get_hags_info,
-            optimizations::enable_hags,
-            optimizations::disable_hags,
-            // Otimizações — Game Mode
-            optimizations::get_game_mode_info,
-            optimizations::enable_game_mode,
-            optimizations::disable_game_mode,
-            // Otimizações — VBS
-            optimizations::get_vbs_info,
-            optimizations::disable_vbs,
-            optimizations::enable_vbs,
+            // Otimizações — Compressão de Wallpaper (tweaks/visual)
+            tweaks::get_wallpaper_compression_info,
+            tweaks::disable_wallpaper_compression,
+            tweaks::revert_wallpaper_compression,
+            // Otimizações — Armazenamento Reservado (tweaks/storage)
+            tweaks::get_reserved_storage_info,
+            tweaks::disable_reserved_storage,
+            tweaks::enable_reserved_storage,
+            // Otimizações — Otimização de Entrega (tweaks/network)
+            tweaks::get_delivery_optimization_info,
+            tweaks::disable_delivery_optimization,
+            tweaks::revert_delivery_optimization,
+            // Otimizações — HAGS (tweaks/gpu)
+            tweaks::get_hags_info,
+            tweaks::enable_hags,
+            tweaks::disable_hags,
+            // Otimizações — Game Mode (tweaks/gaming)
+            tweaks::get_game_mode_info,
+            tweaks::enable_game_mode,
+            tweaks::disable_game_mode,
+            // Otimizações — VBS (tweaks/gaming)
+            tweaks::get_vbs_info,
+            tweaks::disable_vbs,
+            tweaks::enable_vbs,
             // Otimizações — Restaurar Padrão Windows (sem backup)
-            optimizations::restore_wallpaper_default,
-            optimizations::restore_delivery_optimization_default,
-            optimizations::restore_reserved_storage_default,
-            // Otimizações — GPU e Display (placeholders)
-            optimizations::get_game_dvr_info,
-            optimizations::disable_game_dvr,
-            optimizations::revert_game_dvr,
-            optimizations::get_xbox_overlay_info,
-            optimizations::disable_xbox_overlay,
-            optimizations::revert_xbox_overlay,
-            optimizations::get_msi_mode_gpu_info,
-            optimizations::enable_msi_mode_gpu,
-            optimizations::disable_msi_mode_gpu,
-            optimizations::get_mpo_info,
-            optimizations::disable_mpo,
-            optimizations::revert_mpo,
-            optimizations::get_nvidia_telemetry_info,
-            optimizations::disable_nvidia_telemetry,
-            optimizations::revert_nvidia_telemetry,
-            // Otimizações — Gaming (placeholders)
-            optimizations::get_timer_resolution_info,
-            optimizations::enable_timer_resolution,
-            optimizations::disable_timer_resolution,
-            optimizations::get_mouse_acceleration_info,
-            optimizations::disable_mouse_acceleration,
-            optimizations::revert_mouse_acceleration,
-            optimizations::get_fullscreen_optimizations_info,
-            optimizations::disable_fullscreen_optimizations,
-            optimizations::revert_fullscreen_optimizations,
-            // Otimizações — Energia e CPU (placeholders)
-            optimizations::get_ultimate_performance_info,
-            optimizations::enable_ultimate_performance,
-            optimizations::revert_ultimate_performance,
-            optimizations::get_power_throttling_info,
-            optimizations::disable_power_throttling,
-            optimizations::revert_power_throttling,
-            // Otimizações — Armazenamento (placeholders)
-            optimizations::get_hibernation_info,
-            optimizations::disable_hibernation,
-            optimizations::enable_hibernation,
-            optimizations::get_ntfs_last_access_info,
-            optimizations::disable_ntfs_last_access,
-            optimizations::revert_ntfs_last_access,
-            // Otimizações — Rede (placeholders)
-            optimizations::get_nagle_info,
-            optimizations::disable_nagle,
-            optimizations::revert_nagle,
-            // Otimizações — Visual e Experiência (placeholders)
-            optimizations::get_sticky_keys_info,
-            optimizations::disable_sticky_keys,
-            optimizations::revert_sticky_keys,
-            optimizations::get_bing_search_info,
-            optimizations::disable_bing_search,
-            optimizations::revert_bing_search,
+            tweaks::restore_wallpaper_default,
+            tweaks::restore_delivery_optimization_default,
+            tweaks::restore_reserved_storage_default,
+            // Otimizações — Game DVR e Xbox Overlay (tweaks/gaming)
+            tweaks::get_game_dvr_info,
+            tweaks::disable_game_dvr,
+            tweaks::revert_game_dvr,
+            tweaks::get_xbox_overlay_info,
+            tweaks::disable_xbox_overlay,
+            tweaks::revert_xbox_overlay,
+            tweaks::get_msi_mode_gpu_info,
+            tweaks::enable_msi_mode_gpu,
+            tweaks::disable_msi_mode_gpu,
+            tweaks::get_mpo_info,
+            tweaks::disable_mpo,
+            tweaks::revert_mpo,
+            tweaks::get_nvidia_telemetry_info,
+            tweaks::disable_nvidia_telemetry,
+            tweaks::revert_nvidia_telemetry,
+            // Otimizações — Gaming (tweaks/gaming)
+            tweaks::get_timer_resolution_info,
+            tweaks::enable_timer_resolution,
+            tweaks::disable_timer_resolution,
+            tweaks::get_mouse_acceleration_info,
+            tweaks::disable_mouse_acceleration,
+            tweaks::revert_mouse_acceleration,
+            tweaks::get_fullscreen_optimizations_info,
+            tweaks::disable_fullscreen_optimizations,
+            tweaks::revert_fullscreen_optimizations,
+            // Otimizações — Energia e CPU (tweaks/power)
+            tweaks::get_ultimate_performance_info,
+            tweaks::enable_ultimate_performance,
+            tweaks::revert_ultimate_performance,
+            tweaks::get_power_throttling_info,
+            tweaks::disable_power_throttling,
+            tweaks::revert_power_throttling,
+            // Otimizações — Armazenamento (tweaks/power + tweaks/storage)
+            tweaks::get_hibernation_info,
+            tweaks::disable_hibernation,
+            tweaks::enable_hibernation,
+            tweaks::get_ntfs_last_access_info,
+            tweaks::disable_ntfs_last_access,
+            tweaks::revert_ntfs_last_access,
+            // Otimizações — Rede (tweaks/network)
+            tweaks::get_nagle_info,
+            tweaks::disable_nagle,
+            tweaks::revert_nagle,
+            // Otimizações — Visual e Experiência (tweaks/visual)
+            tweaks::get_sticky_keys_info,
+            tweaks::disable_sticky_keys,
+            tweaks::revert_sticky_keys,
+            tweaks::get_bing_search_info,
+            tweaks::disable_bing_search,
+            tweaks::revert_bing_search,
             // Privacidade — Telemetria
             privacy::get_telemetry_registry_info,
             privacy::disable_telemetry_registry,
@@ -126,18 +126,18 @@ pub fn run() {
             cleanup::scan_cleanup,
             cleanup::execute_cleanup,
             // Saúde do Sistema — DISM
-            health_check::run_dism_cleanup,
-            health_check::run_dism_checkhealth,
-            health_check::run_dism_scanhealth,
-            health_check::run_dism_restorehealth,
+            health::run_dism_cleanup,
+            health::run_dism_checkhealth,
+            health::run_dism_scanhealth,
+            health::run_dism_restorehealth,
             // Saúde do Sistema — Verificações
-            health_check::run_sfc,
-            health_check::run_chkdsk,
-            health_check::run_ssd_trim,
+            health::run_sfc,
+            health::run_chkdsk,
+            health::run_ssd_trim,
             // Saúde do Sistema — Manutenção
-            health_check::flush_dns,
-            health_check::run_temp_cleanup,
-            health_check::kill_process,
+            health::flush_dns,
+            health::run_temp_cleanup,
+            health::kill_process,
             // Planos de Execução
             plans::create_plan,
             plans::update_plan,
@@ -167,6 +167,10 @@ pub fn run() {
             bloatware::remove_uwp_apps,
             // Sobre / Atualizações
             about::check_for_updates,
+            // Controle de Janela (titlebar customizada)
+            window::minimize_window,
+            window::maximize_window,
+            window::close_window,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o FrameGuard");

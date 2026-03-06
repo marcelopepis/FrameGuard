@@ -19,6 +19,7 @@ mod ffi {
 
     #[repr(C)]
     #[derive(Clone, Copy)]
+    #[allow(clippy::upper_case_acronyms)]
     pub struct FILETIME {
         pub dwLowDateTime: u32,
         pub dwHighDateTime: u32,
