@@ -111,8 +111,8 @@ fn load_from_disk() -> Result<ActivityLog, String> {
         return Ok(ActivityLog::new());
     }
 
-    let contents = fs::read_to_string(&path)
-        .map_err(|e| format!("Erro ao ler activity_log.json: {}", e))?;
+    let contents =
+        fs::read_to_string(&path).map_err(|e| format!("Erro ao ler activity_log.json: {}", e))?;
 
     serde_json::from_str(&contents)
         .map_err(|e| format!("Arquivo activity_log.json inválido: {}", e))
@@ -187,11 +187,7 @@ pub fn plan_execution_entry(
 }
 
 /// Cria uma entrada de log para tweak individual (apply ou revert).
-pub fn tweak_entry(
-    name: &str,
-    applied: bool,
-    success: bool,
-) -> ActivityEntry {
+pub fn tweak_entry(name: &str, applied: bool, success: bool) -> ActivityEntry {
     ActivityEntry {
         timestamp: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
         activity_type: if applied {

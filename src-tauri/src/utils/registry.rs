@@ -66,13 +66,7 @@ pub fn read_dword(hive: Hive, path: &str, key: &str) -> Result<Option<u32>, Stri
     let subkey = match hive.as_regkey().open_subkey(path) {
         Ok(k) => k,
         Err(e) if is_not_found(&e) => return Ok(None),
-        Err(e) => {
-            return Err(format!(
-                "Erro ao abrir '{}': {}",
-                full_path(hive, path),
-                e
-            ))
-        }
+        Err(e) => return Err(format!("Erro ao abrir '{}': {}", full_path(hive, path), e)),
     };
 
     match subkey.get_value::<u32, _>(key) {
@@ -93,16 +87,13 @@ pub fn read_dword(hive: Hive, path: &str, key: &str) -> Result<Option<u32>, Stri
 /// `RegCreateKeyEx`). Para `HKEY_LOCAL_MACHINE`, o processo deve estar
 /// rodando como administrador.
 pub fn write_dword(hive: Hive, path: &str, key: &str, value: u32) -> Result<(), String> {
-    let (subkey, _) = hive
-        .as_regkey()
-        .create_subkey(path)
-        .map_err(|e| {
-            format!(
-                "Erro ao criar/abrir '{}' para escrita: {}",
-                full_path(hive, path),
-                e
-            )
-        })?;
+    let (subkey, _) = hive.as_regkey().create_subkey(path).map_err(|e| {
+        format!(
+            "Erro ao criar/abrir '{}' para escrita: {}",
+            full_path(hive, path),
+            e
+        )
+    })?;
 
     subkey.set_value(key, &value).map_err(|e| {
         format!(
@@ -124,13 +115,7 @@ pub fn read_string(hive: Hive, path: &str, key: &str) -> Result<Option<String>, 
     let subkey = match hive.as_regkey().open_subkey(path) {
         Ok(k) => k,
         Err(e) if is_not_found(&e) => return Ok(None),
-        Err(e) => {
-            return Err(format!(
-                "Erro ao abrir '{}': {}",
-                full_path(hive, path),
-                e
-            ))
-        }
+        Err(e) => return Err(format!("Erro ao abrir '{}': {}", full_path(hive, path), e)),
     };
 
     match subkey.get_value::<String, _>(key) {
@@ -150,16 +135,13 @@ pub fn read_string(hive: Hive, path: &str, key: &str) -> Result<Option<String>, 
 /// Cria a subchave automaticamente se ela não existir.
 #[allow(dead_code)]
 pub fn write_string(hive: Hive, path: &str, key: &str, value: &str) -> Result<(), String> {
-    let (subkey, _) = hive
-        .as_regkey()
-        .create_subkey(path)
-        .map_err(|e| {
-            format!(
-                "Erro ao criar/abrir '{}' para escrita: {}",
-                full_path(hive, path),
-                e
-            )
-        })?;
+    let (subkey, _) = hive.as_regkey().create_subkey(path).map_err(|e| {
+        format!(
+            "Erro ao criar/abrir '{}' para escrita: {}",
+            full_path(hive, path),
+            e
+        )
+    })?;
 
     subkey.set_value(key, &value).map_err(|e| {
         format!(

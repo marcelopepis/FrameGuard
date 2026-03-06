@@ -253,9 +253,7 @@ fn seed_builtin_plans(state: &mut PlansFile) {
             // Plano não existe — precisa inserir
             None => true,
             // Plano existe mas com versão antiga (ou sem versão = v1) — precisa atualizar
-            Some(existing) => {
-                existing.builtin_version.unwrap_or(1) < CURRENT_BUILTIN_VERSION
-            }
+            Some(existing) => existing.builtin_version.unwrap_or(1) < CURRENT_BUILTIN_VERSION,
         };
 
         if needs_update {
@@ -333,8 +331,8 @@ fn load_from_disk() -> Result<PlansFile, String> {
         return Ok(PlansFile::new());
     }
 
-    let contents = fs::read_to_string(&path)
-        .map_err(|e| format!("Erro ao ler plans.json: {}", e))?;
+    let contents =
+        fs::read_to_string(&path).map_err(|e| format!("Erro ao ler plans.json: {}", e))?;
 
     serde_json::from_str(&contents)
         .map_err(|e| format!("Arquivo plans.json inválido ou corrompido: {}", e))
@@ -366,11 +364,7 @@ fn now_utc() -> String {
 ///
 /// # Retorna
 /// O `Plan` criado com `id` e `created_at` preenchidos.
-pub fn create_plan(
-    name: &str,
-    description: &str,
-    items: Vec<PlanItem>,
-) -> Result<Plan, String> {
+pub fn create_plan(name: &str, description: &str, items: Vec<PlanItem>) -> Result<Plan, String> {
     let mut state = get_state()
         .lock()
         .map_err(|_| "Falha ao adquirir lock no estado de planos".to_string())?;

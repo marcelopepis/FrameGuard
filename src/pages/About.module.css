@@ -69,7 +69,7 @@
   align-items: center;
   justify-content: center;
   background: var(--color-accent-subtle);
-  border: 1px solid rgba(34, 211, 238, 0.2);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
   border-radius: var(--radius-md);
   color: var(--color-accent);
   flex-shrink: 0;
@@ -228,12 +228,14 @@
   cursor: pointer;
   width: 100%;
   text-align: left;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .linkRow:hover {
   color: var(--color-accent-hover);
-  background: rgba(34, 211, 238, 0.03);
+  background: rgba(var(--accent-rgb), 0.03);
 }
 
 .linkRowMuted {
@@ -304,12 +306,14 @@
   gap: 6px;
   padding: 7px 16px;
   background: var(--color-accent);
-  color: #0a0e17;
+  color: var(--bg-base);
   border-radius: var(--radius-md);
   font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .btnPrimary:hover:not(:disabled) {
@@ -335,7 +339,9 @@
   font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .btnSecondary:hover:not(:disabled) {
@@ -349,8 +355,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .actionBusy {
@@ -386,7 +396,7 @@
 .updateAvailable {
   composes: updateResult;
   color: var(--color-accent);
-  background: rgba(34, 211, 238, 0.04);
+  background: rgba(var(--accent-rgb), 0.04);
 }
 
 .updateError {
@@ -413,8 +423,14 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ─── Referência Volt ────────────────────────────────────── */

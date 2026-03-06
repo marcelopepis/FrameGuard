@@ -4,9 +4,7 @@
 // notificações não-intrusivas no canto superior direito da janela.
 // O ToastProvider renderiza o ToastContainer via portal em document.body.
 
-import {
-  createContext, useContext, useState, useCallback, useRef, ReactNode,
-} from 'react';
+import { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import ToastContainer from '../components/Toast/Toast';
 
@@ -42,48 +40,44 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const dismissToast = useCallback((id: string) => {
     const timer = timers.current.get(id);
-    if (timer) { clearTimeout(timer); timers.current.delete(id); }
+    if (timer) {
+      clearTimeout(timer);
+      timers.current.delete(id);
+    }
 
     // Marca como dismissing para disparar animação de saída
-    setToasts(prev => prev.map(t => t.id === id ? { ...t, dismissing: true } : t));
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, dismissing: true } : t)));
 
     // Remove do array após a animação
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts((prev) => prev.filter((t) => t.id !== id));
     }, DISMISS_ANIM_MS);
   }, []);
 
-  const showToast = useCallback((
-    type: ToastType,
-    title: string,
-    message?: string,
-    duration?: number,
-  ) => {
-    const defaultDuration = type === 'error' ? 8000 : 6000;
-    const finalDuration = duration ?? defaultDuration;
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const showToast = useCallback(
+    (type: ToastType, title: string, message?: string, duration?: number) => {
+      const defaultDuration = type === 'error' ? 8000 : 6000;
+      const finalDuration = duration ?? defaultDuration;
+      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    setToasts(prev => {
-      // Remove o mais antigo caso já esteja no limite
-      const list = prev.filter(t => !t.dismissing).length >= MAX_TOASTS
-        ? prev.slice(1)
-        : prev;
-      return [...list, { id, type, title, message, duration: finalDuration, dismissing: false }];
-    });
+      setToasts((prev) => {
+        // Remove o mais antigo caso já esteja no limite
+        const list = prev.filter((t) => !t.dismissing).length >= MAX_TOASTS ? prev.slice(1) : prev;
+        return [...list, { id, type, title, message, duration: finalDuration, dismissing: false }];
+      });
 
-    if (finalDuration > 0) {
-      const timer = setTimeout(() => dismissToast(id), finalDuration);
-      timers.current.set(id, timer);
-    }
-  }, [dismissToast]);
+      if (finalDuration > 0) {
+        const timer = setTimeout(() => dismissToast(id), finalDuration);
+        timers.current.set(id, timer);
+      }
+    },
+    [dismissToast],
+  );
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {createPortal(
-        <ToastContainer toasts={toasts} onDismiss={dismissToast} />,
-        document.body,
-      )}
+      {createPortal(<ToastContainer toasts={toasts} onDismiss={dismissToast} />, document.body)}
     </ToastContext.Provider>
   );
 }

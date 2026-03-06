@@ -179,8 +179,7 @@ fn read_os_version() -> String {
 /// Coleta informações sobre a máquina atual para inclusão nos metadados do `.fg`.
 fn get_machine_info() -> MachineInfo {
     MachineInfo {
-        hostname: std::env::var("COMPUTERNAME")
-            .unwrap_or_else(|_| "Desconhecido".to_string()),
+        hostname: std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Desconhecido".to_string()),
         os_version: read_os_version(),
     }
 }
@@ -227,8 +226,7 @@ fn extract_applied_task_ids() -> Vec<String> {
 /// Retorna erro se o arquivo não existir, não for JSON válido ou não for um
 /// export FrameGuard reconhecido.
 fn read_and_validate_fg(path: &Path) -> Result<FgExportFile, String> {
-    let contents = fs::read_to_string(path)
-        .map_err(|e| format!("Erro ao ler o arquivo: {}", e))?;
+    let contents = fs::read_to_string(path).map_err(|e| format!("Erro ao ler o arquivo: {}", e))?;
 
     let file: FgExportFile = serde_json::from_str(&contents)
         .map_err(|e| format!("Arquivo inválido ou corrompido: {}", e))?;
@@ -304,7 +302,7 @@ pub fn export_config(app_handle: AppHandle) -> Result<ExportResult, String> {
     let export_file = FgExportFile {
         frameguard_export: true,
         version: "1.0".to_string(),
-        app_version: "0.1.0".to_string(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
         exported_at: exported_at.clone(),
         machine_info: get_machine_info(),
         backups: backups_value,
@@ -317,8 +315,7 @@ pub fn export_config(app_handle: AppHandle) -> Result<ExportResult, String> {
     let json = serde_json::to_string_pretty(&export_file)
         .map_err(|e| format!("Erro ao serializar dados de exportação: {}", e))?;
 
-    fs::write(&path, &json)
-        .map_err(|e| format!("Erro ao gravar o arquivo .fg: {}", e))?;
+    fs::write(&path, &json).map_err(|e| format!("Erro ao gravar o arquivo .fg: {}", e))?;
 
     let file_size_bytes = fs::metadata(&path)
         .map(|m| m.len())
@@ -359,10 +356,7 @@ pub fn export_config(app_handle: AppHandle) -> Result<ExportResult, String> {
 /// # Retorna
 /// `ImportResult` com modo, contagens de itens importados e avisos não críticos.
 #[tauri::command]
-pub fn import_config(
-    app_handle: AppHandle,
-    mode: String,
-) -> Result<ImportResult, String> {
+pub fn import_config(app_handle: AppHandle, mode: String) -> Result<ImportResult, String> {
     if mode != "replace" && mode != "merge" {
         return Err(format!(
             "Modo inválido: '{}'. Valores aceitos: 'replace' ou 'merge'.",
@@ -411,16 +405,13 @@ pub fn import_config(
         // Erros em seções individuais geram avisos mas não interrompem a importação.
 
         // Backups: todas as entradas são inseridas/atualizadas
-        let backup_entries: HashMap<String, BackupEntry> =
-            serde_json::from_value(fg_file.backups)
-                .ok()
-                .and_then(|f: BackupFile| Some(f.backups))
-                .unwrap_or_else(|| {
-                    warnings.push(
-                        "Seção 'backups' ignorada — dados inválidos no arquivo".to_string(),
-                    );
-                    HashMap::new()
-                });
+        let backup_entries: HashMap<String, BackupEntry> = serde_json::from_value(fg_file.backups)
+            .ok()
+            .map(|f: BackupFile| f.backups)
+            .unwrap_or_else(|| {
+                warnings.push("Seção 'backups' ignorada — dados inválidos no arquivo".to_string());
+                HashMap::new()
+            });
 
         backups_imported = backup::merge_backups(backup_entries)?;
 
@@ -429,9 +420,7 @@ pub fn import_config(
             .ok()
             .map(|f: PlansFile| f.plans.into_values().collect())
             .unwrap_or_else(|| {
-                warnings.push(
-                    "Seção 'plans' ignorada — dados inválidos no arquivo".to_string(),
-                );
+                warnings.push("Seção 'plans' ignorada — dados inválidos no arquivo".to_string());
                 Vec::new()
             });
 

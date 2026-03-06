@@ -7,9 +7,18 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
-  Github, ExternalLink, User,
-  RefreshCw, CheckCircle2, AlertCircle, X as XIcon,
-  Loader2, Crosshair, Heart, Eye, Gem,
+  Github,
+  ExternalLink,
+  User,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  X as XIcon,
+  Loader2,
+  Crosshair,
+  Heart,
+  Eye,
+  Gem,
 } from 'lucide-react';
 import styles from './About.module.css';
 import voltIcon from '../midia/volt_icon.png';
@@ -17,7 +26,7 @@ import FrameGuardIcon from '../components/FrameGuardIcon';
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
-const APP_VERSION = '0.1.2';
+const APP_VERSION = '0.2.0';
 const GITHUB_URL = 'https://github.com/marcelopepis/FrameGuard';
 const AUTHOR_NAME = 'Marcelo Pepis';
 const AUTHOR_URL = 'https://github.com/marcelopepis';
@@ -36,11 +45,16 @@ interface UpdateCheckResult {
 
 export default function About() {
   const [updateCheck, setUpdateCheck] = useState<
-    { loading: true } | { loading: false; result: UpdateCheckResult } | { loading: false; error: string } | null
+    | { loading: true }
+    | { loading: false; result: UpdateCheckResult }
+    | { loading: false; error: string }
+    | null
   >(null);
 
   async function handleOpenUrl(url: string) {
-    try { await openUrl(url); } catch {}
+    try {
+      await openUrl(url);
+    } catch {}
   }
 
   async function handleCheckUpdates() {
@@ -55,7 +69,6 @@ export default function About() {
 
   return (
     <div className={styles.page}>
-
       {/* ── Header ── */}
       <div className={styles.header}>
         <h1 className={styles.title}>Sobre o FrameGuard</h1>
@@ -63,7 +76,6 @@ export default function About() {
       </div>
 
       <div className={styles.sections}>
-
         {/* ════════ IDENTIDADE ════════ */}
         <div className={styles.card}>
           <div className={styles.identity}>
@@ -80,13 +92,12 @@ export default function About() {
 
         {/* ════════ MANIFESTO ════════ */}
         <div className={styles.card}>
-
           {/* Introdução */}
           <p className={styles.manifestoIntro}>
-            O FrameGuard existe por um motivo simples: seu PC deveria trabalhar pra você,
-            não contra você. Sabemos como é — você só quer jogar depois de um dia longo,
-            mas o Windows decidiu que agora é hora de atualizar, indexar, coletar telemetria
-            e rodar doze serviços que você nunca pediu.
+            O FrameGuard existe por um motivo simples: seu PC deveria trabalhar pra você, não contra
+            você. Sabemos como é — você só quer jogar depois de um dia longo, mas o Windows decidiu
+            que agora é hora de atualizar, indexar, coletar telemetria e rodar doze serviços que
+            você nunca pediu.
           </p>
 
           <div className={styles.divider} />
@@ -94,12 +105,18 @@ export default function About() {
           {/* O que fazemos */}
           <div className={styles.manifestoSection}>
             <div className={styles.manifestoHeading}>O que fazemos</div>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.65 }}>
-              Otimizamos, limpamos e cuidamos do seu Windows para que ele saia do caminho e
-              deixe você jogar. Cada ajuste é explicado em detalhe, classificado por nível de
-              evidência, e pode ser revertido com um clique. Sem mágica. Sem promessa de
-              "200% mais FPS". Só configurações reais, documentadas, que fazem diferença
-              mensurável.
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                color: 'var(--color-text-secondary)',
+                lineHeight: 1.65,
+              }}
+            >
+              Otimizamos, limpamos e cuidamos do seu Windows para que ele saia do caminho e deixe
+              você jogar. Cada ajuste é explicado em detalhe, classificado por nível de evidência, e
+              pode ser revertido com um clique. Sem mágica. Sem promessa de "200% mais FPS". Só
+              configurações reais, documentadas, que fazem diferença mensurável.
             </p>
           </div>
 
@@ -113,31 +130,35 @@ export default function About() {
                 <XIcon size={14} />
                 <span>
                   <span className={styles.manifestoListItemBold}>Não coletamos seus dados.</span>{' '}
-                  Zero telemetria. O FrameGuard não faz requisição pra servidor nenhum.
-                  Suas configurações ficam no seu PC, em arquivos JSON que você pode abrir e ler.
+                  Zero telemetria. O FrameGuard não faz requisição pra servidor nenhum. Suas
+                  configurações ficam no seu PC, em arquivos JSON que você pode abrir e ler.
                 </span>
               </li>
               <li className={styles.manifestoListItem}>
                 <XIcon size={14} />
                 <span>
-                  <span className={styles.manifestoListItemBold}>Não vendemos nada dentro do app.</span>{' '}
+                  <span className={styles.manifestoListItemBold}>
+                    Não vendemos nada dentro do app.
+                  </span>{' '}
                   Sem versão PRO, sem paywall, sem feature bloqueada.
                 </span>
               </li>
               <li className={styles.manifestoListItem}>
                 <XIcon size={14} />
                 <span>
-                  <span className={styles.manifestoListItemBold}>Não instalamos nada silenciosamente.</span>{' '}
-                  O FrameGuard não se coloca pra iniciar com o Windows, não cria serviço
-                  oculto, não roda em segundo plano.
+                  <span className={styles.manifestoListItemBold}>
+                    Não instalamos nada silenciosamente.
+                  </span>{' '}
+                  O FrameGuard não se coloca pra iniciar com o Windows, não cria serviço oculto, não
+                  roda em segundo plano.
                 </span>
               </li>
               <li className={styles.manifestoListItem}>
                 <XIcon size={14} />
                 <span>
-                  <span className={styles.manifestoListItemBold}>Não enfeitamos snake oil.</span>{' '}
-                  Se um tweak não tem evidência de que funciona, a gente diz isso na cara.
-                  Se a comunidade validar que é lorota, a gente tira do app.
+                  <span className={styles.manifestoListItemBold}>Não enfeitamos snake oil.</span> Se
+                  um tweak não tem evidência de que funciona, a gente diz isso na cara. Se a
+                  comunidade validar que é lorota, a gente tira do app.
                 </span>
               </li>
             </ul>
@@ -148,31 +169,39 @@ export default function About() {
           {/* Pilares */}
           <div className={styles.pillars}>
             <div className={styles.pillar}>
-              <div className={styles.pillarName}><Crosshair size={14} /> No-bullshit</div>
+              <div className={styles.pillarName}>
+                <Crosshair size={14} /> No-bullshit
+              </div>
               <div className={styles.pillarDesc}>
                 Sem promessas vazias. Cada tweak tem uma classificação honesta de evidência:
                 comprovado, plausível ou não comprovado. Você decide sabendo o que esperar.
               </div>
             </div>
             <div className={styles.pillar}>
-              <div className={styles.pillarName}><Heart size={14} /> Respeito</div>
+              <div className={styles.pillarName}>
+                <Heart size={14} /> Respeito
+              </div>
               <div className={styles.pillarDesc}>
-                Pela sua inteligência e pela sua privacidade. Você não precisa que a gente
-                decida por você. A gente explica, você escolhe.
+                Pela sua inteligência e pela sua privacidade. Você não precisa que a gente decida
+                por você. A gente explica, você escolhe.
               </div>
             </div>
             <div className={styles.pillar}>
-              <div className={styles.pillarName}><Eye size={14} /> Transparência</div>
+              <div className={styles.pillarName}>
+                <Eye size={14} /> Transparência
+              </div>
               <div className={styles.pillarDesc}>
-                Tudo que o FrameGuard faz no seu sistema é documentado, reversível e
-                auditável. Backups em JSON legível. Código aberto. Sem caixa preta.
+                Tudo que o FrameGuard faz no seu sistema é documentado, reversível e auditável.
+                Backups em JSON legível. Código aberto. Sem caixa preta.
               </div>
             </div>
             <div className={styles.pillar}>
-              <div className={styles.pillarName}><Gem size={14} /> Craft</div>
+              <div className={styles.pillarName}>
+                <Gem size={14} /> Craft
+              </div>
               <div className={styles.pillarDesc}>
-                Software útil não precisa ser feio. O FrameGuard é feito com o mesmo cuidado
-                que você tem quando escolhe cada peça do seu setup.
+                Software útil não precisa ser feio. O FrameGuard é feito com o mesmo cuidado que
+                você tem quando escolhe cada peça do seu setup.
               </div>
             </div>
           </div>
@@ -186,7 +215,6 @@ export default function About() {
 
         {/* ════════ LINKS E METADADOS ════════ */}
         <div className={styles.card}>
-
           {/* Verificar atualizações */}
           <div className={styles.updateSection}>
             <div className={styles.updateInfo}>
@@ -207,8 +235,9 @@ export default function About() {
           </div>
 
           {/* Resultado da verificação */}
-          {updateCheck && !updateCheck.loading && (
-            'error' in updateCheck ? (
+          {updateCheck &&
+            !updateCheck.loading &&
+            ('error' in updateCheck ? (
               <div className={styles.updateError}>
                 <AlertCircle size={15} />
                 <span>Erro ao verificar: {updateCheck.error}</span>
@@ -232,8 +261,7 @@ export default function About() {
                 <CheckCircle2 size={15} />
                 <span>Você está na versão mais recente ({updateCheck.result.current_version})</span>
               </div>
-            )
-          )}
+            ))}
 
           <div className={styles.divider} />
 
@@ -283,15 +311,10 @@ export default function About() {
 
           {/* Volt reference */}
           <div className={styles.voltRef}>
-            <img
-              src={voltIcon}
-              alt="Volt"
-              className={styles.voltIcon}
-            />
+            <img src={voltIcon} alt="Volt" className={styles.voltIcon} />
             <span>Powered by Volt</span>
           </div>
         </div>
-
       </div>
     </div>
   );

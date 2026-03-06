@@ -5,15 +5,29 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import {
-  Search, Trash2, Loader2, CheckCircle, AlertTriangle,
-  ChevronDown, HardDrive, Monitor, Globe, Package, Settings2,
+  Search,
+  Trash2,
+  Loader2,
+  CheckCircle,
+  AlertTriangle,
+  ChevronDown,
+  HardDrive,
+  Monitor,
+  Globe,
+  Package,
+  Settings2,
   RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
 import { formatBytes, formatDuration } from '../utils/formatters';
 import type {
-  CleanupScanResult, CleanupCategory, CleanupProgressEvent, CleanupResult,
+  CleanupScanResult,
+  CleanupCategory,
+  CleanupProgressEvent,
+  CleanupResult,
+  BrowserCleanOptions,
 } from '../types/cleanup';
 import styles from './Cleanup.module.css';
 
@@ -24,19 +38,30 @@ function CategoryIcon({ categoryId }: { categoryId: string }) {
   const size = 18;
   const props = { size, className: styles.categoryIcon, strokeWidth: 1.8 };
   switch (categoryId) {
-    case 'sistema_windows': return <Monitor {...props} />;
-    case 'gpu_shader_cache': return <HardDrive {...props} />;
-    case 'browsers':         return <Globe {...props} />;
-    case 'aplicativos':      return <Package {...props} />;
-    case 'avancado':         return <Settings2 {...props} />;
-    default:                 return <HardDrive {...props} />;
+    case 'sistema_windows':
+      return <Monitor {...props} />;
+    case 'gpu_shader_cache':
+      return <HardDrive {...props} />;
+    case 'browsers':
+      return <Globe {...props} />;
+    case 'aplicativos':
+      return <Package {...props} />;
+    case 'avancado':
+      return <Settings2 {...props} />;
+    default:
+      return <HardDrive {...props} />;
   }
 }
 
 // Badge de risco
 function RiskBadge({ risk }: { risk: string }) {
   const label = risk === 'safe' ? 'Seguro' : risk === 'moderate' ? 'Atenção' : 'Cuidado';
-  const cls = risk === 'safe' ? styles.riskSafe : risk === 'moderate' ? styles.riskModerate : styles.riskCaution;
+  const cls =
+    risk === 'safe'
+      ? styles.riskSafe
+      : risk === 'moderate'
+        ? styles.riskModerate
+        : styles.riskCaution;
   return <span className={`${styles.riskBadge} ${cls}`}>{label}</span>;
 }
 
@@ -53,6 +78,14 @@ export default function Cleanup() {
     totalCategories: number;
   } | null>(null);
 
+  // Opções granulares de limpeza de browsers — padrão seguro
+  const [browserOptions, setBrowserOptions] = useState<BrowserCleanOptions>({
+    cache: true,
+    cookies: false,
+    history: false,
+    sessions: true,
+  });
+
   const { isRunning, startTask, endTask } = useGlobalRunning();
   const { showToast } = useToast();
 
@@ -60,6 +93,7 @@ export default function Cleanup() {
   const handleScan = useCallback(async () => {
     setPhase('scanning');
     setScanProgress(null);
+    startTask('cleanup_scan', '/cleanup');
 
     const unlisten = await listen<{
       category_name: string;
@@ -93,17 +127,18 @@ export default function Cleanup() {
       showToast('error', 'Erro ao escanear', String(e));
       setPhase('initial');
     } finally {
+      endTask('cleanup_scan');
       unlisten();
       setScanProgress(null);
     }
-  }, [showToast]);
+  }, [showToast, startTask, endTask]);
 
   // ── Cleanup ───────────────────────────────────────────────
   const handleClean = useCallback(async () => {
     if (selected.size === 0) return;
     setPhase('cleaning');
     setProgress(null);
-    startTask('cleanup');
+    startTask('cleanup', '/cleanup');
 
     const unlisten = await listen<CleanupProgressEvent>('cleanup_progress', (event) => {
       setProgress(event.payload);
@@ -112,10 +147,15 @@ export default function Cleanup() {
     try {
       const result = await invoke<CleanupResult>('execute_cleanup', {
         itemIds: Array.from(selected),
+        browserOptions,
       });
       setCleanupResult(result);
       setPhase('report');
-      showToast('success', 'Limpeza concluída', `${formatBytes(result.total_freed_bytes)} liberados`);
+      showToast(
+        'success',
+        'Limpeza concluída',
+        `${formatBytes(result.total_freed_bytes)} liberados`,
+      );
       invoke('log_tweak_activity', {
         name: 'Limpeza de Sistema',
         applied: true,
@@ -133,11 +173,11 @@ export default function Cleanup() {
       endTask('cleanup');
       unlisten();
     }
-  }, [selected, startTask, endTask, showToast]);
+  }, [selected, browserOptions, startTask, endTask, showToast]);
 
   // ── Seleção ───────────────────────────────────────────────
   const toggleItem = useCallback((itemId: string) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) next.delete(itemId);
       else next.add(itemId);
@@ -146,9 +186,9 @@ export default function Cleanup() {
   }, []);
 
   const toggleCategory = useCallback((cat: CleanupCategory) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
-      const allSelected = cat.items.every(i => next.has(i.id));
+      const allSelected = cat.items.every((i) => next.has(i.id));
       for (const item of cat.items) {
         if (allSelected) next.delete(item.id);
         else next.add(item.id);
@@ -158,7 +198,7 @@ export default function Cleanup() {
   }, []);
 
   const toggleExpand = useCallback((catId: string) => {
-    setExpanded(prev => {
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(catId)) next.delete(catId);
       else next.add(catId);
@@ -167,11 +207,15 @@ export default function Cleanup() {
   }, []);
 
   // Calcular total selecionado
-  const selectedBytes = scanResult?.categories.reduce((sum, cat) => {
-    return sum + cat.items.reduce((s, item) => {
-      return s + (selected.has(item.id) ? item.size_bytes : 0);
-    }, 0);
-  }, 0) ?? 0;
+  const selectedBytes =
+    scanResult?.categories.reduce((sum, cat) => {
+      return (
+        sum +
+        cat.items.reduce((s, item) => {
+          return s + (selected.has(item.id) ? item.size_bytes : 0);
+        }, 0)
+      );
+    }, 0) ?? 0;
 
   // ── Render ────────────────────────────────────────────────
   return (
@@ -187,8 +231,8 @@ export default function Cleanup() {
             <HardDrive size={48} strokeWidth={1.2} />
           </div>
           <p className={styles.initialText}>
-            Escaneie o sistema para identificar arquivos temporários, caches de GPU,
-            browsers e aplicativos que podem ser removidos com segurança.
+            Escaneie o sistema para identificar arquivos temporários, caches de GPU, browsers e
+            aplicativos que podem ser removidos com segurança.
           </p>
           <button className={styles.scanBtn} onClick={handleScan} disabled={isRunning}>
             <Search size={16} />
@@ -228,6 +272,8 @@ export default function Cleanup() {
           expanded={expanded}
           selectedBytes={selectedBytes}
           isRunning={isRunning}
+          browserOptions={browserOptions}
+          onBrowserOptionsChange={setBrowserOptions}
           onToggleItem={toggleItem}
           onToggleCategory={toggleCategory}
           onToggleExpand={toggleExpand}
@@ -260,7 +306,12 @@ export default function Cleanup() {
       )}
 
       {phase === 'report' && cleanupResult && scanResult && (
-        <ReportView result={cleanupResult} onNewScan={() => { setPhase('initial'); }} />
+        <ReportView
+          result={cleanupResult}
+          onNewScan={() => {
+            setPhase('initial');
+          }}
+        />
       )}
     </div>
   );
@@ -274,6 +325,8 @@ interface ResultsViewProps {
   expanded: Set<string>;
   selectedBytes: number;
   isRunning: boolean;
+  browserOptions: BrowserCleanOptions;
+  onBrowserOptionsChange: (opts: BrowserCleanOptions) => void;
   onToggleItem: (id: string) => void;
   onToggleCategory: (cat: CleanupCategory) => void;
   onToggleExpand: (catId: string) => void;
@@ -282,8 +335,18 @@ interface ResultsViewProps {
 }
 
 function ResultsView({
-  scanResult, selected, expanded, selectedBytes, isRunning,
-  onToggleItem, onToggleCategory, onToggleExpand, onClean, onNewScan,
+  scanResult,
+  selected,
+  expanded,
+  selectedBytes,
+  isRunning,
+  browserOptions,
+  onBrowserOptionsChange,
+  onToggleItem,
+  onToggleCategory,
+  onToggleExpand,
+  onClean,
+  onNewScan,
 }: ResultsViewProps) {
   return (
     <>
@@ -304,12 +367,14 @@ function ResultsView({
       </div>
 
       <div className={styles.categoryList}>
-        {scanResult.categories.map(cat => (
+        {scanResult.categories.map((cat) => (
           <CategoryCard
             key={cat.id}
             category={cat}
             selected={selected}
             isExpanded={expanded.has(cat.id)}
+            browserOptions={cat.id === 'browsers' ? browserOptions : undefined}
+            onBrowserOptionsChange={cat.id === 'browsers' ? onBrowserOptionsChange : undefined}
             onToggleItem={onToggleItem}
             onToggleCategory={() => onToggleCategory(cat)}
             onToggleExpand={() => onToggleExpand(cat.id)}
@@ -319,7 +384,8 @@ function ResultsView({
 
       <div className={styles.resultsFooter}>
         <span className={styles.totalSelected}>
-          Total selecionado: <span className={styles.totalSelectedValue}>{formatBytes(selectedBytes)}</span>
+          Total selecionado:{' '}
+          <span className={styles.totalSelectedValue}>{formatBytes(selectedBytes)}</span>
         </span>
         <button
           className={styles.cleanBtn}
@@ -340,17 +406,26 @@ interface CategoryCardProps {
   category: CleanupCategory;
   selected: Set<string>;
   isExpanded: boolean;
+  browserOptions?: BrowserCleanOptions;
+  onBrowserOptionsChange?: (opts: BrowserCleanOptions) => void;
   onToggleItem: (id: string) => void;
   onToggleCategory: () => void;
   onToggleExpand: () => void;
 }
 
 function CategoryCard({
-  category, selected, isExpanded, onToggleItem, onToggleCategory, onToggleExpand,
+  category,
+  selected,
+  isExpanded,
+  browserOptions,
+  onBrowserOptionsChange,
+  onToggleItem,
+  onToggleCategory,
+  onToggleExpand,
 }: CategoryCardProps) {
   const checkRef = useRef<HTMLInputElement>(null);
 
-  const selectedCount = category.items.filter(i => selected.has(i.id)).length;
+  const selectedCount = category.items.filter((i) => selected.has(i.id)).length;
   const allSelected = selectedCount === category.items.length;
   const someSelected = selectedCount > 0 && !allSelected;
 
@@ -362,7 +437,8 @@ function CategoryCard({
   }, [someSelected]);
 
   const catSelectedSize = category.items.reduce(
-    (sum, item) => sum + (selected.has(item.id) ? item.size_bytes : 0), 0
+    (sum, item) => sum + (selected.has(item.id) ? item.size_bytes : 0),
+    0,
   );
 
   return (
@@ -383,20 +459,25 @@ function CategoryCard({
         <span className={styles.categorySize}>
           {catSelectedSize > 0 && catSelectedSize !== category.total_size_bytes
             ? `${formatBytes(catSelectedSize)} / ${formatBytes(category.total_size_bytes)}`
-            : formatBytes(category.total_size_bytes)
-          }
+            : formatBytes(category.total_size_bytes)}
         </span>
         <RiskBadge risk={category.risk} />
         <ChevronDown
           size={16}
           className={`${styles.chevron} ${isExpanded ? styles.chevronOpen : ''}`}
-          onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand();
+          }}
         />
       </div>
 
       {isExpanded && (
         <div className={styles.categoryItems}>
-          {category.items.map(item => (
+          {browserOptions && onBrowserOptionsChange && (
+            <BrowserOptionsPanel options={browserOptions} onChange={onBrowserOptionsChange} />
+          )}
+          {category.items.map((item) => (
             <div className={styles.itemRow} key={item.id}>
               <input
                 type="checkbox"
@@ -405,10 +486,82 @@ function CategoryCard({
                 onChange={() => onToggleItem(item.id)}
               />
               <span className={styles.itemName}>{item.name}</span>
+              {!item.default_selected && (
+                <span
+                  className={styles.itemWarning}
+                  title="Dados pessoais — não incluído por padrão"
+                >
+                  <ShieldAlert size={11} />
+                </span>
+              )}
               <span className={styles.itemPath}>{item.path_display}</span>
               <span className={styles.itemSize}>{formatBytes(item.size_bytes)}</span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Subcomponente: Opções de browser ────────────────────────────────────────
+
+function BrowserOptionsPanel({
+  options,
+  onChange,
+}: {
+  options: BrowserCleanOptions;
+  onChange: (opts: BrowserCleanOptions) => void;
+}) {
+  const toggle = (key: keyof BrowserCleanOptions) => {
+    onChange({ ...options, [key]: !options[key] });
+  };
+
+  return (
+    <div className={styles.browserOptions}>
+      <span className={styles.browserOptionsLabel}>Tipos de dados a limpar:</span>
+      <div className={styles.browserOptionsGrid}>
+        <label className={styles.browserOption}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={options.cache}
+            onChange={() => toggle('cache')}
+          />
+          <span>Cache</span>
+        </label>
+        <label className={styles.browserOption}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={options.sessions}
+            onChange={() => toggle('sessions')}
+          />
+          <span>Sessões</span>
+        </label>
+        <label className={styles.browserOption}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={options.cookies}
+            onChange={() => toggle('cookies')}
+          />
+          <span>Cookies</span>
+        </label>
+        <label className={styles.browserOption}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={options.history}
+            onChange={() => toggle('history')}
+          />
+          <span>Histórico</span>
+        </label>
+      </div>
+      {options.cookies && (
+        <div className={styles.browserCookieWarning}>
+          <AlertTriangle size={12} />
+          Você será desconectado de todos os sites nos browsers selecionados.
         </div>
       )}
     </div>
@@ -420,7 +573,7 @@ function CategoryCard({
 function ReportView({ result, onNewScan }: { result: CleanupResult; onNewScan: () => void }) {
   // Filtrar items com resultado > 0
   const visibleItems = result.item_results.filter(
-    r => r.freed_bytes > 0 || r.files_removed > 0 || r.errors.length > 0
+    (r) => r.freed_bytes > 0 || r.files_removed > 0 || r.errors.length > 0,
   );
 
   return (
@@ -429,7 +582,8 @@ function ReportView({ result, onNewScan }: { result: CleanupResult; onNewScan: (
         <CheckCircle size={36} className={styles.reportIcon} />
         <h2 className={styles.reportTitle}>{formatBytes(result.total_freed_bytes)} liberados</h2>
         <p className={styles.reportSubtitle}>
-          {result.total_files_removed} arquivo(s) removidos em {formatDuration(result.duration_seconds)}
+          {result.total_files_removed} arquivo(s) removidos em{' '}
+          {formatDuration(result.duration_seconds)}
         </p>
         {result.total_files_skipped > 0 && (
           <p className={styles.skippedNote}>
@@ -440,7 +594,7 @@ function ReportView({ result, onNewScan }: { result: CleanupResult; onNewScan: (
 
       {visibleItems.length > 0 && (
         <div className={styles.reportDetails}>
-          {visibleItems.map(item => (
+          {visibleItems.map((item) => (
             <div className={styles.reportItem} key={item.id}>
               <span className={styles.reportItemName}>{item.name}</span>
               <span className={styles.reportItemFreed}>{formatBytes(item.freed_bytes)}</span>
@@ -459,7 +613,7 @@ function ReportView({ result, onNewScan }: { result: CleanupResult; onNewScan: (
             <AlertTriangle size={14} />
             Processos que impediram remoção
           </div>
-          {result.locking_processes.map(proc => (
+          {result.locking_processes.map((proc) => (
             <div key={proc.pid} className={styles.lockingProcess}>
               <span className={styles.lockingName}>{proc.name}</span>
               <span className={styles.lockingPid}>PID {proc.pid}</span>

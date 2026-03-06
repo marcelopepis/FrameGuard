@@ -1,0 +1,75 @@
+/* ── Tokens de tema do FrameGuard ──────────────────────────────────────────────
+   Seletores: :root[data-theme="dark"] e :root[data-theme="light"]
+   Dark é o padrão (fallback quando data-theme não está definido).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root,
+:root[data-theme='dark'] {
+  /* Fundos */
+  --bg-base: #0a0e17;
+  --bg-surface: #111827;
+  --bg-elevated: #1a2236;
+  --bg-modal: #0d1220;
+
+  /* Accent */
+  --accent: #22d3ee;
+  --accent-hover: #06b6d4;
+  --accent-glow: rgba(34, 211, 238, 0.15);
+
+  /* Texto */
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Status */
+  --status-green: #34d399;
+  --status-amber: #fbbf24;
+  --status-red: #f87171;
+
+  /* Sidebar */
+  --sidebar-top: #0b0f1a;
+  --sidebar-bottom: #090c16;
+
+  /* Borda */
+  --border: rgba(255, 255, 255, 0.08);
+
+  /* RGB triplets — para compor alpha: rgba(var(--accent-rgb), 0.15) */
+  --accent-rgb: 34, 211, 238;
+  --surface-rgb: 17, 24, 39;
+  --muted-rgb: 148, 163, 184;
+}
+
+:root[data-theme='light'] {
+  /* Fundos */
+  --bg-base: #f5f0e8;
+  --bg-surface: #ede8de;
+  --bg-elevated: #e4ddd0;
+  --bg-modal: #e8e3d8;
+
+  /* Accent */
+  --accent: #0891b2;
+  --accent-hover: #0e7490;
+  --accent-glow: rgba(8, 145, 178, 0.12);
+
+  /* Texto */
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  /* Status */
+  --status-green: #059669;
+  --status-amber: #d97706;
+  --status-red: #dc2626;
+
+  /* Sidebar */
+  --sidebar-top: #e8e3d8;
+  --sidebar-bottom: #ded8cb;
+
+  /* Borda */
+  --border: rgba(0, 0, 0, 0.1);
+
+  /* RGB triplets */
+  --accent-rgb: 8, 145, 178;
+  --surface-rgb: 237, 232, 222;
+  --muted-rgb: 71, 85, 105;
+}

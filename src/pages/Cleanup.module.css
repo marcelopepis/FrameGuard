@@ -59,7 +59,7 @@
   gap: 8px;
   padding: 11px 28px;
   background: var(--color-accent);
-  color: #0a0e17;
+  color: var(--bg-base);
   border: none;
   border-radius: var(--radius-md);
   font-size: 13.5px;
@@ -104,8 +104,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── Resultados — Topo ──────────────────────────────────── */
@@ -245,7 +249,7 @@
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
-  border: 1.5px solid rgba(148, 163, 184, 0.3);
+  border: 1.5px solid rgba(var(--muted-rgb), 0.3);
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
@@ -266,7 +270,7 @@
   left: 4.5px;
   width: 4px;
   height: 8px;
-  border: solid #0a0e17;
+  border: solid var(--bg-base);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
@@ -283,7 +287,7 @@
   left: 3px;
   width: 8px;
   height: 2px;
-  background: #0a0e17;
+  background: var(--bg-base);
   border-radius: 1px;
 }
 
@@ -341,6 +345,14 @@
   flex-shrink: 0;
 }
 
+.itemWarning {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-warning);
+  flex-shrink: 0;
+  cursor: help;
+}
+
 .itemPath {
   flex: 1;
   overflow: hidden;
@@ -354,6 +366,56 @@
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   color: var(--color-text-secondary);
+}
+
+/* ─── Painel de opções de browser ────────────────────────── */
+
+.browserOptions {
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.browserOptionsLabel {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.browserOptionsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
+}
+
+.browserOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.browserCookieWarning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--color-warning);
+  padding: 6px 10px;
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.12);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
 }
 
 /* ─── Footer com totais e botão de limpar ────────────────── */
@@ -389,7 +451,7 @@
   gap: 8px;
   padding: 9px 20px;
   background: var(--color-accent);
-  color: #0a0e17;
+  color: var(--bg-base);
   border: none;
   border-radius: var(--radius-md);
   font-size: 13px;
@@ -431,7 +493,7 @@
 .progressBar {
   flex: 1;
   height: 8px;
-  background: rgba(148, 163, 184, 0.12);
+  background: rgba(var(--muted-rgb), 0.12);
   border-radius: 4px;
   overflow: hidden;
 }

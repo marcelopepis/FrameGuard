@@ -60,7 +60,7 @@
   width: 28px;
   height: 28px;
   background: var(--color-accent-subtle);
-  border: 1px solid rgba(34, 211, 238, 0.15);
+  border: 1px solid rgba(var(--accent-rgb), 0.15);
   border-radius: var(--radius-sm);
   color: var(--color-accent);
   flex-shrink: 0;
@@ -137,6 +137,49 @@
   flex-shrink: 0;
 }
 
+/* ─── Theme Switch ──────────────────────────────────────── */
+
+.themeSwitch {
+  display: flex;
+  gap: 2px;
+  background: rgba(var(--muted-rgb), 0.08);
+  border: 1px solid rgba(var(--muted-rgb), 0.14);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.themeSwitchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.themeSwitchBtn:hover:not(.themeSwitchActive) {
+  color: var(--color-text-secondary);
+  background: rgba(var(--muted-rgb), 0.06);
+}
+
+.themeSwitchActive {
+  color: var(--color-accent);
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: rgba(var(--accent-rgb), 0.25);
+  font-weight: 600;
+}
+
 /* ─── Select (idioma) ────────────────────────────────────── */
 
 .select {
@@ -168,8 +211,8 @@
   border-radius: 100px;
   font-size: 10.5px;
   font-weight: 600;
-  background: rgba(148, 163, 184, 0.07);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(var(--muted-rgb), 0.07);
+  border: 1px solid rgba(var(--muted-rgb), 0.16);
   color: var(--color-text-muted);
   user-select: none;
 }
@@ -189,8 +232,8 @@
   position: relative;
   width: 38px;
   height: 22px;
-  background: rgba(148, 163, 184, 0.12);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(var(--muted-rgb), 0.12);
+  border: 1px solid rgba(var(--muted-rgb), 0.2);
   border-radius: 100px;
   cursor: pointer;
   transition:
@@ -200,8 +243,8 @@
 }
 
 .toggleOn {
-  background: rgba(34, 211, 238, 0.25);
-  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(var(--accent-rgb), 0.25);
+  border-color: rgba(var(--accent-rgb), 0.45);
 }
 
 .toggleDisabled {
@@ -217,7 +260,9 @@
   height: 14px;
   background: var(--color-text-muted);
   border-radius: 50%;
-  transition: transform var(--transition-fast), background var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .toggleOn .toggleThumb {
@@ -258,8 +303,8 @@
 .code {
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
-  background: rgba(34, 211, 238, 0.07);
-  border: 1px solid rgba(34, 211, 238, 0.12);
+  background: rgba(var(--accent-rgb), 0.07);
+  border: 1px solid rgba(var(--accent-rgb), 0.12);
   border-radius: 3px;
   padding: 1px 5px;
   color: var(--color-accent);
@@ -280,12 +325,14 @@
   gap: 6px;
   padding: 7px 16px;
   background: var(--color-accent);
-  color: #0a0e17;
+  color: var(--bg-base);
   border-radius: var(--radius-md);
   font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .btnPrimary:hover:not(:disabled) {
@@ -311,7 +358,9 @@
   font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .btnSecondary:hover:not(:disabled) {
@@ -360,7 +409,9 @@
   font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .btnDanger:hover:not(:disabled) {
@@ -385,7 +436,9 @@
   transition: color var(--transition-fast);
 }
 
-.btnClose:hover { color: var(--color-text-secondary); }
+.btnClose:hover {
+  color: var(--color-text-secondary);
+}
 
 /* ─── Estado de carregamento inline ──────────────────────── */
 
@@ -403,8 +456,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── Feedback de sucesso / erro ─────────────────────────── */
@@ -459,13 +516,19 @@
 
 .feedbackWarn {
   font-size: 11px;
-  color: #fbbf24;
+  color: var(--status-amber);
   margin-top: 2px;
 }
 
 @keyframes fadeSlide {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ─── Preview de importação ──────────────────────────────── */
@@ -545,15 +608,15 @@
     background var(--transition-fast);
 }
 
-.modeOption input[type="radio"] {
+.modeOption input[type='radio'] {
   margin-top: 2px;
   accent-color: var(--color-accent);
   flex-shrink: 0;
 }
 
 .modeSelected {
-  border-color: rgba(34, 211, 238, 0.3);
-  background: rgba(34, 211, 238, 0.05);
+  border-color: rgba(var(--accent-rgb), 0.3);
+  background: rgba(var(--accent-rgb), 0.05);
 }
 
 .modeDanger {
@@ -636,7 +699,7 @@
 
 .backupsTable td {
   padding: 7px 8px 7px 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.06);
+  border-top: 1px solid rgba(var(--muted-rgb), 0.06);
   vertical-align: middle;
 }
 
@@ -675,14 +738,14 @@
 }
 
 .pillCyan {
-  background: rgba(34, 211, 238, 0.07);
-  border-color: rgba(34, 211, 238, 0.2);
+  background: rgba(var(--accent-rgb), 0.07);
+  border-color: rgba(var(--accent-rgb), 0.2);
   color: var(--color-accent);
 }
 
 .pillGray {
-  background: rgba(148, 163, 184, 0.06);
-  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(var(--muted-rgb), 0.06);
+  border-color: rgba(var(--muted-rgb), 0.16);
   color: var(--color-text-muted);
 }
 
@@ -702,11 +765,10 @@
   font-family: 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
   font-size: 12px;
   background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.1);
   border-radius: var(--radius-sm);
   padding: 7px 12px;
   color: var(--color-accent);
   display: block;
   word-break: break-all;
 }
-

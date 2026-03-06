@@ -201,14 +201,16 @@ const CURATED_APPS: &[CuratedApp] = &[
     CuratedApp {
         name: "Clipchamp.Clipchamp",
         display_name: "Clipchamp",
-        description: "Editor de vídeo da Microsoft. Pré-instalado, substituível por DaVinci Resolve.",
+        description:
+            "Editor de vídeo da Microsoft. Pré-instalado, substituível por DaVinci Resolve.",
         category: "microsoft_bloatware",
         recommended_action: RecommendedAction::Remove,
     },
     CuratedApp {
         name: "Microsoft.OutlookForWindows",
         display_name: "Outlook (novo)",
-        description: "Nova versão do Outlook como app UWP. Instalado automaticamente em Win11 24H2+.",
+        description:
+            "Nova versão do Outlook como app UWP. Instalado automaticamente em Win11 24H2+.",
         category: "microsoft_bloatware",
         recommended_action: RecommendedAction::Optional,
     },
@@ -219,7 +221,6 @@ const CURATED_APPS: &[CuratedApp] = &[
         category: "microsoft_bloatware",
         recommended_action: RecommendedAction::Remove,
     },
-
     // ── Jogos e Xbox pré-instalados ──
     CuratedApp {
         name: "Microsoft.XboxGamingOverlay",
@@ -249,7 +250,6 @@ const CURATED_APPS: &[CuratedApp] = &[
         category: "games_preinstalled",
         recommended_action: RecommendedAction::Remove,
     },
-
     // ── Apps de terceiros pré-instalados ──
     CuratedApp {
         name: "SpotifyAB.SpotifyMusic",
@@ -300,7 +300,6 @@ const CURATED_APPS: &[CuratedApp] = &[
         category: "third_party",
         recommended_action: RecommendedAction::Remove,
     },
-
     // ── Úteis (opcionais) ──
     CuratedApp {
         name: "Microsoft.Paint",
@@ -323,7 +322,6 @@ const CURATED_APPS: &[CuratedApp] = &[
         category: "useful",
         recommended_action: RecommendedAction::Optional,
     },
-
     // ── Sistema (não remover) ──
     CuratedApp {
         name: "Microsoft.WindowsStore",
@@ -378,7 +376,10 @@ fn parse_json_array<T: for<'de> Deserialize<'de>>(json_str: &str) -> Result<Vec<
             .map_err(|e| format!("Erro ao parsear JSON objeto: {}", e))?;
         Ok(vec![single])
     } else {
-        Err(format!("Saída inesperada do PowerShell: {}", &trimmed[..trimmed.len().min(200)]))
+        Err(format!(
+            "Saída inesperada do PowerShell: {}",
+            &trimmed[..trimmed.len().min(200)]
+        ))
     }
 }
 

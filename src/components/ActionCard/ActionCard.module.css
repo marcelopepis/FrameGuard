@@ -94,13 +94,13 @@
   border-color: var(--color-border-hover);
   box-shadow:
     0 6px 20px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(34, 211, 238, 0.04);
+    inset 0 1px 0 rgba(var(--accent-rgb), 0.04);
 }
 
 /* Destaque sutil durante execução */
 .actionCardRunning {
-  border-color: rgba(34, 211, 238, 0.25);
-  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.08);
+  border-color: rgba(var(--accent-rgb), 0.25);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.08);
 }
 
 /* ─── Topo do card ───────────────────────────────────────── */
@@ -119,7 +119,7 @@
   align-items: center;
   justify-content: center;
   background: var(--color-accent-subtle);
-  border: 1px solid rgba(34, 211, 238, 0.15);
+  border: 1px solid rgba(var(--accent-rgb), 0.15);
   border-radius: var(--radius-sm);
   color: var(--color-accent);
   flex-shrink: 0;
@@ -172,7 +172,7 @@
 
 .detailsPanel {
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.1);
   border-radius: var(--radius-sm);
   padding: 11px 13px;
   margin-top: 2px;
@@ -220,7 +220,7 @@
 .metaBadgeRestart {
   background: rgba(251, 191, 36, 0.07);
   border-color: rgba(251, 191, 36, 0.2);
-  color: #fbbf24;
+  color: var(--status-amber);
 }
 
 .metaDuration {
@@ -304,14 +304,26 @@
 }
 
 /* Cores por status */
-.statusSuccess .resultMessage { color: var(--color-success); }
-.statusSuccess .resultIcon    { color: var(--color-success); }
+.statusSuccess .resultMessage {
+  color: var(--color-success);
+}
+.statusSuccess .resultIcon {
+  color: var(--color-success);
+}
 
-.statusWarning .resultMessage { color: #fbbf24; }
-.statusWarning .resultIcon    { color: #fbbf24; }
+.statusWarning .resultMessage {
+  color: var(--status-amber);
+}
+.statusWarning .resultIcon {
+  color: var(--status-amber);
+}
 
-.statusError .resultMessage   { color: var(--color-error); }
-.statusError .resultIcon      { color: var(--color-error); }
+.statusError .resultMessage {
+  color: var(--color-error);
+}
+.statusError .resultIcon {
+  color: var(--color-error);
+}
 
 /* ─── Estado de execução (barra de progresso) ────────────── */
 
@@ -324,7 +336,7 @@
 .progressTrack {
   flex: 1;
   height: 4px;
-  background: rgba(148, 163, 184, 0.1);
+  background: rgba(var(--muted-rgb), 0.1);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -332,7 +344,7 @@
 .progressFill {
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--color-accent) 0%, rgba(34, 211, 238, 0.55) 100%);
+  background: linear-gradient(90deg, var(--color-accent) 0%, rgba(var(--accent-rgb), 0.55) 100%);
   transition: width 0.4s ease;
 }
 
@@ -346,8 +358,12 @@
 }
 
 @keyframes shimmer {
-  0%   { transform: translateX(-200%); }
-  100% { transform: translateX(350%); }
+  0% {
+    transform: translateX(-200%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
 }
 
 .progressLabel {
@@ -394,8 +410,8 @@
   align-items: center;
   gap: 6px;
   padding: 7px 16px;
-  background: rgba(34, 211, 238, 0.1);
-  border: 1px solid rgba(34, 211, 238, 0.22);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
   color: var(--color-accent);
   border-radius: var(--radius-md);
   font-size: 12.5px;
@@ -408,8 +424,8 @@
 }
 
 .btnRun:hover:not(:disabled) {
-  background: rgba(34, 211, 238, 0.18);
-  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(var(--accent-rgb), 0.18);
+  border-color: rgba(var(--accent-rgb), 0.4);
   transform: translateY(-1px);
 }
 
@@ -453,8 +469,8 @@
   align-items: center;
   gap: 7px;
   padding: 6px 12px;
-  background: rgba(34, 211, 238, 0.07);
-  border: 1px solid rgba(34, 211, 238, 0.18);
+  background: rgba(var(--accent-rgb), 0.07);
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
   border-radius: var(--radius-md);
   font-size: 12px;
   font-weight: 500;
@@ -469,8 +485,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── Área de log (terminal) ─────────────────────────────── */
@@ -479,19 +499,23 @@
   max-height: 260px;
   overflow-y: auto;
   background: rgba(0, 0, 0, 0.5);
-  border-top: 1px solid rgba(34, 211, 238, 0.08);
+  border-top: 1px solid rgba(var(--accent-rgb), 0.08);
   padding: 12px 18px;
   font-family: 'Cascadia Code', 'Consolas', 'Fira Code', monospace;
   font-size: 11.5px;
   line-height: 1.7;
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.15) transparent;
+  scrollbar-color: rgba(var(--muted-rgb), 0.15) transparent;
 }
 
-.logArea::-webkit-scrollbar        { width: 4px; }
-.logArea::-webkit-scrollbar-track  { background: transparent; }
-.logArea::-webkit-scrollbar-thumb  {
-  background: rgba(148, 163, 184, 0.2);
+.logArea::-webkit-scrollbar {
+  width: 4px;
+}
+.logArea::-webkit-scrollbar-track {
+  background: transparent;
+}
+.logArea::-webkit-scrollbar-thumb {
+  background: rgba(var(--muted-rgb), 0.2);
   border-radius: 2px;
 }
 
@@ -501,10 +525,19 @@
   word-break: break-word;
 }
 
-.logStdout  { color: #e2e8f0; }
-.logStderr  { color: #fbbf24; }
-.logSystem  { color: #64748b; }
-.logError   { color: var(--color-error); font-weight: 500; }
+.logStdout {
+  color: #e2e8f0;
+}
+.logStderr {
+  color: var(--status-amber);
+}
+.logSystem {
+  color: var(--text-muted);
+}
+.logError {
+  color: var(--color-error);
+  font-weight: 500;
+}
 
 /* Cursor piscante no final do log durante execução */
 .logCursor {
@@ -514,8 +547,13 @@
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 /* ─── Painel de processos travando arquivos ──────────────── */
@@ -535,7 +573,7 @@
   gap: 7px;
   font-size: 12px;
   font-weight: 600;
-  color: #fbbf24;
+  color: var(--status-amber);
 }
 
 .lockList {
@@ -550,7 +588,7 @@
   gap: 10px;
   padding: 8px 12px;
   background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(var(--muted-rgb), 0.08);
   border-radius: var(--radius-sm);
   flex-wrap: wrap;
 }
@@ -631,8 +669,8 @@
   align-items: center;
   gap: 6px;
   padding: 7px 16px;
-  background: rgba(34, 211, 238, 0.1);
-  border: 1px solid rgba(34, 211, 238, 0.22);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
   color: var(--color-accent);
   border-radius: var(--radius-md);
   font-size: 12px;
@@ -648,8 +686,8 @@
 }
 
 .lockRetryBtn:hover:not(:disabled) {
-  background: rgba(34, 211, 238, 0.18);
-  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(var(--accent-rgb), 0.18);
+  border-color: rgba(var(--accent-rgb), 0.4);
   transform: translateY(-1px);
 }
 
@@ -689,4 +727,3 @@
   line-height: 1.6;
   margin: 0;
 }
-

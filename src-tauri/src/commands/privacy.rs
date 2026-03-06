@@ -18,12 +18,10 @@ use crate::utils::registry::{delete_value, key_exists, read_dword, write_dword, 
 // Privacidade — Desabilitar Telemetria do Windows
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const TELEMETRY_DATA_COLLECTION_PATH: &str =
-    r"SOFTWARE\Policies\Microsoft\Windows\DataCollection";
+const TELEMETRY_DATA_COLLECTION_PATH: &str = r"SOFTWARE\Policies\Microsoft\Windows\DataCollection";
 const TELEMETRY_DATA_COLLECTION_KEY: &str = "AllowTelemetry";
 
-const TELEMETRY_PRIVACY_PATH: &str =
-    r"Software\Microsoft\Windows\CurrentVersion\Privacy";
+const TELEMETRY_PRIVACY_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Privacy";
 const TELEMETRY_TAILORED_KEY: &str = "TailoredExperiencesWithDiagnosticDataEnabled";
 
 const TELEMETRY_ADVERTISING_PATH: &str =
@@ -32,9 +30,24 @@ const TELEMETRY_ADVERTISING_KEY: &str = "Enabled";
 
 /// Chaves de telemetria: (Hive, path, key, valor_aplicado)
 const TELEMETRY_KEYS: [(Hive, &str, &str, u32); 3] = [
-    (Hive::LocalMachine, TELEMETRY_DATA_COLLECTION_PATH, TELEMETRY_DATA_COLLECTION_KEY, 0),
-    (Hive::CurrentUser,  TELEMETRY_PRIVACY_PATH,         TELEMETRY_TAILORED_KEY,         0),
-    (Hive::CurrentUser,  TELEMETRY_ADVERTISING_PATH,     TELEMETRY_ADVERTISING_KEY,      0),
+    (
+        Hive::LocalMachine,
+        TELEMETRY_DATA_COLLECTION_PATH,
+        TELEMETRY_DATA_COLLECTION_KEY,
+        0,
+    ),
+    (
+        Hive::CurrentUser,
+        TELEMETRY_PRIVACY_PATH,
+        TELEMETRY_TAILORED_KEY,
+        0,
+    ),
+    (
+        Hive::CurrentUser,
+        TELEMETRY_ADVERTISING_PATH,
+        TELEMETRY_ADVERTISING_KEY,
+        0,
+    ),
 ];
 
 fn get_telemetry_is_applied() -> Result<bool, String> {
@@ -79,17 +92,14 @@ pub async fn get_telemetry_registry_info() -> Result<TweakInfo, String> {
 #[tauri::command]
 pub fn disable_telemetry_registry() -> Result<(), String> {
     if get_telemetry_is_applied()? {
-        return Err(
-            "Tweak 'disable_telemetry_registry' já está aplicado".to_string(),
-        );
+        return Err("Tweak 'disable_telemetry_registry' já está aplicado".to_string());
     }
 
     // Lê todos os originais ANTES de qualquer modificação
     let orig_vals: Vec<Value> = TELEMETRY_KEYS
         .iter()
         .map(|(hive, path, key, _)| {
-            read_dword(*hive, path, key)
-                .map(|opt| opt.map(|v| json!(v)).unwrap_or(Value::Null))
+            read_dword(*hive, path, key).map(|opt| opt.map(|v| json!(v)).unwrap_or(Value::Null))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -139,11 +149,17 @@ pub fn revert_telemetry_registry() -> Result<(), String> {
 
     for entry in &entries {
         let hive_str = entry["hive"].as_str().unwrap_or("CurrentUser");
-        let path = entry["path"].as_str()
+        let path = entry["path"]
+            .as_str()
             .ok_or("Backup telemetria: campo 'path' ausente")?;
-        let key = entry["key"].as_str()
+        let key = entry["key"]
+            .as_str()
             .ok_or("Backup telemetria: campo 'key' ausente")?;
-        let hive = if hive_str == "LocalMachine" { Hive::LocalMachine } else { Hive::CurrentUser };
+        let hive = if hive_str == "LocalMachine" {
+            Hive::LocalMachine
+        } else {
+            Hive::CurrentUser
+        };
 
         match &entry["value"] {
             Value::Null => {
@@ -171,23 +187,35 @@ pub fn revert_telemetry_registry() -> Result<(), String> {
 // Privacidade — Desabilitar Copilot e Cortana
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const COPILOT_POLICY_PATH: &str =
-    r"Software\Policies\Microsoft\Windows\WindowsCopilot";
+const COPILOT_POLICY_PATH: &str = r"Software\Policies\Microsoft\Windows\WindowsCopilot";
 const COPILOT_POLICY_KEY: &str = "TurnOffWindowsCopilot";
 
-const COPILOT_BUTTON_PATH: &str =
-    r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+const COPILOT_BUTTON_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
 const COPILOT_BUTTON_KEY: &str = "ShowCopilotButton";
 
-const CORTANA_POLICY_PATH: &str =
-    r"SOFTWARE\Policies\Microsoft\Windows\Windows Search";
+const CORTANA_POLICY_PATH: &str = r"SOFTWARE\Policies\Microsoft\Windows\Windows Search";
 const CORTANA_POLICY_KEY: &str = "AllowCortana";
 
 /// Chaves Copilot/Cortana: (Hive, path, key, valor_aplicado)
 const COPILOT_KEYS: [(Hive, &str, &str, u32); 3] = [
-    (Hive::CurrentUser,  COPILOT_POLICY_PATH, COPILOT_POLICY_KEY, 1),
-    (Hive::CurrentUser,  COPILOT_BUTTON_PATH, COPILOT_BUTTON_KEY, 0),
-    (Hive::LocalMachine, CORTANA_POLICY_PATH, CORTANA_POLICY_KEY, 0),
+    (
+        Hive::CurrentUser,
+        COPILOT_POLICY_PATH,
+        COPILOT_POLICY_KEY,
+        1,
+    ),
+    (
+        Hive::CurrentUser,
+        COPILOT_BUTTON_PATH,
+        COPILOT_BUTTON_KEY,
+        0,
+    ),
+    (
+        Hive::LocalMachine,
+        CORTANA_POLICY_PATH,
+        CORTANA_POLICY_KEY,
+        0,
+    ),
 ];
 
 fn get_copilot_is_applied() -> Result<bool, String> {
@@ -225,7 +253,9 @@ pub async fn get_copilot_info() -> Result<TweakInfo, String> {
 
             hardware_filter: None,
         })
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -237,8 +267,7 @@ pub fn disable_copilot() -> Result<(), String> {
     let orig_vals: Vec<Value> = COPILOT_KEYS
         .iter()
         .map(|(hive, path, key, _)| {
-            read_dword(*hive, path, key)
-                .map(|opt| opt.map(|v| json!(v)).unwrap_or(Value::Null))
+            read_dword(*hive, path, key).map(|opt| opt.map(|v| json!(v)).unwrap_or(Value::Null))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -293,8 +322,7 @@ pub fn revert_copilot() -> Result<(), String> {
 // Privacidade — Desabilitar Content Delivery Manager
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CDM_PATH: &str =
-    r"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
+const CDM_PATH: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
 
 /// Chaves do ContentDeliveryManager que devem ser 0 quando aplicado
 const CDM_KEYS: [&str; 14] = [
@@ -319,9 +347,9 @@ const CDM_PUSH_PATH: &str = r"SOFTWARE\Policies\Microsoft\PushToInstall";
 
 /// Chaves adicionais (HKLM): (path, key, valor_aplicado)
 const CDM_EXTRA_KEYS: [(&str, &str, u32); 3] = [
-    (CDM_CLOUD_PATH, "DisableWindowsConsumerFeatures",    1),
+    (CDM_CLOUD_PATH, "DisableWindowsConsumerFeatures", 1),
     (CDM_CLOUD_PATH, "DisableConsumerAccountStateContent", 1),
-    (CDM_PUSH_PATH,  "DisablePushToInstall",               1),
+    (CDM_PUSH_PATH, "DisablePushToInstall", 1),
 ];
 
 fn get_content_delivery_is_applied() -> Result<bool, String> {
@@ -351,10 +379,11 @@ pub async fn get_content_delivery_info() -> Result<TweakInfo, String> {
         Ok(TweakInfo {
             id: "disable_content_delivery".to_string(),
             name: "Desabilitar Content Delivery Manager".to_string(),
-            description: "Impede o Windows de instalar silenciosamente apps sugeridos (bloatware), \
+            description:
+                "Impede o Windows de instalar silenciosamente apps sugeridos (bloatware), \
                 exibir dicas, sugestões e propagandas no Menu Iniciar e tela de bloqueio. \
                 Também bloqueia recursos de consumidor via política de grupo."
-                .to_string(),
+                    .to_string(),
             category: "privacy".to_string(),
             is_applied,
             requires_restart: false,
@@ -368,15 +397,15 @@ pub async fn get_content_delivery_info() -> Result<TweakInfo, String> {
 
             hardware_filter: None,
         })
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub fn disable_content_delivery() -> Result<(), String> {
     if get_content_delivery_is_applied()? {
-        return Err(
-            "Tweak 'disable_content_delivery' já está aplicado".to_string(),
-        );
+        return Err("Tweak 'disable_content_delivery' já está aplicado".to_string());
     }
 
     // Monta array com todas as entradas (14 HKCU + 3 HKLM)
@@ -456,14 +485,18 @@ const BG_APPS_PATH: &str =
     r"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications";
 const BG_APPS_KEY: &str = "GlobalUserDisabled";
 
-const BG_APPS_SEARCH_PATH: &str =
-    r"Software\Microsoft\Windows\CurrentVersion\Search";
+const BG_APPS_SEARCH_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Search";
 const BG_APPS_SEARCH_KEY: &str = "BackgroundAppGlobalToggle";
 
 /// Chaves de background apps: (Hive, path, key, valor_aplicado)
 const BG_APPS_KEYS: [(Hive, &str, &str, u32); 2] = [
-    (Hive::CurrentUser, BG_APPS_PATH,        BG_APPS_KEY,        1),
-    (Hive::CurrentUser, BG_APPS_SEARCH_PATH,  BG_APPS_SEARCH_KEY, 0),
+    (Hive::CurrentUser, BG_APPS_PATH, BG_APPS_KEY, 1),
+    (
+        Hive::CurrentUser,
+        BG_APPS_SEARCH_PATH,
+        BG_APPS_SEARCH_KEY,
+        0,
+    ),
 ];
 
 fn get_background_apps_is_applied() -> Result<bool, String> {
@@ -496,27 +529,26 @@ pub async fn get_background_apps_info() -> Result<TweakInfo, String> {
             has_backup,
             risk_level: RiskLevel::Medium,
             evidence_level: EvidenceLevel::Plausible,
-            default_value_description:
-                "Padrão Windows: apps UWP podem executar em segundo plano".to_string(),
+            default_value_description: "Padrão Windows: apps UWP podem executar em segundo plano"
+                .to_string(),
 
             hardware_filter: None,
         })
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub fn disable_background_apps() -> Result<(), String> {
     if get_background_apps_is_applied()? {
-        return Err(
-            "Tweak 'disable_background_apps' já está aplicado".to_string(),
-        );
+        return Err("Tweak 'disable_background_apps' já está aplicado".to_string());
     }
 
     let orig_vals: Vec<Value> = BG_APPS_KEYS
         .iter()
         .map(|(hive, path, key, _)| {
-            read_dword(*hive, path, key)
-                .map(|opt| opt.map(|v| json!(v)).unwrap_or(Value::Null))
+            read_dword(*hive, path, key).map(|opt| opt.map(|v| json!(v)).unwrap_or(Value::Null))
         })
         .collect::<Result<Vec<_>, _>>()?;
 

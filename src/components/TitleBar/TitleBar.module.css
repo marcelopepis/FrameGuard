@@ -1,0 +1,60 @@
+.titlebar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  min-height: 40px;
+  background: var(--bg-base);
+  user-select: none;
+  position: relative;
+  z-index: 50;
+}
+
+/* Região de drag: logo + nome + espaço flexível */
+.dragRegion {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+  padding-left: 16px;
+  gap: 10px;
+}
+
+.appName {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+/* ─── Botões de controle ────────────────────────────────── */
+
+.controls {
+  display: flex;
+  height: 100%;
+}
+
+.controlBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+  padding: 0;
+  outline: none;
+}
+
+.controlBtn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.closeBtn:hover {
+  background: #dc2626;
+  color: #ffffff;
+}

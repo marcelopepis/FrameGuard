@@ -29,11 +29,10 @@ pub struct RestorePointResponse {
 /// para não impedir a execução do tweak/plano.
 #[tauri::command]
 pub async fn create_restore_point(description: String) -> Result<RestorePointResponse, String> {
-    let result = tokio::task::spawn_blocking(move || {
-        restore_point::create_restore_point(&description)
-    })
-    .await
-    .map_err(|e| format!("Falha no spawn_blocking: {}", e))?;
+    let result =
+        tokio::task::spawn_blocking(move || restore_point::create_restore_point(&description))
+            .await
+            .map_err(|e| format!("Falha no spawn_blocking: {}", e))?;
 
     Ok(match result {
         RestorePointResult::Created => RestorePointResponse {

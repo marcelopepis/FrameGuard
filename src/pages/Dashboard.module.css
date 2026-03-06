@@ -59,7 +59,7 @@
   transform: translateY(-2px);
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(34, 211, 238, 0.06);
+    inset 0 1px 0 rgba(var(--accent-rgb), 0.06);
 }
 
 /* Cabeçalho do card: ícone + label */
@@ -77,7 +77,7 @@
   align-items: center;
   justify-content: center;
   background: var(--color-accent-subtle);
-  border: 1px solid rgba(34, 211, 238, 0.14);
+  border: 1px solid rgba(var(--accent-rgb), 0.14);
   border-radius: var(--radius-sm);
   color: var(--color-accent);
   flex-shrink: 0;
@@ -119,7 +119,7 @@
 .progressTrack {
   width: 100%;
   height: 4px;
-  background: rgba(148, 163, 184, 0.1);
+  background: rgba(var(--muted-rgb), 0.1);
   border-radius: 2px;
   overflow: hidden;
   margin-top: 6px;
@@ -128,7 +128,7 @@
 .progressFill {
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--color-accent) 0%, rgba(34, 211, 238, 0.6) 100%);
+  background: linear-gradient(90deg, var(--color-accent) 0%, rgba(var(--accent-rgb), 0.6) 100%);
   transition: width 0.5s ease;
 }
 
@@ -144,17 +144,21 @@
   border-radius: 4px;
   background: linear-gradient(
     90deg,
-    rgba(148, 163, 184, 0.08) 25%,
-    rgba(148, 163, 184, 0.16) 50%,
-    rgba(148, 163, 184, 0.08) 75%
+    rgba(var(--muted-rgb), 0.08) 25%,
+    rgba(var(--muted-rgb), 0.16) 50%,
+    rgba(var(--muted-rgb), 0.08) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
 @keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ─── Admin tag (card Sistema) ───────────────────────────── */
@@ -289,18 +293,23 @@
 }
 
 .dotOff {
-  background: #fbbf24;
+  background: var(--status-amber);
   box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
 }
 
 .dotError {
-  background: #f87171;
+  background: var(--status-red);
   box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.45; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .badgeLabel {
@@ -349,7 +358,7 @@
   transform: translateY(-1px);
   box-shadow:
     0 6px 20px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(34, 211, 238, 0.05);
+    inset 0 1px 0 rgba(var(--accent-rgb), 0.05);
 }
 
 .quickPlanIcon {
@@ -359,7 +368,7 @@
   align-items: center;
   justify-content: center;
   background: var(--color-accent-subtle);
-  border: 1px solid rgba(34, 211, 238, 0.14);
+  border: 1px solid rgba(var(--accent-rgb), 0.14);
   border-radius: var(--radius-sm);
   color: var(--color-accent);
   flex-shrink: 0;
@@ -431,8 +440,8 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  background: rgba(34, 211, 238, 0.1);
-  border: 1px solid rgba(34, 211, 238, 0.22);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
   color: var(--color-accent);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
@@ -444,8 +453,8 @@
 }
 
 .quickPlanRun:hover:not(:disabled) {
-  background: rgba(34, 211, 238, 0.2);
-  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(var(--accent-rgb), 0.2);
+  border-color: rgba(var(--accent-rgb), 0.4);
   transform: scale(1.06);
 }
 
@@ -471,8 +480,8 @@
 }
 
 .execModal {
-  background: #0d1220;
-  border: 1px solid rgba(34, 211, 238, 0.22);
+  background: var(--bg-modal);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 580px;
@@ -481,7 +490,7 @@
   flex-direction: column;
   box-shadow:
     0 24px 64px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 rgba(34, 211, 238, 0.06);
+    inset 0 1px 0 rgba(var(--accent-rgb), 0.06);
   overflow: hidden;
 }
 
@@ -524,7 +533,9 @@
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   flex-shrink: 0;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .execClose:hover:not(:disabled) {
@@ -540,13 +551,13 @@
 /* Barra de progresso */
 .execProgress {
   height: 3px;
-  background: rgba(148, 163, 184, 0.08);
+  background: rgba(var(--muted-rgb), 0.08);
   flex-shrink: 0;
 }
 
 .execProgressFill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-accent), rgba(34, 211, 238, 0.55));
+  background: linear-gradient(90deg, var(--color-accent), rgba(var(--accent-rgb), 0.55));
   transition: width 0.4s ease;
 }
 
@@ -568,14 +579,29 @@
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   overflow: hidden;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
-.execSt_pending  { background: transparent; }
-.execSt_running  { background: rgba(34, 211, 238, 0.06); border-color: rgba(34, 211, 238, 0.18); }
-.execSt_completed { background: rgba(52, 211, 153, 0.05); border-color: rgba(52, 211, 153, 0.1); }
-.execSt_failed   { background: rgba(248, 113, 113, 0.06); border-color: rgba(248, 113, 113, 0.15); }
-.execSt_skipped  { opacity: 0.45; }
+.execSt_pending {
+  background: transparent;
+}
+.execSt_running {
+  background: rgba(var(--accent-rgb), 0.06);
+  border-color: rgba(var(--accent-rgb), 0.18);
+}
+.execSt_completed {
+  background: rgba(52, 211, 153, 0.05);
+  border-color: rgba(52, 211, 153, 0.1);
+}
+.execSt_failed {
+  background: rgba(248, 113, 113, 0.06);
+  border-color: rgba(248, 113, 113, 0.15);
+}
+.execSt_skipped {
+  opacity: 0.45;
+}
 
 .execItemMain {
   display: flex;
@@ -619,12 +645,14 @@
   color: var(--color-text-muted);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .execExpandBtn:hover {
   color: var(--color-text-secondary);
-  background: rgba(148, 163, 184, 0.08);
+  background: rgba(var(--muted-rgb), 0.08);
 }
 
 .execItemDetails {
@@ -716,11 +744,13 @@
   gap: 7px;
   padding: 8px 16px;
   background: var(--color-accent);
-  color: #0a0e17;
+  color: var(--bg-base);
   border-radius: var(--radius-md);
   font-size: 12.5px;
   font-weight: 600;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .execCloseBtn:hover {
@@ -729,16 +759,39 @@
 }
 
 /* Ícones de status (execução) */
-.stPending   { color: var(--color-text-muted);  flex-shrink: 0; }
-.stRunning   { color: var(--color-accent);       flex-shrink: 0; animation: spin 0.9s linear infinite; }
-.stCompleted { color: var(--color-success);      flex-shrink: 0; }
-.stWarning   { color: var(--color-warning);      flex-shrink: 0; }
-.stFailed    { color: var(--color-error);        flex-shrink: 0; }
-.stSkipped   { color: var(--color-text-muted);   flex-shrink: 0; }
+.stPending {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.stRunning {
+  color: var(--color-accent);
+  flex-shrink: 0;
+  animation: spin 0.9s linear infinite;
+}
+.stCompleted {
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+.stWarning {
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
+.stFailed {
+  color: var(--color-error);
+  flex-shrink: 0;
+}
+.stSkipped {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ─── Atividade Recente ─────────────────────────────────── */
@@ -815,9 +868,18 @@
 }
 
 /* Ícones de resultado */
-.actResultSuccess { color: var(--color-success); flex-shrink: 0; }
-.actResultPartial { color: var(--color-warning); flex-shrink: 0; }
-.actResultFailed  { color: var(--color-error);   flex-shrink: 0; }
+.actResultSuccess {
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+.actResultPartial {
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
+.actResultFailed {
+  color: var(--color-error);
+  flex-shrink: 0;
+}
 
 /* Estado vazio */
 .activityEmpty {

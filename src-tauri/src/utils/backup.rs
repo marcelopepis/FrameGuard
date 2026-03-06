@@ -109,9 +109,8 @@ fn backup_path() -> Result<PathBuf, String> {
     let dir = PathBuf::from(appdata).join("FrameGuard");
 
     if !dir.exists() {
-        fs::create_dir_all(&dir).map_err(|e| {
-            format!("Não foi possível criar o diretório de backups: {}", e)
-        })?;
+        fs::create_dir_all(&dir)
+            .map_err(|e| format!("Não foi possível criar o diretório de backups: {}", e))?;
     }
 
     Ok(dir.join("backups.json"))
@@ -126,8 +125,8 @@ fn load_from_disk() -> Result<BackupFile, String> {
         return Ok(BackupFile::new());
     }
 
-    let contents = fs::read_to_string(&path)
-        .map_err(|e| format!("Erro ao ler backups.json: {}", e))?;
+    let contents =
+        fs::read_to_string(&path).map_err(|e| format!("Erro ao ler backups.json: {}", e))?;
 
     serde_json::from_str(&contents)
         .map_err(|e| format!("Arquivo backups.json inválido ou corrompido: {}", e))

@@ -7,7 +7,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  Loader2, XCircle, RefreshCw, ChevronDown, Info, AlertTriangle, CheckCircle, X,
+  Loader2,
+  XCircle,
+  RefreshCw,
+  ChevronDown,
+  Info,
+  AlertTriangle,
+  CheckCircle,
+  X,
 } from 'lucide-react';
 import styles from './BloatwareSection.module.css';
 import { useGlobalRunning } from '../../contexts/RunningContext';
@@ -65,19 +72,27 @@ const APP_CATEGORIES = [
 
 function badgeClass(action: string): string {
   switch (action) {
-    case 'remove':   return `${styles.badge} ${styles.badgeRemove}`;
-    case 'optional': return `${styles.badge} ${styles.badgeOptional}`;
-    case 'keep':     return `${styles.badge} ${styles.badgeKeep}`;
-    default:         return styles.badge;
+    case 'remove':
+      return `${styles.badge} ${styles.badgeRemove}`;
+    case 'optional':
+      return `${styles.badge} ${styles.badgeOptional}`;
+    case 'keep':
+      return `${styles.badge} ${styles.badgeKeep}`;
+    default:
+      return styles.badge;
   }
 }
 
 function badgeLabel(action: string): string {
   switch (action) {
-    case 'remove':   return 'Remover';
-    case 'optional': return 'Opcional';
-    case 'keep':     return 'Manter';
-    default:         return action;
+    case 'remove':
+      return 'Remover';
+    case 'optional':
+      return 'Opcional';
+    case 'keep':
+      return 'Manter';
+    default:
+      return action;
   }
 }
 
@@ -122,12 +137,14 @@ export default function BloatwareSection() {
     }
   }, []);
 
-  useEffect(() => { loadApps(); }, [loadApps]);
+  useEffect(() => {
+    loadApps();
+  }, [loadApps]);
 
   // ── Toggle ──
 
   function toggleCategory(catId: string) {
-    setCollapsed(prev => {
+    setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(catId)) next.delete(catId);
       else next.add(catId);
@@ -136,7 +153,7 @@ export default function BloatwareSection() {
   }
 
   function toggleApp(name: string) {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
@@ -169,11 +186,15 @@ export default function BloatwareSection() {
       setLastResult(result);
 
       if (result.succeeded.length > 0) {
-        showToast('success', 'Apps removidos',
-          `${result.succeeded.length} app(s) removido(s) com sucesso.`);
+        showToast(
+          'success',
+          'Apps removidos',
+          `${result.succeeded.length} app(s) removido(s) com sucesso.`,
+        );
         invoke('log_tweak_activity', {
           name: `Remover ${result.succeeded.length} app(s) UWP`,
-          applied: true, success: true,
+          applied: true,
+          success: true,
         }).catch(() => {});
       }
 
@@ -184,7 +205,8 @@ export default function BloatwareSection() {
         if (result.succeeded.length === 0) {
           invoke('log_tweak_activity', {
             name: `Remover apps UWP (${result.failed.length} falha(s))`,
-            applied: true, success: false,
+            applied: true,
+            success: false,
           }).catch(() => {});
         }
       }
@@ -196,7 +218,9 @@ export default function BloatwareSection() {
     } catch (e) {
       showToast('error', 'Erro ao remover apps', String(e));
       invoke('log_tweak_activity', {
-        name: 'Remover apps UWP', applied: true, success: false,
+        name: 'Remover apps UWP',
+        applied: true,
+        success: false,
       }).catch(() => {});
     } finally {
       setRemoving(false);
@@ -228,7 +252,9 @@ export default function BloatwareSection() {
         <div className={styles.errorState}>
           <XCircle size={16} />
           <span>{error}</span>
-          <button className={styles.btnRetry} onClick={loadApps}>Tentar novamente</button>
+          <button className={styles.btnRetry} onClick={loadApps}>
+            Tentar novamente
+          </button>
         </div>
       </div>
     );
@@ -236,15 +262,14 @@ export default function BloatwareSection() {
 
   // ── Contagens ──
 
-  const installedCount = apps.filter(a => a.is_installed).length;
-  const selectedInstalled = Array.from(selected).filter(name => {
-    const app = apps.find(a => a.name === name);
+  const installedCount = apps.filter((a) => a.is_installed).length;
+  const selectedInstalled = Array.from(selected).filter((name) => {
+    const app = apps.find((a) => a.name === name);
     return app?.is_installed && app?.recommended_action !== 'keep';
   });
 
   return (
     <div className={styles.sectionCard}>
-
       {/* ── Header ── */}
       <div className={styles.sectionHeader}>
         <span className={styles.sectionTitle}>Remoção de Bloatware UWP</span>
@@ -257,30 +282,28 @@ export default function BloatwareSection() {
       <div className={styles.infoBanner}>
         <Info size={15} />
         <span>
-          Apps removidos podem ser reinstalados pela Microsoft Store.
-          Apps marcados como "Manter" são protegidos e não podem ser removidos.
+          Apps removidos podem ser reinstalados pela Microsoft Store. Apps marcados como "Manter"
+          são protegidos e não podem ser removidos.
         </span>
       </div>
 
       {/* ── Resultado da última remoção ── */}
       {lastResult && (
-        <div className={`${styles.resultBanner} ${
-          lastResult.failed.length > 0 ? styles.resultPartial : styles.resultSuccess
-        }`}>
-          {lastResult.failed.length > 0
-            ? <AlertTriangle size={16} />
-            : <CheckCircle size={16} />
-          }
+        <div
+          className={`${styles.resultBanner} ${
+            lastResult.failed.length > 0 ? styles.resultPartial : styles.resultSuccess
+          }`}
+        >
+          {lastResult.failed.length > 0 ? <AlertTriangle size={16} /> : <CheckCircle size={16} />}
           <div className={styles.resultDetails}>
             <span>
               {lastResult.succeeded.length > 0 &&
                 `${lastResult.succeeded.length} removido(s) com sucesso.`}
-              {lastResult.failed.length > 0 &&
-                ` ${lastResult.failed.length} falha(s).`}
+              {lastResult.failed.length > 0 && ` ${lastResult.failed.length} falha(s).`}
             </span>
             {lastResult.failed.length > 0 && (
               <span style={{ fontSize: '11.5px', opacity: 0.8 }}>
-                Falhas: {lastResult.failed.map(f => f.display_name).join(', ')}
+                Falhas: {lastResult.failed.map((f) => f.display_name).join(', ')}
               </span>
             )}
           </div>
@@ -291,20 +314,17 @@ export default function BloatwareSection() {
       )}
 
       {/* ── Categorias com tabelas ── */}
-      {APP_CATEGORIES.map(cat => {
-        const catApps = apps.filter(a => a.category === cat.id);
+      {APP_CATEGORIES.map((cat) => {
+        const catApps = apps.filter((a) => a.category === cat.id);
         if (catApps.length === 0) return null;
 
         const catKey = `bloat_${cat.id}`;
         const isCollapsed = collapsed.has(catKey);
-        const catInstalled = catApps.filter(a => a.is_installed).length;
+        const catInstalled = catApps.filter((a) => a.is_installed).length;
 
         return (
           <div key={cat.id}>
-            <div
-              className={styles.categoryHeader}
-              onClick={() => toggleCategory(catKey)}
-            >
+            <div className={styles.categoryHeader} onClick={() => toggleCategory(catKey)}>
               <ChevronDown
                 size={14}
                 className={`${styles.chevron} ${isCollapsed ? styles.chevronCollapsed : ''}`}
@@ -327,7 +347,7 @@ export default function BloatwareSection() {
                   </tr>
                 </thead>
                 <tbody>
-                  {catApps.map(app => {
+                  {catApps.map((app) => {
                     const isKeep = app.recommended_action === 'keep';
                     const notInstalled = !app.is_installed;
 
@@ -349,9 +369,7 @@ export default function BloatwareSection() {
                         </td>
                         <td>
                           <div className={styles.nameCell}>
-                            <span className={styles.displayName}>
-                              {app.display_name}
-                            </span>
+                            <span className={styles.displayName}>{app.display_name}</span>
                             <span className={styles.techName}>{app.name}</span>
                           </div>
                         </td>
@@ -376,7 +394,8 @@ export default function BloatwareSection() {
         <div className={styles.confirmOverlay}>
           <AlertTriangle size={16} />
           <span className={styles.confirmText}>
-            Remover {selectedInstalled.length} app(s)? Alguns podem ser reinstalados pela Microsoft Store.
+            Remover {selectedInstalled.length} app(s)? Alguns podem ser reinstalados pela Microsoft
+            Store.
           </span>
           <button className={styles.btnConfirm} onClick={handleRemove}>
             Confirmar Remoção
@@ -392,8 +411,7 @@ export default function BloatwareSection() {
         <span className={styles.selectionCount}>
           {selectedInstalled.length > 0
             ? `${selectedInstalled.length} selecionado(s)`
-            : 'Nenhum selecionado'
-          }
+            : 'Nenhum selecionado'}
         </span>
         <button
           className={styles.btnSecondary}

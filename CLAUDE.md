@@ -12,11 +12,15 @@ Informações que o Claude Code precisa saber ao executar qualquer prompt:
 - Persistência: JSON em %APPDATA%\FrameGuard/ (plans.json, backups.json, activity_log.json)
 - O app roda em Windows PT-BR — detecção baseada em texto deve ser agnóstica de idioma
 - Correções recentes: activity log, dashboard cache TTL/OnceLock, file locks (Restart Manager API), comandos async com spawn_blocking, detecção de GPU via registro direto (sem PowerShell), Power Plan por GUID (cross-locale)
-- Features recentes: WelcomeModal (primeira execução), busca global na sidebar (Ctrl+K), filtro por hardware/vendor, remoção de bloatware UWP, ponto de restauração automático, página de cleanup categorizado, página educacional (Learn)
+- Features recentes: WelcomeModal (primeira execução), busca global na sidebar (Ctrl+K), filtro por hardware/vendor, remoção de bloatware UWP, ponto de restauração automático, página de cleanup categorizado, página educacional (Learn), tema dark/light
+- Refatorações recentes: tweaks do backend divididos em submódulos por categoria (`commands/tweaks/`), health_check dividido em submódulos (`commands/health/`), `TweakMeta` builder (`utils/tweak_builder.rs`), `tweakRegistry.ts` centralizado no frontend, hooks extraídos (`useTweakPage`, `useDashboardData`), componentes Dashboard extraídos, CSS tokens extraídos em `tokens.css`
 
 Ao gerar código novo:
 - Rust: usar spawn_blocking para operações que envolvem PowerShell, WMI ou registry
+- Rust: usar `TweakMeta` em `utils/tweak_builder.rs` para metadados estáticos de tweaks novos
+- Rust: tweaks de otimização vão em `commands/tweaks/{categoria}.rs`, não em `optimizations.rs`
 - React: CSS Modules (.module.css) para estilos, Lucide para ícones
+- React: registrar tweaks novos no `tweakRegistry.ts` (fonte única de verdade para IDs/comandos)
 - Garantir que qualquer novo comando Tauri seja registrado em src-tauri/src/lib.rs
 
 ## Stack Tecnológico
@@ -41,12 +45,14 @@ Ao gerar código novo:
 ┌─────────────────────────────────────────────────────┐
 │  Frontend (React + TS)                              │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────────┐│
-│  │ Contexts  │ │  Hooks   │ │     10 Pages         ││
-│  │(Running,  │ │(Action,  │ │ Dashboard, Optim,    ││
-│  │ Toast)    │ │ Plan,    │ │ Privacy, Maint,      ││
-│  └──────────┘ │ HwFilter,│ │ Cleanup, Services,   ││
-│               │ Search)  │ │ Plans, Learn, About,  ││
-│               └──────────┘ │ Settings              ││
+│  │ Contexts  │ │  Hooks    │ │     10 Pages         ││
+│  │(Running,  │ │(Action,   │ │ Dashboard, Optim,    ││
+│  │ Toast)    │ │ Plan,     │ │ Privacy, Maint,      ││
+│  └──────────┘ │ HwFilter, │ │ Cleanup, Services,   ││
+│               │ Search,   │ │ Plans, Learn, About,  ││
+│               │ TweakPage,│ │ Settings              ││
+│               │ Dashboard)│ └──────────────────────┘│
+│               └──────────┘                          │
 │                             └──────────────────────┘│
 │          invoke() ↕ listen()                        │
 ├─────────────────────────────────────────────────────┤
@@ -54,9 +60,10 @@ Ao gerar código novo:
 │  ┌──────────────┐  ┌──────────────────────────────┐ │
 │  │  Commands     │  │  Utils                       │ │
 │  │  (system_info,│  │  (registry, command_runner,  │ │
-│  │   optim, priv,│  │   backup, plan_manager,      │ │
-│  │   health,     │  │   activity_log, file_locks,  │ │
-│  │   cleanup,    │  │   restore_point)             │ │
+│  │   tweaks/,    │  │   backup, plan_manager,      │ │
+│  │   health/,    │  │   activity_log, file_locks,  │ │
+│  │   privacy,    │  │   restore_point, wmi,        │ │
+│  │   cleanup,    │  │   tweak_builder)             │ │
 │  │   bloatware,  │  └──────────────────────────────┘ │
 │  │   restore_pt, │                                   │
 │  │   about)      │                                   │
@@ -77,6 +84,11 @@ FrameGuard/
 │   ├── components/
 │   │   ├── ActionCard/            # Card de ação com progresso, logs, resultado
 │   │   ├── BloatwareSection/      # Seção de remoção de apps UWP (usado em Privacy)
+│   │   ├── Dashboard/             # Subcomponentes extraídos do Dashboard
+│   │   │   ├── ActivityItem.tsx   # Item de atividade recente
+│   │   │   ├── QuickPlanCard.tsx  # Card de plano rápido
+│   │   │   ├── StatusBadges.tsx   # Badges de status (Admin, GameDVR, PowerPlan)
+│   │   │   └── QuickExecModal.tsx # Modal de execução rápida de plano
 │   │   ├── Layout/                # Layout principal (Sidebar + content + SearchBar)
 │   │   ├── SearchBar/             # Busca global na sidebar (Ctrl+K)
 │   │   ├── Toast/                 # Notificações toast (portal)
@@ -87,12 +99,15 @@ FrameGuard/
 │   │   ├── RunningContext.tsx      # Estado global de execução (Set<string>)
 │   │   └── ToastContext.tsx        # Fila de toasts (max 3)
 │   ├── data/
-│   │   └── searchIndex.ts         # Índice estático para busca global (tweaks, ações, planos)
+│   │   ├── searchIndex.ts         # Índice estático para busca global (tweaks, ações, planos)
+│   │   └── tweakRegistry.ts       # Registro centralizado de tweaks (IDs, comandos, categorias)
 │   ├── hooks/
 │   │   ├── useActionRunner.ts     # Execução de ações com streaming
+│   │   ├── useDashboardData.ts    # Estados e fetches do Dashboard (extraído)
 │   │   ├── useHardwareFilter.ts   # Filtragem de tweaks por vendor (GPU/CPU)
 │   │   ├── usePlanExecution.ts    # Execução de planos com progresso por item
 │   │   ├── useSearchHighlight.ts  # Scroll + highlight de itens encontrados via busca
+│   │   ├── useTweakPage.ts        # Lógica compartilhada de páginas de tweaks (Optim/Privacy)
 │   │   └── index.ts
 │   ├── pages/
 │   │   ├── Dashboard.tsx          # Hardware, status, atividade recente, planos rápidos
@@ -108,14 +123,16 @@ FrameGuard/
 │   ├── services/
 │   │   └── systemInfo.ts          # Wrappers invoke() para system info + getDetectedVendors
 │   ├── styles/
-│   │   └── globals.css            # CSS vars do tema, reset, scrollbar
+│   │   ├── tokens.css             # Design tokens (cores dark/light, accent, status, border)
+│   │   └── globals.css            # Reset, scrollbar, utilitários globais
 │   ├── types/
 │   │   ├── health.ts              # Interfaces compartilhadas (HealthCheckResult, etc.)
 │   │   ├── cleanup.ts             # Tipos do sistema de cleanup (CleanupItem, CleanupCategory)
 │   │   └── index.ts
 │   └── utils/
 │       ├── formatters.ts          # formatDuration, formatDate, formatSpaceFreed
-│       └── restorePoint.ts        # Lógica centralizada de ponto de restauração (cache 24h)
+│       ├── restorePoint.ts        # Lógica centralizada de ponto de restauração (cache 24h)
+│       └── theme.ts               # Gerenciamento de tema dark/light (localStorage)
 │
 ├── src-tauri/                     # Backend Rust
 │   ├── src/
@@ -124,9 +141,21 @@ FrameGuard/
 │   │   ├── commands/
 │   │   │   ├── mod.rs             # Declaração de módulos
 │   │   │   ├── system_info.rs     # HW info (cache), status (TTL 5s), usage, summary, vendors
-│   │   │   ├── optimizations.rs   # 21 tweaks (get_info, apply, revert, restore_default)
+│   │   │   ├── optimizations.rs   # Tipos TweakInfo, RiskLevel, EvidenceLevel + helpers
+│   │   │   ├── tweaks/            # Tweaks organizados por categoria
+│   │   │   │   ├── mod.rs         # Re-exporta todos os submódulos
+│   │   │   │   ├── gaming.rs      # Game Mode, VBS, Timer Resolution, Mouse Accel, FSO
+│   │   │   │   ├── gpu.rs         # HAGS, Game DVR, Xbox Overlay, MSI Mode, MPO, NVIDIA Telemetry
+│   │   │   │   ├── network.rs     # Delivery Optimization, Nagle
+│   │   │   │   ├── power.rs       # Ultimate Performance, Power Throttling, Hibernation
+│   │   │   │   ├── storage.rs     # Reserved Storage, NTFS Last Access
+│   │   │   │   └── visual.rs      # Wallpaper Compression, Sticky Keys, Bing Search
 │   │   │   ├── privacy.rs         # 4 tweaks de privacidade
-│   │   │   ├── health_check.rs    # DISM, SFC, chkdsk, SSD trim, DNS, temp cleanup
+│   │   │   ├── health/            # Ações de saúde do sistema (split de health_check.rs)
+│   │   │   │   ├── mod.rs         # Tipos (HealthCheckResult, CheckStatus) + helpers compartilhados
+│   │   │   │   ├── dism.rs        # DISM Cleanup, CheckHealth, ScanHealth, RestoreHealth
+│   │   │   │   ├── disk.rs        # SFC, chkdsk, SSD TRIM
+│   │   │   │   └── maintenance.rs # Flush DNS, limpeza de temporários, kill process
 │   │   │   ├── cleanup.rs         # scan_cleanup, execute_cleanup (categorizado)
 │   │   │   ├── bloatware.rs       # get_installed_uwp_apps, remove_uwp_apps
 │   │   │   ├── restore_point.rs   # create_restore_point (via PowerShell)
@@ -144,6 +173,7 @@ FrameGuard/
 │   │       ├── activity_log.rs    # FIFO max 100 (%APPDATA%\FrameGuard\activity_log.json)
 │   │       ├── file_locks.rs      # Restart Manager API — detecta processos travando arquivos
 │   │       ├── restore_point.rs   # Criação de ponto de restauração Windows
+│   │       ├── tweak_builder.rs   # TweakMeta — metadados estáticos de tweaks (reduz boilerplate)
 │   │       ├── wmi.rs             # Queries WMI
 │   │       └── elevated.rs        # is_elevated() via OpenProcessToken
 │   ├── Cargo.toml
@@ -179,6 +209,7 @@ FrameGuard/
 | `frameguard:cleanup:{id}`  | Último resultado de cleanup       |
 | `fg.firstRunSeen`          | Flag de primeira execução (WelcomeModal) |
 | `fg.restorePoint`          | Preferência de ponto de restauração automático |
+| `fg-theme`                 | Tema ativo: `"dark"` ou `"light"` (padrão: dark) |
 
 ### IDs dos Planos Built-in
 - `builtin_manutencao_basica` — Manutenção básica
@@ -230,10 +261,13 @@ run_command_with_progress(&app, "event_channel", cmd, args, display_label)
 
 ### Padrão de Tweak (Backend)
 Cada tweak segue o padrão:
-1. `get_{tweak}_info()` → `TweakInfo` (status atual, risk, evidence, backup)
-2. `disable_{tweak}()` ou `enable_{tweak}()` → aplica + cria backup
-3. `revert_{tweak}()` → restaura valor original do backup
-4. `restore_{tweak}_default()` → valor padrão Windows (sem backup)
+1. Declarar `const META: TweakMeta` com metadados estáticos (usa `utils/tweak_builder.rs`)
+2. `get_{tweak}_info()` → `META.build(is_applied)` retorna `TweakInfo` completo
+3. `disable_{tweak}()` ou `enable_{tweak}()` → aplica + cria backup
+4. `revert_{tweak}()` → restaura valor original do backup
+5. (opcional) `restore_{tweak}_default()` → valor padrão Windows (sem backup)
+
+Tweaks ficam em `commands/tweaks/{categoria}.rs` (gaming, gpu, network, power, storage, visual).
 
 ### Padrão de Tweak (Frontend)
 ```typescript
@@ -301,6 +335,7 @@ interface TweakInfo {
 enum Hive { CurrentUser, LocalMachine }
 
 // Tweaks
+struct TweakMeta { id, name, description, category, requires_restart, risk_level, evidence_level, default_value_description, hardware_filter }
 struct TweakInfo { id, name, description, category, is_applied, requires_restart, has_backup, risk_level, evidence_level, ... }
 enum RiskLevel { Low, Medium, High }
 enum EvidenceLevel { Proven, Plausible, Unproven }
@@ -352,8 +387,10 @@ interface ToastCtx { showToast(type, title, message?, duration?): void }
 // Hooks
 function useActionRunner(actions: ActionMeta[], lsKeyPrefix: string): { states, handleRun, toggleLog, toggleDetails, isRunning }
 function usePlanExecution(): { executingPlan, execState, execute, closeModal, cleanup }
-function useHardwareFilter(tweaks: TweakDef[]): { filteredTweaks, detectedVendors, loading }
-function useSearchHighlight(): void  // auto-scroll + highlight via URL params (?section=&highlight=)
+function useHardwareFilter(): { filterCompatible, getVendorBadge }
+function useSearchHighlight(opts): void  // auto-scroll + highlight via URL params (?section=&highlight=)
+function useDashboardData(cleanupPlanExec): DashboardData  // estados + fetches do Dashboard
+function useTweakPage(config: TweakPageConfig): UseTweakPageReturn  // lógica compartilhada Optim/Privacy
 
 // Ação
 interface ActionMeta { id, name, Icon, description, technicalDetails, estimatedDuration, eventChannel, command, invokeArgs?, requiresInternet?, requiresRestart?, category }
@@ -362,31 +399,40 @@ interface ActionState { running, log: LogLine[], progress, showLog, showDetails,
 
 ## Design System
 
-### Cores (CSS Custom Properties)
+### Design Tokens (`src/styles/tokens.css`)
+
+Tokens definidos via `[data-theme]` no `:root`. Dark é o padrão.
+
 ```css
---color-bg-primary:    #0a0e17;        /* Fundo principal */
---color-bg-secondary:  #111827;        /* Fundo secundário */
---color-bg-card:       rgba(17,24,39,0.6); /* Card glassmorphism */
---color-accent:        #22d3ee;        /* Cyan (ações primárias) */
---color-accent-hover:  #06b6d4;        /* Cyan hover */
---color-text-primary:  #f1f5f9;        /* Texto principal */
---color-text-secondary:#94a3b8;        /* Texto secundário */
---color-border:        rgba(148,163,184,0.12);
---color-success:       #34d399;        /* Verde */
---color-warning:       #fbbf24;        /* Amarelo */
---color-error:         #f87171;        /* Vermelho */
---glass-blur:          blur(12px);     /* Glassmorphism */
---radius-sm/md/lg:     6px/10px/16px;
---transition-fast:     150ms ease;
---transition-normal:   250ms ease;
+/* Fundos */
+--bg-base / --bg-surface / --bg-elevated / --bg-modal
+/* Accent */
+--accent / --accent-hover / --accent-glow
+/* Texto */
+--text-primary / --text-secondary / --text-muted
+/* Status */
+--status-green / --status-amber / --status-red
+/* Sidebar */
+--sidebar-top / --sidebar-bottom
+/* Borda */
+--border
+/* RGB triplets (para compor alpha) */
+--accent-rgb / --surface-rgb / --muted-rgb
 ```
+
+### Tema Dark/Light
+
+- Tokens em `src/styles/tokens.css` com seletores `[data-theme="dark"]` e `[data-theme="light"]`
+- Gerenciamento em `src/utils/theme.ts`: `initTheme()`, `applyTheme()`, `getStoredTheme()`
+- `initTheme()` chamado em `main.tsx` antes do render (evita flash)
+- Persistido em `localStorage` (`fg-theme`, padrão: `dark`)
 
 ### Princípios Visuais
 - **Frutiger Aero moderno** — glassmorphism sutil, gradientes suaves
 - Fonte: Inter, Segoe UI, system-ui
 - Cards com `backdrop-filter: blur(12px)`
 - Bordas arredondadas consistentes (6-16px)
-- Tema escuro com accent cyan
+- Suporte a tema escuro e claro com accent cyan
 - CSS Modules para isolamento de estilos por componente
 
 ## Scripts de Build
@@ -559,19 +605,19 @@ Princípios críticos para não degradar a experiência de abertura do app:
 ## Adicionando um Novo Tweak (Checklist)
 
 ### Backend (Rust)
-1. Criar funções em `commands/optimizations.rs` ou `commands/privacy.rs`:
-   - `get_{tweak}_info() -> Result<TweakInfo, String>`
-   - `disable_{tweak}() -> Result<(), String>` (ou `enable_`)
-   - `revert_{tweak}() -> Result<(), String>`
-   - (opcional) `restore_{tweak}_default() -> Result<(), String>`
-2. Registrar no `tauri::generate_handler![]` em `lib.rs`
-3. Usar `backup_before_apply()` antes de alterar registro/sistema
-4. OBRIGATÓRIO: usar `pub async fn` + `tokio::task::spawn_blocking` — comandos sync congelam a UI
+1. Criar arquivo ou adicionar ao submódulo correto em `commands/tweaks/{categoria}.rs`
+2. Declarar `const META: TweakMeta` com metadados estáticos (usando `utils/tweak_builder.rs`)
+3. Implementar `get_{tweak}_info()` → `META.build(is_applied)`
+4. Implementar `disable_{tweak}()` / `enable_{tweak}()` + `revert_{tweak}()`
+5. Usar `backup_before_apply()` antes de alterar registro/sistema
+6. Registrar no `tauri::generate_handler![]` em `lib.rs`
+7. OBRIGATÓRIO: usar `pub async fn` + `tokio::task::spawn_blocking` — comandos sync congelam a UI
 
 ### Frontend (React)
-1. Adicionar entrada no array de tweaks da página correspondente
-2. TweakCard já lida com apply/revert/restore automaticamente
-3. Adicionar `tweak_id` nos planos built-in se relevante (`plan_manager.rs`)
+1. Adicionar entrada no `tweakRegistry.ts` (fonte única de verdade)
+2. Adicionar o ID no array `tweakIds` da seção correspondente na página (Optimizations/Privacy)
+3. `useTweakPage` + `TweakCard` já lidam com apply/revert/restore automaticamente
+4. Adicionar `tweak_id` nos planos built-in se relevante (`plan_manager.rs`)
 
 ### Planos Built-in
 
@@ -586,14 +632,14 @@ Princípios críticos para não degradar a experiência de abertura do app:
 - [ ] Backup é criado corretamente (verificar em Configurações > Ver backups)
 - [ ] Reaplicar tweak já aplicado não dá erro (backup update)
 - [ ] Filtro de hardware funciona (tweak some se hardware incompatível)
-- [ ] Busca global encontra o tweak (verificar searchIndex.ts)
+- [ ] Busca global encontra o tweak (verificar searchIndex.ts e tweakRegistry.ts)
 
 ## Adicionando uma Nova Ação de Manutenção (Checklist)
 
 ### Backend
-1. Criar função `async fn run_{action}(app: AppHandle) -> Result<HealthCheckResult, String>` em `health_check.rs`
+1. Criar função no submódulo correto em `commands/health/` (dism.rs, disk.rs ou maintenance.rs)
 2. Usar `run_command_with_progress` com event channel dedicado
-3. Registrar no `generate_handler![]`
+3. Registrar no `generate_handler![]` em `lib.rs`
 
 ### Frontend
 1. Adicionar `ActionMeta` no array da página Maintenance

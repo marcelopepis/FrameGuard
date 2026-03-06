@@ -1,31 +1,78 @@
-// Componente ActionCard compartilhado entre as páginas de Saúde do Sistema e Limpeza.
-//
-// Recebe os metadados e o estado da ação via props e renderiza o card completo:
-// ícone, descrição, detalhes técnicos expansíveis, barra de progresso, log em
-// tempo real e botão de execução.
+/**
+ * Componente ActionCard compartilhado entre as páginas de Saúde do Sistema e Limpeza.
+ *
+ * Recebe os metadados e o estado da ação via props e renderiza o card completo:
+ * ícone, descrição, detalhes técnicos expansíveis, barra de progresso, log em
+ * tempo real e botão de execução.
+ *
+ * @module ActionCard
+ */
 
 import { useState, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  Globe, RefreshCw,
-  ChevronDown, ChevronUp, Loader2,
-  CheckCircle2, XCircle, AlertTriangle, Play,
-  Lock, X as XIcon,
+  Globe,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Play,
+  Lock,
+  X as XIcon,
 } from 'lucide-react';
 import styles from './ActionCard.module.css';
 import type { ActionMeta, ActionState, LockingProcessInfo } from '../../types/health';
 import { formatDate, formatDuration, formatSpaceFreed } from '../../utils/formatters';
 
+/** Props do componente `ActionCard`. */
 interface ActionCardProps {
+  /** Metadados da ação (nome, descrição, comando, canal de eventos) */
   meta: ActionMeta;
+  /** Estado atual da ação (running, log, progresso, resultado) */
   state: ActionState;
+  /** Callback ao clicar "Executar" */
   onRun: () => void;
+  /** Callback ao clicar "Ver log" / "Ocultar log" */
   onToggleLog: () => void;
+  /** Callback ao clicar "Saiba mais" / "Menos detalhes" */
   onToggleDetails: () => void;
+  /** Desabilita o botão de execução quando outro comando está rodando */
   disabled?: boolean;
 }
 
-export function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, disabled }: ActionCardProps) {
+/**
+ * Card de ação de manutenção com progresso, log em tempo real e resultado persistido.
+ *
+ * Exibe barra de progresso (determinada ou indeterminada) durante a execução,
+ * resultado com ícone de status após conclusão, e log expansível com output
+ * linha a linha do comando.
+ *
+ * @param props - Props do card (ver {@link ActionCardProps})
+ * @returns Elemento do card completo com progresso, resultado e log
+ *
+ * @example
+ * ```tsx
+ * <ActionCard
+ *   meta={actionMeta}
+ *   state={states[actionMeta.id]}
+ *   onRun={() => handleRun(actionMeta)}
+ *   onToggleLog={() => toggleLog(actionMeta.id)}
+ *   onToggleDetails={() => toggleDetails(actionMeta.id)}
+ *   disabled={isRunning}
+ * />
+ * ```
+ */
+export function ActionCard({
+  meta,
+  state,
+  onRun,
+  onToggleLog,
+  onToggleDetails,
+  disabled,
+}: ActionCardProps) {
   const logRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll para a última linha conforme o log cresce
@@ -43,12 +90,13 @@ export function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, d
     : null;
 
   const statusClass = result
-    ? { success: styles.statusSuccess, warning: styles.statusWarning, error: styles.statusError }[result.status]
+    ? { success: styles.statusSuccess, warning: styles.statusWarning, error: styles.statusError }[
+        result.status
+      ]
     : '';
 
   return (
     <div className={`${styles.actionCard} ${state.running ? styles.actionCardRunning : ''}`}>
-
       {/* ── Topo: ícone + info ── */}
       <div className={styles.cardTop}>
         <div className={styles.cardIcon}>
@@ -111,7 +159,9 @@ export function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, d
               <div className={styles.resultContent}>
                 <span className={styles.resultMessage}>{result.message}</span>
                 <div className={styles.resultMeta}>
-                  <span className={styles.resultDuration}>{formatDuration(result.duration_seconds)}</span>
+                  <span className={styles.resultDuration}>
+                    {formatDuration(result.duration_seconds)}
+                  </span>
                   {result.space_freed_mb !== null && result.space_freed_mb > 0 && (
                     <span className={styles.resultSpace}>
                       {formatSpaceFreed(result.space_freed_mb)} liberados
@@ -141,13 +191,19 @@ export function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, d
             </div>
           ) : (
             <div className={styles.btnRunWrap}>
-              <button className={styles.btnRun} onClick={!disabled ? onRun : undefined} disabled={disabled}>
+              <button
+                className={styles.btnRun}
+                onClick={!disabled ? onRun : undefined}
+                disabled={disabled}
+              >
                 <Play size={13} />
                 Executar
               </button>
               {disabled && (
                 <div className={styles.btnRunTip}>
-                  Outro comando em execução.<br />Aguarde a conclusão.
+                  Outro comando em execução.
+                  <br />
+                  Aguarde a conclusão.
                 </div>
               )}
             </div>
@@ -171,19 +227,21 @@ export function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, d
             <div
               key={i}
               className={`${styles.logLine} ${
-                line.type === 'stderr'     ? styles.logStderr  :
-                line.type === 'started'   ? styles.logSystem  :
-                line.type === 'completed' ? styles.logSystem  :
-                line.type === 'error'     ? styles.logError   :
-                styles.logStdout
+                line.type === 'stderr'
+                  ? styles.logStderr
+                  : line.type === 'started'
+                    ? styles.logSystem
+                    : line.type === 'completed'
+                      ? styles.logSystem
+                      : line.type === 'error'
+                        ? styles.logError
+                        : styles.logStdout
               }`}
             >
               {line.type === 'started' ? `$ ${line.text}` : line.text}
             </div>
           ))}
-          {state.running && (
-            <div className={`${styles.logLine} ${styles.logCursor}`}>▋</div>
-          )}
+          {state.running && <div className={`${styles.logLine} ${styles.logCursor}`}>▋</div>}
         </div>
       )}
     </div>
@@ -192,8 +250,16 @@ export function ActionCard({ meta, state, onRun, onToggleLog, onToggleDetails, d
 
 // ─── Painel de processos que travam arquivos ────────────────────────────────
 
+/**
+ * Painel que lista processos que travam arquivos, com botões para encerrá-los.
+ *
+ * Exibido abaixo do ActionCard quando a limpeza de temporários detecta
+ * processos mantendo handles abertos via Restart Manager API.
+ */
 function LockingProcessesPanel({
-  processes, onRetry, disabled,
+  processes,
+  onRetry,
+  disabled,
 }: {
   processes: LockingProcessInfo[];
   onRetry: () => void;
@@ -204,20 +270,28 @@ function LockingProcessesPanel({
   const [errors, setErrors] = useState<Map<number, string>>(new Map());
 
   async function handleKill(pid: number) {
-    setKilling(prev => new Set(prev).add(pid));
-    setErrors(prev => { const m = new Map(prev); m.delete(pid); return m; });
+    setKilling((prev) => new Set(prev).add(pid));
+    setErrors((prev) => {
+      const m = new Map(prev);
+      m.delete(pid);
+      return m;
+    });
 
     try {
       await invoke<string>('kill_process', { pid });
-      setKilled(prev => new Set(prev).add(pid));
+      setKilled((prev) => new Set(prev).add(pid));
     } catch (e) {
-      setErrors(prev => new Map(prev).set(pid, String(e)));
+      setErrors((prev) => new Map(prev).set(pid, String(e)));
     } finally {
-      setKilling(prev => { const s = new Set(prev); s.delete(pid); return s; });
+      setKilling((prev) => {
+        const s = new Set(prev);
+        s.delete(pid);
+        return s;
+      });
     }
   }
 
-  const allKilled = processes.every(p => killed.has(p.pid));
+  const allKilled = processes.every((p) => killed.has(p.pid));
 
   return (
     <div className={styles.lockPanel}>
@@ -227,11 +301,16 @@ function LockingProcessesPanel({
       </div>
 
       <div className={styles.lockList}>
-        {processes.map(p => (
-          <div key={p.pid} className={`${styles.lockRow} ${killed.has(p.pid) ? styles.lockRowKilled : ''}`}>
+        {processes.map((p) => (
+          <div
+            key={p.pid}
+            className={`${styles.lockRow} ${killed.has(p.pid) ? styles.lockRowKilled : ''}`}
+          >
             <div className={styles.lockInfo}>
               <span className={styles.lockName}>{p.name}</span>
-              <span className={styles.lockMeta}>PID {p.pid} · {p.file_count} arquivo{p.file_count !== 1 ? 's' : ''}</span>
+              <span className={styles.lockMeta}>
+                PID {p.pid} · {p.file_count} arquivo{p.file_count !== 1 ? 's' : ''}
+              </span>
             </div>
 
             {killed.has(p.pid) ? (
@@ -255,19 +334,13 @@ function LockingProcessesPanel({
               </button>
             )}
 
-            {errors.has(p.pid) && (
-              <span className={styles.lockError}>{errors.get(p.pid)}</span>
-            )}
+            {errors.has(p.pid) && <span className={styles.lockError}>{errors.get(p.pid)}</span>}
           </div>
         ))}
       </div>
 
       {allKilled && (
-        <button
-          className={styles.lockRetryBtn}
-          onClick={onRetry}
-          disabled={disabled}
-        >
+        <button className={styles.lockRetryBtn} onClick={onRetry} disabled={disabled}>
           <Play size={12} strokeWidth={2.5} />
           Executar limpeza novamente
         </button>

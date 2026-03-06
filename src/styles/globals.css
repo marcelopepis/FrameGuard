@@ -9,35 +9,35 @@
 }
 
 :root {
-  /* Cores principais */
-  --color-bg-primary: #0a0e17;
-  --color-bg-secondary: #111827;
-  --color-bg-card: rgba(17, 24, 39, 0.6);
-  --color-bg-card-hover: rgba(17, 24, 39, 0.8);
+  /* Cores — alias dos tokens (tokens.css define dark/light) */
+  --color-bg-primary: var(--bg-base);
+  --color-bg-secondary: var(--bg-surface);
+  --color-bg-card: rgba(var(--surface-rgb), 0.6);
+  --color-bg-card-hover: rgba(var(--surface-rgb), 0.8);
 
-  /* Accent azul/cyan */
-  --color-accent: #22d3ee;
-  --color-accent-hover: #06b6d4;
-  --color-accent-glow: rgba(34, 211, 238, 0.15);
-  --color-accent-subtle: rgba(34, 211, 238, 0.08);
+  /* Accent */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-subtle: rgba(var(--accent-rgb), 0.08);
 
   /* Texto */
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
 
   /* Bordas */
-  --color-border: rgba(148, 163, 184, 0.12);
-  --color-border-hover: rgba(34, 211, 238, 0.3);
+  --color-border: rgba(var(--muted-rgb), 0.12);
+  --color-border-hover: rgba(var(--accent-rgb), 0.3);
 
   /* Status */
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
+  --color-success: var(--status-green);
+  --color-warning: var(--status-amber);
+  --color-error: var(--status-red);
 
   /* Glassmorphism */
   --glass-blur: blur(12px);
-  --glass-bg: rgba(17, 24, 39, 0.5);
+  --glass-bg: rgba(var(--surface-rgb), 0.5);
   --glass-border: 1px solid var(--color-border);
 
   /* Bordas arredondadas */
@@ -50,7 +50,12 @@
   --transition-normal: 250ms ease;
 
   /* Tipografia */
-  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family:
+    'Inter',
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 16px;
   line-height: 1.5;
   font-weight: 400;
@@ -120,7 +125,9 @@ button {
 .searchHighlight {
   outline: 2px solid var(--color-accent) !important;
   outline-offset: -2px;
-  box-shadow: 0 0 16px rgba(34, 211, 238, 0.2) !important;
+  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.2) !important;
   border-radius: var(--radius-md);
-  transition: outline 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    outline 0.3s ease,
+    box-shadow 0.3s ease;
 }
