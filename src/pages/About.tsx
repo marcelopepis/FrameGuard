@@ -4,8 +4,9 @@
 // licença GPL v3 e referência sutil à Volt.
 
 import { useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 import {
   Github,
   ExternalLink,
@@ -13,6 +14,7 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
+  Download,
   X as XIcon,
   Loader2,
   Crosshair,
@@ -26,30 +28,27 @@ import FrameGuardIcon from '../components/FrameGuardIcon';
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 const GITHUB_URL = 'https://github.com/marcelopepis/FrameGuard';
+const RELEASES_URL = 'https://github.com/marcelopepis/FrameGuard/releases';
 const AUTHOR_NAME = 'Marcelo Pepis';
 const AUTHOR_URL = 'https://github.com/marcelopepis';
 
 // ── Tipos ───────────────────────────────────────────────────────────────────────
 
-interface UpdateCheckResult {
-  current_version: string;
-  latest_version: string;
-  is_update_available: boolean;
-  release_url: string;
-  release_notes: string;
-}
+type UpdaterState =
+  | { status: 'idle' }
+  | { status: 'checking' }
+  | { status: 'up-to-date' }
+  | { status: 'available'; version: string; body: string | null }
+  | { status: 'downloading'; downloaded: number; total: number | null }
+  | { status: 'installing' }
+  | { status: 'error'; message: string };
 
 // ── Componente ──────────────────────────────────────────────────────────────────
 
 export default function About() {
-  const [updateCheck, setUpdateCheck] = useState<
-    | { loading: true }
-    | { loading: false; result: UpdateCheckResult }
-    | { loading: false; error: string }
-    | null
-  >(null);
+  const [updaterState, setUpdaterState] = useState<UpdaterState>({ status: 'idle' });
 
   async function handleOpenUrl(url: string) {
     try {
@@ -57,13 +56,54 @@ export default function About() {
     } catch {}
   }
 
-  async function handleCheckUpdates() {
-    setUpdateCheck({ loading: true });
+  async function handleCheckUpdate() {
+    setUpdaterState({ status: 'checking' });
     try {
-      const result = await invoke<UpdateCheckResult>('check_for_updates');
-      setUpdateCheck({ loading: false, result });
+      const update = await check();
+      if (!update?.available) {
+        setUpdaterState({ status: 'up-to-date' });
+        return;
+      }
+      setUpdaterState({
+        status: 'available',
+        version: update.version,
+        body: update.body ?? null,
+      });
     } catch (e) {
-      setUpdateCheck({ loading: false, error: String(e) });
+      setUpdaterState({ status: 'error', message: String(e) });
+    }
+  }
+
+  async function handleInstallUpdate() {
+    if (updaterState.status !== 'available') return;
+
+    try {
+      const update = await check();
+      if (!update?.available) return;
+
+      setUpdaterState({ status: 'downloading', downloaded: 0, total: null });
+
+      await update.downloadAndInstall((event) => {
+        if (event.event === 'Started') {
+          setUpdaterState({
+            status: 'downloading',
+            downloaded: 0,
+            total: event.data.contentLength ?? null,
+          });
+        } else if (event.event === 'Progress') {
+          setUpdaterState((prev) =>
+            prev.status === 'downloading'
+              ? { ...prev, downloaded: prev.downloaded + event.data.chunkLength }
+              : prev,
+          );
+        } else if (event.event === 'Finished') {
+          setUpdaterState({ status: 'installing' });
+        }
+      });
+
+      await relaunch();
+    } catch (e) {
+      setUpdaterState({ status: 'error', message: String(e) });
     }
   }
 
@@ -215,53 +255,109 @@ export default function About() {
 
         {/* ════════ LINKS E METADADOS ════════ */}
         <div className={styles.card}>
-          {/* Verificar atualizações */}
+          {/* ── Seção do Updater ── */}
           <div className={styles.updateSection}>
             <div className={styles.updateInfo}>
-              <div className={styles.updateLabel}>Verificar Atualizações</div>
+              <div className={styles.updateLabel}>Atualizações</div>
               <div className={styles.updateDesc}>
-                Confere a versão mais recente publicada no GitHub
+                Verifica e instala a versão mais recente automaticamente
               </div>
             </div>
-            {updateCheck?.loading ? (
+            {updaterState.status === 'checking' ? (
               <span className={styles.actionBusy}>
                 <Loader2 size={13} className={styles.spinner} /> Verificando...
               </span>
+            ) : updaterState.status === 'downloading' || updaterState.status === 'installing' ? (
+              <span className={styles.actionBusy}>
+                <Loader2 size={13} className={styles.spinner} />
+                {updaterState.status === 'installing' ? 'Instalando...' : 'Baixando...'}
+              </span>
             ) : (
-              <button className={styles.btnPrimary} onClick={handleCheckUpdates}>
+              <button className={styles.btnPrimary} onClick={handleCheckUpdate}>
                 <RefreshCw size={13} /> Verificar
               </button>
             )}
           </div>
 
-          {/* Resultado da verificação */}
-          {updateCheck &&
-            !updateCheck.loading &&
-            ('error' in updateCheck ? (
-              <div className={styles.updateError}>
-                <AlertCircle size={15} />
-                <span>Erro ao verificar: {updateCheck.error}</span>
-              </div>
-            ) : updateCheck.result.is_update_available ? (
-              <div className={styles.updateAvailable}>
-                <RefreshCw size={15} />
-                <span>
-                  Nova versão <strong>{updateCheck.result.latest_version}</strong> disponível!
-                  (atual: {updateCheck.result.current_version})
-                </span>
-                <button
-                  className={styles.updateLink}
-                  onClick={() => handleOpenUrl(updateCheck.result.release_url)}
-                >
-                  Baixar
-                </button>
-              </div>
-            ) : (
-              <div className={styles.updateUpToDate}>
-                <CheckCircle2 size={15} />
-                <span>Você está na versão mais recente ({updateCheck.result.current_version})</span>
-              </div>
-            ))}
+          {/* Resultado da verificação — seção dedicada */}
+          {updaterState.status !== 'idle' && updaterState.status !== 'checking' && (
+            <div className={styles.updaterSection}>
+              {/* Up-to-date */}
+              {updaterState.status === 'up-to-date' && (
+                <div className={styles.updaterCard}>
+                  <div className={`${styles.statusRow} ${styles.successText}`}>
+                    <CheckCircle2 size={16} />
+                    <span>Você está na versão mais recente (v{APP_VERSION})</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Update available */}
+              {updaterState.status === 'available' && (
+                <div className={styles.updateAvailableCard}>
+                  <div className={styles.updaterTitle}>
+                    <Download size={16} />
+                    Nova versão v{updaterState.version} disponível
+                  </div>
+                  <div className={styles.statusRow}>
+                    <span>Versão atual: v{APP_VERSION}</span>
+                  </div>
+                  {updaterState.body && (
+                    <div className={styles.changelogText}>{updaterState.body}</div>
+                  )}
+                  <button className={styles.btnPrimary} onClick={handleInstallUpdate}>
+                    <Download size={13} /> Baixar e instalar
+                  </button>
+                </div>
+              )}
+
+              {/* Downloading */}
+              {updaterState.status === 'downloading' && (
+                <div className={styles.updaterCard}>
+                  <div className={styles.statusRow}>
+                    <Loader2 size={16} className={styles.spinner} />
+                    <span>Baixando atualização...</span>
+                  </div>
+                  {updaterState.total != null && updaterState.total > 0 && (
+                    <div className={styles.progressBar}>
+                      <div
+                        className={styles.progressFill}
+                        style={{
+                          width: `${Math.min(100, (updaterState.downloaded / updaterState.total) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Installing */}
+              {updaterState.status === 'installing' && (
+                <div className={styles.updaterCard}>
+                  <div className={styles.statusRow}>
+                    <Loader2 size={16} className={styles.spinner} />
+                    <span>Instalando... o app será reiniciado em instantes</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Error */}
+              {updaterState.status === 'error' && (
+                <div className={styles.updaterCard}>
+                  <div className={`${styles.statusRow} ${styles.errorText}`}>
+                    <AlertCircle size={16} />
+                    <span>Erro ao verificar: {updaterState.message}</span>
+                  </div>
+                  <button
+                    className={styles.updateLink}
+                    onClick={() => handleOpenUrl(RELEASES_URL)}
+                  >
+                    Ver releases no GitHub
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className={styles.divider} />
 

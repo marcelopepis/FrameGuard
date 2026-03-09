@@ -35,11 +35,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'FrameGuard v__VERSION__'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'FrameGuard ${{ github.ref_name }}'
           releaseBody: |
-            ## FrameGuard v__VERSION__
+            ## FrameGuard ${{ github.ref_name }}
 
             ### Instalação
             1. Baixe o arquivo `.exe` abaixo
@@ -53,3 +55,4 @@ jobs:
             _Changelog completo em breve._
           releaseDraft: true
           prerelease: false
+          updaterJsonKeepUniversal: true

@@ -1,6 +1,6 @@
 [package]
 name = "frameguard"
-version = "0.2.0"
+version = "0.2.1"
 description = "Utilitário de manutenção e otimização Windows 11 para gamers"
 authors = ["Marcelo Pepis"]
 license = "GPL-3.0-or-later"
@@ -23,6 +23,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 winreg = "0.55"

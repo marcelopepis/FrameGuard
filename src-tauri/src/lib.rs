@@ -12,6 +12,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|_app| {
             // Pre-warm de TODOS os caches estáticos em background.
             // Roda em paralelo — a janela abre imediatamente enquanto

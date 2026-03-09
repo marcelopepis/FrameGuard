@@ -1,7 +1,7 @@
 {
   "name": "frameguard",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "GPL-3.0-or-later",
   "author": "Marcelo Pepis",
   "repository": "https://github.com/marcelopepis/FrameGuard",
@@ -20,13 +20,15 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.0",
     "lucide-react": "^0.564.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.13.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
+    "@tauri-apps/cli": "^2.10.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@typescript-eslint/eslint-plugin": "^8.56.1",

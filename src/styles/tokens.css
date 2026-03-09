@@ -52,9 +52,9 @@
   --accent-glow: rgba(8, 145, 178, 0.12);
 
   /* Texto */
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #4B5563;
 
   /* Status */
   --status-green: #059669;
@@ -66,7 +66,7 @@
   --sidebar-bottom: #ded8cb;
 
   /* Borda */
-  --border: rgba(0, 0, 0, 0.1);
+  --border: rgba(0, 0, 0, 0.18);
 
   /* RGB triplets */
   --accent-rgb: 8, 145, 178;

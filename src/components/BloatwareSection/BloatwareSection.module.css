@@ -154,6 +154,27 @@
   pointer-events: none;
 }
 
+:global(:root[data-theme='light']) .rowNotInstalled {
+  opacity: 0.8;
+}
+
+:global(:root[data-theme='light']) .rowNotInstalled .displayName {
+  color: var(--color-text-secondary);
+}
+
+:global(:root[data-theme='light']) .rowNotInstalled .techName,
+:global(:root[data-theme='light']) .rowNotInstalled .descCell {
+  color: var(--color-text-muted);
+}
+
+:global(:root[data-theme='light']) .rowNotInstalled .badge {
+  opacity: 0.7;
+}
+
+:global(:root[data-theme='light']) .rowNotInstalled .checkbox:disabled {
+  opacity: 0.5;
+}
+
 .rowKeep td {
   opacity: 0.6;
 }
