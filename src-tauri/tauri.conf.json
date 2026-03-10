@@ -29,9 +29,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERDNzU3RjFBRkQ4QjFDMUQKUldRZEhJdjlHbjkxM01BUWV4alk5ck5GbG5CVmExdXBkVjlkOUxxSTdjL0ZOZlpNakZZK2xhL2QK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE2NjUzOTUzNUMwNDRFMDcKUldRSFRnUmNVemxsRmd2TytpcFpSL25LVnYxQnBvWit5bXE1YXNNMlpIUlRETWEvMGRLaEZNa2IK",
       "endpoints": [
-        "https://github.com/OWNER/frameguard/releases/latest/download/latest.json"
+        "https://github.com/marcelopepis/FrameGuard/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
