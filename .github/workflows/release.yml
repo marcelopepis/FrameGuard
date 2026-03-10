@@ -73,4 +73,4 @@ jobs:
             _Changelog completo em breve._
           releaseDraft: false
           prerelease: false
-          updaterJsonKeepUniversal: true
+          updaterJsonPreferNsis: true
