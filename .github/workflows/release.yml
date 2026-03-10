@@ -53,6 +53,6 @@ jobs:
 
             ---
             _Changelog completo em breve._
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           updaterJsonKeepUniversal: true
