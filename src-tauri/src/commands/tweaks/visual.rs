@@ -1,13 +1,14 @@
-//! Tweaks visuais e UX: Wallpaper Compression, Sticky Keys, Bing Search.
+//! Tweaks visuais e UX: Wallpaper Compression, Sticky Keys, Bing Search, Classic Right Click.
 
 use serde_json::{json, Value};
 
-use crate::commands::optimizations::{EvidenceLevel, RiskLevel, TweakInfo};
+use crate::commands::optimizations::{backup_info, EvidenceLevel, RiskLevel, TweakInfo};
 use crate::utils::backup::{
     backup_before_apply, restore_from_backup, OriginalValue, TweakCategory,
 };
 use crate::utils::registry::{
-    delete_value, key_exists, read_dword, read_string, write_dword, write_string, Hive,
+    delete_subkey_all, delete_value, key_exists, read_dword, read_string, subkey_exists,
+    write_dword, write_string, Hive,
 };
 use crate::utils::tweak_builder::TweakMeta;
 
@@ -310,6 +311,122 @@ pub fn revert_bing_search() -> Result<(), String> {
             ));
         }
     }
+
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK — Classic Right Click Menu (Windows 11)
+//
+// HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32
+//   Default value = "" (string vazia) → restaura menu completo do Win10
+// Somente Windows 11 (build ≥ 22000)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// CLSID pai que ativa o menu clássico quando InprocServer32 existe com valor default vazio
+const CLASSIC_CTX_CLSID_PATH: &str =
+    r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+const CLASSIC_CTX_INPROC_PATH: &str =
+    r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32";
+
+/// Verifica o CurrentBuildNumber para determinar se estamos em Windows 11.
+fn is_windows_11() -> bool {
+    let build_str: String = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+        .and_then(|k| k.get_value("CurrentBuildNumber"))
+        .unwrap_or_default();
+    let build: u32 = build_str.trim().parse().unwrap_or(0);
+    build >= 22000
+}
+
+/// Verifica se o tweak está aplicado (a subchave InprocServer32 existe).
+fn get_classic_right_click_is_applied() -> Result<bool, String> {
+    subkey_exists(Hive::CurrentUser, CLASSIC_CTX_INPROC_PATH)
+}
+
+#[tauri::command]
+pub async fn get_classic_right_click_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_classic_right_click_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("classic_right_click");
+
+        Ok(TweakInfo {
+            id: "classic_right_click".to_string(),
+            name: "Menu de Contexto Clássico (Win11)".to_string(),
+            description: "Restaura o menu de contexto completo do Windows 10 no Windows 11. \
+                Por padrão, o Win11 exibe um menu reduzido com \"Mostrar mais opções\" — \
+                este tweak restaura o menu completo diretamente. Reinicia o Explorer \
+                automaticamente ao aplicar e ao reverter."
+                .to_string(),
+            category: "visual".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows 11: menu de contexto moderno com \"Mostrar mais opções\""
+                    .to_string(),
+            hardware_filter: None,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Reinicia o Explorer (taskkill + spawn) para aplicar a mudança imediatamente.
+fn restart_explorer() {
+    std::process::Command::new("taskkill")
+        .args(["/F", "/IM", "explorer.exe"])
+        .output()
+        .ok();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::process::Command::new("explorer.exe").spawn().ok();
+}
+
+/// Aplica o menu de contexto clássico criando a chave InprocServer32 com valor default vazio.
+#[tauri::command]
+pub fn apply_classic_right_click() -> Result<(), String> {
+    if !is_windows_11() {
+        return Err("Este tweak é exclusivo para Windows 11 (build ≥ 22000)".to_string());
+    }
+
+    if get_classic_right_click_is_applied()? {
+        return Err("Tweak 'classic_right_click' já está aplicado".to_string());
+    }
+
+    // O backup registra se a chave existia (sempre false neste caso, pois já checamos)
+    backup_before_apply(
+        "classic_right_click",
+        TweakCategory::Registry,
+        "Classic Right Click: CLSID InprocServer32 override",
+        OriginalValue {
+            path: format!("HKEY_CURRENT_USER\\{}", CLASSIC_CTX_CLSID_PATH),
+            key: "InprocServer32".to_string(),
+            value: None, // Chave não existia antes
+            value_type: "SUBKEY".to_string(),
+        },
+        json!("created"),
+    )?;
+
+    // Criar a subchave InprocServer32 e definir o valor padrão (Default) como string vazia
+    write_string(Hive::CurrentUser, CLASSIC_CTX_INPROC_PATH, "", "")?;
+
+    restart_explorer();
+
+    Ok(())
+}
+
+/// Reverte o menu de contexto para o moderno do Win11 deletando a chave CLSID inteira.
+#[tauri::command]
+pub fn revert_classic_right_click() -> Result<(), String> {
+    let _original = restore_from_backup("classic_right_click")?;
+
+    // Deletar a chave CLSID inteira (e suas subchaves)
+    delete_subkey_all(Hive::CurrentUser, CLASSIC_CTX_CLSID_PATH)?;
+
+    restart_explorer();
 
     Ok(())
 }

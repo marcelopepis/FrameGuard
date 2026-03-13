@@ -51,6 +51,8 @@ pub struct DetectedVendors {
     pub gpu_vendor: String,
     /// `"intel"`, `"amd"` ou `"unknown"`
     pub cpu_vendor: String,
+    /// Build number do Windows (ex: 22631 para Win11 23H2). >= 22000 = Windows 11.
+    pub windows_build: u32,
 }
 
 /// Coleta dados estáticos de CPU e RAM (rápido, <100ms via sysinfo).
@@ -176,9 +178,19 @@ pub async fn get_detected_vendors() -> Result<DetectedVendors, String> {
         "unknown"
     };
 
+    // Ler CurrentBuildNumber do registro (rápido, <1ms)
+    let windows_build: u32 = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+        .and_then(|k| k.get_value::<String, _>("CurrentBuildNumber"))
+        .unwrap_or_default()
+        .trim()
+        .parse()
+        .unwrap_or(0);
+
     Ok(DetectedVendors {
         gpu_vendor: gpu_vendor.to_string(),
         cpu_vendor: cpu_vendor.to_string(),
+        windows_build,
     })
 }
 

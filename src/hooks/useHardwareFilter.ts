@@ -24,12 +24,14 @@ export interface HardwareFilter {
   gpu_vendor?: string;
   /** Vendor de CPU requerido (ex: `"intel"`, `"amd"`) — `undefined` = qualquer CPU */
   cpu_vendor?: string;
+  /** Build mínimo do Windows requerido (ex: 22000 para Win11) — `undefined` = qualquer versão */
+  min_build?: number;
 }
 
-/** Tweaks que requerem hardware específico. Ausência = universal. */
+/** Tweaks que requerem hardware ou OS específico. Ausência = universal. */
 export const TWEAK_HARDWARE_MAP: Record<string, HardwareFilter> = {
   disable_nvidia_telemetry: { gpu_vendor: 'nvidia' },
-  // Adicionar futuros tweaks vendor-specific aqui
+  classic_right_click: { min_build: 22000 }, // Windows 11 apenas
 };
 
 // ── Hook ────────────────────────────────────────────────────────────────────
@@ -60,7 +62,7 @@ export function useHardwareFilter() {
       .then(setVendors)
       .catch(() => {
         // Fallback: show all tweaks if detection fails
-        setVendors({ gpu_vendor: 'unknown', cpu_vendor: 'unknown' });
+        setVendors({ gpu_vendor: 'unknown', cpu_vendor: 'unknown', windows_build: 0 });
       });
   }, []);
 
@@ -73,6 +75,8 @@ export function useHardwareFilter() {
 
       if (filter.gpu_vendor && filter.gpu_vendor !== vendors.gpu_vendor) return false;
       if (filter.cpu_vendor && filter.cpu_vendor !== vendors.cpu_vendor) return false;
+      if (filter.min_build && vendors.windows_build > 0 && vendors.windows_build < filter.min_build)
+        return false;
       return true;
     },
     [vendors],
@@ -84,6 +88,7 @@ export function useHardwareFilter() {
     if (!filter) return null;
     if (filter.gpu_vendor) return filter.gpu_vendor.toUpperCase();
     if (filter.cpu_vendor) return filter.cpu_vendor.toUpperCase();
+    if (filter.min_build) return 'WIN11';
     return null;
   }, []);
 

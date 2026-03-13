@@ -50,6 +50,7 @@ const TWEAK_IDS = [
   'disable_wallpaper_compression',
   'disable_sticky_keys',
   'disable_bing_search',
+  'classic_right_click',
 ] as const;
 
 // Tweaks cujo revert usa backup — quando aplicados sem backup do FrameGuard,
@@ -122,7 +123,7 @@ const SECTIONS = [
     id: 'visual',
     title: 'Visual e Experiência',
     subtitle: 'Ajustes visuais e de usabilidade',
-    tweakIds: ['disable_wallpaper_compression', 'disable_sticky_keys', 'disable_bing_search'],
+    tweakIds: ['disable_wallpaper_compression', 'disable_sticky_keys', 'disable_bing_search', 'classic_right_click'],
   },
 ];
 

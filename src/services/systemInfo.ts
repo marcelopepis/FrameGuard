@@ -65,6 +65,8 @@ export async function getSystemUsage(): Promise<SystemUsage> {
 export interface DetectedVendors {
   gpu_vendor: string;
   cpu_vendor: string;
+  /** Build number do Windows (ex: 22631). >= 22000 = Windows 11. */
+  windows_build: number;
 }
 
 /** Vendors de hardware detectados. Usa caches do backend (instantâneo se pre-warmed). */

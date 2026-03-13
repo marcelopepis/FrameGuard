@@ -437,6 +437,7 @@ pub async fn execute_plan(
             .unwrap_or(DetectedVendors {
                 gpu_vendor: "unknown".to_string(),
                 cpu_vendor: "unknown".to_string(),
+                windows_build: 0,
             });
 
     // Ordena itens por `order` ascendente para garantir sequência correta

@@ -4,7 +4,7 @@
 //! com tratamento uniforme de erros e criação automática de subchaves.
 
 use std::io;
-use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_SET_VALUE};
+use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ALL_ACCESS, KEY_SET_VALUE};
 use winreg::RegKey;
 
 // ─── Hive ──────────────────────────────────────────────────────────────────────
@@ -207,6 +207,49 @@ pub fn key_exists(hive: Hive, path: &str, key: &str) -> Result<bool, String> {
         Err(e) => Err(format!(
             "Erro ao verificar valor '{}' em '{}': {}",
             key,
+            full_path(hive, path),
+            e
+        )),
+    }
+}
+
+/// Verifica se uma subchave (pasta) existe no registro.
+///
+/// Diferente de [`key_exists`] que verifica um *valor* dentro de uma chave,
+/// esta função verifica se a própria *subchave* (path) existe.
+pub fn subkey_exists(hive: Hive, path: &str) -> Result<bool, String> {
+    match hive.as_regkey().open_subkey(path) {
+        Ok(_) => Ok(true),
+        Err(e) if is_not_found(&e) => Ok(false),
+        Err(e) => Err(format!(
+            "Erro ao verificar subchave '{}': {}",
+            full_path(hive, path),
+            e
+        )),
+    }
+}
+
+/// Remove uma subchave e todos os seus valores e subchaves filhas recursivamente.
+///
+/// Equivalente a `reg delete /f`. `path` é o caminho da subchave a deletar.
+/// Retorna `Ok(())` se a subchave não existir (idempotente).
+pub fn delete_subkey_all(hive: Hive, path: &str) -> Result<(), String> {
+    let root = hive
+        .as_regkey()
+        .open_subkey_with_flags("", KEY_ALL_ACCESS)
+        .map_err(|e| {
+            format!(
+                "Erro ao abrir raiz de '{}' para remoção: {}",
+                hive.display_name(),
+                e
+            )
+        })?;
+
+    match root.delete_subkey_all(path) {
+        Ok(()) => Ok(()),
+        Err(e) if is_not_found(&e) => Ok(()),
+        Err(e) => Err(format!(
+            "Erro ao remover subchave '{}': {}",
             full_path(hive, path),
             e
         )),

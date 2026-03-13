@@ -107,6 +107,14 @@ pub fn run() {
             tweaks::get_bing_search_info,
             tweaks::disable_bing_search,
             tweaks::revert_bing_search,
+            // Classic Right Click Menu (tweaks/visual)
+            tweaks::get_classic_right_click_info,
+            tweaks::apply_classic_right_click,
+            tweaks::revert_classic_right_click,
+            // Edge Debloat (tweaks/edge)
+            tweaks::get_edge_debloat_info,
+            tweaks::apply_edge_debloat,
+            tweaks::revert_edge_debloat,
             // Privacidade — Telemetria
             privacy::get_telemetry_registry_info,
             privacy::disable_telemetry_registry,
@@ -123,6 +131,26 @@ pub fn run() {
             privacy::get_background_apps_info,
             privacy::disable_background_apps,
             privacy::revert_background_apps,
+            // Privacidade — Windows Recall
+            privacy::get_recall_info,
+            privacy::disable_windows_recall,
+            privacy::revert_windows_recall,
+            // Privacidade — Windows Error Reporting
+            privacy::get_wer_info,
+            privacy::disable_wer,
+            privacy::revert_wer,
+            // Privacidade — Activity History
+            privacy::get_activity_history_info,
+            privacy::disable_activity_history,
+            privacy::revert_activity_history,
+            // Privacidade — Location Tracking
+            privacy::get_location_tracking_info,
+            privacy::disable_location_tracking,
+            privacy::revert_location_tracking,
+            // Privacidade — Feedback Requests
+            privacy::get_feedback_requests_info,
+            privacy::disable_feedback_requests,
+            privacy::revert_feedback_requests,
             // Limpeza
             cleanup::scan_cleanup,
             cleanup::execute_cleanup,

@@ -14,9 +14,16 @@ import BloatwareSection from '../components/BloatwareSection';
 const TWEAK_IDS = [
   // Telemetria e Diagnósticos
   'disable_telemetry_registry',
+  'disable_wer',
+  'disable_feedback_requests',
   // Assistentes e Bloatware
   'disable_copilot',
   'disable_content_delivery',
+  'edge_debloat',
+  // Rastreamento e Histórico
+  'disable_activity_history',
+  'disable_location_tracking',
+  'disable_windows_recall',
   // Apps em Segundo Plano
   'disable_background_apps',
 ] as const;
@@ -26,13 +33,19 @@ const SECTIONS = [
     id: 'telemetry',
     title: 'Telemetria e Diagnósticos',
     subtitle: 'Coleta de dados e envio de informações para a Microsoft',
-    tweakIds: ['disable_telemetry_registry'],
+    tweakIds: ['disable_telemetry_registry', 'disable_wer', 'disable_feedback_requests'],
   },
   {
     id: 'assistants',
     title: 'Assistentes e Bloatware',
     subtitle: 'Remoção de assistentes e apps pré-instalados indesejados',
-    tweakIds: ['disable_copilot', 'disable_content_delivery'],
+    tweakIds: ['disable_copilot', 'disable_content_delivery', 'edge_debloat'],
+  },
+  {
+    id: 'tracking',
+    title: 'Rastreamento e Histórico',
+    subtitle: 'Controle de rastreamento de atividades, localização e IA',
+    tweakIds: ['disable_activity_history', 'disable_location_tracking', 'disable_windows_recall'],
   },
   {
     id: 'background',
@@ -112,6 +125,67 @@ Apps individuais podem ser reconfigurados em:
 Configurações → Apps → Apps instalados → [app] → Opções avançadas
 
 Atenção: pode afetar notificações push de apps como Mail, Calendar e Teams.`,
+
+  disable_windows_recall: `O Windows Recall é um recurso de IA que tira screenshots periódicos da tela para criar uma "memória" pesquisável. Mesmo em PCs sem hardware Copilot+, desabilitar preventivamente evita ativação futura.
+
+Chaves configuradas (HKLM — política de grupo):
+HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI
+  DisableAIDataAnalysis = 1
+  TurnOffSavingSnapshots = 1
+
+Desabilita tanto a análise de dados por IA quanto a captura de snapshots.`,
+
+  disable_wer: `O Windows Error Reporting (WER) envia relatórios de crash e erros para a Microsoft. Desabilitar reduz tráfego de rede e evita envio de dados potencialmente sensíveis.
+
+Chave configurada (HKLM):
+HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting
+  Disabled = 1
+
+A maioria dos usuários não se beneficia dos relatórios — desenvolvedores podem querer manter habilitado.`,
+
+  disable_activity_history: `O Histórico de Atividades rastreia apps usados, arquivos abertos e sites visitados para alimentar a Timeline e funcionalidades cross-device.
+
+Chaves configuradas (HKLM — política de grupo):
+HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows\\System
+  EnableActivityFeed = 0
+  PublishUserActivities = 0
+  UploadUserActivities = 0
+
+Desabilita coleta, publicação e upload de atividades. A Timeline deixa de ser alimentada.`,
+
+  disable_location_tracking: `O rastreamento de localização permite que Windows e apps acessem sua posição geográfica via GPS, Wi-Fi ou IP.
+
+Chave configurada (HKLM):
+HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location
+  Value = "Deny"
+
+Bloqueia o acesso à localização para todos os apps e serviços do sistema.`,
+
+  disable_feedback_requests: `O Windows exibe periodicamente pop-ups solicitando feedback sobre o sistema operacional.
+
+Chave configurada (HKCU):
+HKEY_CURRENT_USER\\Software\\Microsoft\\Siuf\\Rules
+  NumberOfSIUFInPeriod = 0
+
+Definir como 0 impede que o Windows solicite feedback. A reversão remove a chave, restaurando o comportamento padrão.`,
+
+  edge_debloat: `Aplica 12 políticas de grupo para reduzir recursos de background e telemetria do Microsoft Edge.
+
+Chaves configuradas em HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge:
+  StartupBoostEnabled = 0 (pré-carga na inicialização)
+  BackgroundModeEnabled = 0 (processos em background)
+  NewTabPagePrerenderEnabled = 0 (pré-renderização de nova aba)
+  HubsSidebarEnabled = 0 (sidebar com Copilot/Discover)
+  EdgeShoppingAssistantEnabled = 0 (assistente de compras)
+  EdgeCollectionsEnabled = 0 (coleções)
+  ShowRecommendationsEnabled = 0 (recomendações)
+  DefaultBrowserSettingsCampaignEnabled = 0 (nags de browser padrão)
+  NewTabPageBingChatEnabled = 0 (Copilot na nova aba)
+  DiagnosticData = 0 (telemetria do Edge)
+  PersonalizationReportingEnabled = 0 (relatórios de personalização)
+  UserFeedbackAllowed = 0 (feedback do usuário)
+
+A reversão remove cada política individualmente, restaurando o comportamento padrão do Edge.`,
 };
 
 // ── Componente principal ───────────────────────────────────────────────────────

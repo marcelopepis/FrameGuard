@@ -28,8 +28,16 @@ const TELEMETRY_ADVERTISING_PATH: &str =
     r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo";
 const TELEMETRY_ADVERTISING_KEY: &str = "Enabled";
 
+const TELEMETRY_POLICIES_PATH: &str =
+    r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection";
+const TELEMETRY_DEVICE_NAME_KEY: &str = "AllowDeviceNameInTelemetry";
+const TELEMETRY_NO_FEEDBACK_KEY: &str = "DoNotShowFeedbackNotifications";
+
+const TELEMETRY_DMWAPPUSH_PATH: &str = r"SYSTEM\CurrentControlSet\Services\dmwappushservice";
+const TELEMETRY_DMWAPPUSH_KEY: &str = "Start";
+
 /// Chaves de telemetria: (Hive, path, key, valor_aplicado)
-const TELEMETRY_KEYS: [(Hive, &str, &str, u32); 3] = [
+const TELEMETRY_KEYS: [(Hive, &str, &str, u32); 6] = [
     (
         Hive::LocalMachine,
         TELEMETRY_DATA_COLLECTION_PATH,
@@ -47,6 +55,24 @@ const TELEMETRY_KEYS: [(Hive, &str, &str, u32); 3] = [
         TELEMETRY_ADVERTISING_PATH,
         TELEMETRY_ADVERTISING_KEY,
         0,
+    ),
+    (
+        Hive::LocalMachine,
+        TELEMETRY_POLICIES_PATH,
+        TELEMETRY_DEVICE_NAME_KEY,
+        0,
+    ),
+    (
+        Hive::LocalMachine,
+        TELEMETRY_POLICIES_PATH,
+        TELEMETRY_NO_FEEDBACK_KEY,
+        1,
+    ),
+    (
+        Hive::LocalMachine,
+        TELEMETRY_DMWAPPUSH_PATH,
+        TELEMETRY_DMWAPPUSH_KEY,
+        4,
     ),
 ];
 
@@ -70,8 +96,9 @@ pub async fn get_telemetry_registry_info() -> Result<TweakInfo, String> {
             id: "disable_telemetry_registry".to_string(),
             name: "Desabilitar Telemetria do Windows".to_string(),
             description: "Reduz a coleta de dados de diagnóstico e telemetria enviados à Microsoft. \
-                Define AllowTelemetry = 0 (nível mínimo), desabilita experiências personalizadas e \
-                remove o ID de publicidade usado para rastreamento entre apps."
+                Define AllowTelemetry = 0 (nível mínimo), desabilita experiências personalizadas, \
+                remove o ID de publicidade, bloqueia envio do nome do dispositivo, \
+                suprime notificações de feedback e desabilita o serviço dmwappushservice."
                 .to_string(),
             category: "privacy".to_string(),
             is_applied,
@@ -121,7 +148,7 @@ pub fn disable_telemetry_registry() -> Result<(), String> {
     backup_before_apply(
         "disable_telemetry_registry",
         TweakCategory::Registry,
-        "Telemetria: AllowTelemetry, TailoredExperiences, AdvertisingId",
+        "Telemetria: AllowTelemetry, TailoredExperiences, AdvertisingId, DeviceName, FeedbackNotif, dmwappushservice",
         OriginalValue {
             path: "MULTI".to_string(),
             key: "telemetry_keys".to_string(),
@@ -597,6 +624,491 @@ pub fn revert_background_apps() -> Result<(), String> {
     };
 
     revert_multi_dword_entries(&entries, "BackgroundApps")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Privacidade — Desabilitar Windows Recall
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const RECALL_PATH: &str = r"SOFTWARE\Policies\Microsoft\Windows\WindowsAI";
+
+/// Chaves do Windows Recall: (Hive, path, key, valor_aplicado)
+const RECALL_KEYS: [(Hive, &str, &str, u32); 2] = [
+    (Hive::LocalMachine, RECALL_PATH, "DisableAIDataAnalysis", 1),
+    (Hive::LocalMachine, RECALL_PATH, "AllowRecallEnablement", 0),
+];
+
+fn get_recall_is_applied() -> Result<bool, String> {
+    for (hive, path, key, target) in &RECALL_KEYS {
+        let val = read_dword(*hive, path, key)?.unwrap_or(99);
+        if val != *target {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn get_recall_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_recall_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_windows_recall");
+
+        Ok(TweakInfo {
+            id: "disable_windows_recall".to_string(),
+            name: "Desabilitar Windows Recall".to_string(),
+            description: "Desabilita o Windows Recall (IA que tira screenshots contínuos do uso do PC). \
+                Preventivo mesmo em PCs sem hardware Copilot+. Bloqueia via política de grupo \
+                a análise de dados por IA e a habilitação do Recall."
+                .to_string(),
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: Recall pode ser habilitado em hardware compatível".to_string(),
+            hardware_filter: None,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn disable_windows_recall() -> Result<(), String> {
+    if get_recall_is_applied()? {
+        return Err("Tweak 'disable_windows_recall' já está aplicado".to_string());
+    }
+
+    let orig_vals: Vec<Value> = RECALL_KEYS
+        .iter()
+        .map(|(hive, path, key, _)| {
+            read_dword(*hive, path, key).map(|opt| opt.map(|v| json!(v)).unwrap_or(Value::Null))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let backup_entries: Vec<Value> = RECALL_KEYS
+        .iter()
+        .zip(orig_vals.iter())
+        .map(|((hive, path, key, _), orig)| {
+            json!({
+                "hive": format!("{:?}", hive),
+                "path": path,
+                "key": key,
+                "value": orig
+            })
+        })
+        .collect();
+
+    let applied_vals: Vec<Value> = RECALL_KEYS.iter().map(|(_, _, _, v)| json!(v)).collect();
+
+    backup_before_apply(
+        "disable_windows_recall",
+        TweakCategory::Registry,
+        "Windows Recall: DisableAIDataAnalysis, AllowRecallEnablement",
+        OriginalValue {
+            path: "MULTI".to_string(),
+            key: "recall_keys".to_string(),
+            value: Some(Value::Array(backup_entries)),
+            value_type: "MULTI_DWORD".to_string(),
+        },
+        Value::Array(applied_vals),
+    )?;
+
+    for (hive, path, key, target) in &RECALL_KEYS {
+        write_dword(*hive, path, key, *target)?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn revert_windows_recall() -> Result<(), String> {
+    let original = restore_from_backup("disable_windows_recall")?;
+
+    let entries = match original.value {
+        Some(Value::Array(arr)) => arr,
+        _ => return Err("Formato de backup de Windows Recall inválido".to_string()),
+    };
+
+    revert_multi_dword_entries(&entries, "WindowsRecall")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Privacidade — Desabilitar Windows Error Reporting
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const WER_PATH: &str = r"SOFTWARE\Microsoft\Windows\Windows Error Reporting";
+const WER_KEY: &str = "Disabled";
+
+fn get_wer_is_applied() -> Result<bool, String> {
+    let val = read_dword(Hive::LocalMachine, WER_PATH, WER_KEY)?.unwrap_or(0);
+    Ok(val == 1)
+}
+
+#[tauri::command]
+pub async fn get_wer_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_wer_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_wer");
+
+        Ok(TweakInfo {
+            id: "disable_wer".to_string(),
+            name: "Desabilitar Windows Error Reporting".to_string(),
+            description: "Impede o envio de relatórios de crash e erros para a Microsoft. \
+                Reduz tráfego de rede e impede coleta de dumps de memória que podem conter \
+                dados sensíveis."
+                .to_string(),
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: relatórios de erro habilitados e enviados à Microsoft".to_string(),
+            hardware_filter: None,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn disable_wer() -> Result<(), String> {
+    if get_wer_is_applied()? {
+        return Err("Tweak 'disable_wer' já está aplicado".to_string());
+    }
+
+    let orig = read_dword(Hive::LocalMachine, WER_PATH, WER_KEY)?
+        .map(|v| json!(v))
+        .unwrap_or(Value::Null);
+
+    backup_before_apply(
+        "disable_wer",
+        TweakCategory::Registry,
+        "Windows Error Reporting: Disabled",
+        OriginalValue {
+            path: WER_PATH.to_string(),
+            key: WER_KEY.to_string(),
+            value: Some(json!([{"hive": "LocalMachine", "path": WER_PATH, "key": WER_KEY, "value": orig}])),
+            value_type: "MULTI_DWORD".to_string(),
+        },
+        json!([1]),
+    )?;
+
+    write_dword(Hive::LocalMachine, WER_PATH, WER_KEY, 1)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn revert_wer() -> Result<(), String> {
+    let original = restore_from_backup("disable_wer")?;
+
+    let entries = match original.value {
+        Some(Value::Array(arr)) => arr,
+        _ => return Err("Formato de backup de WER inválido".to_string()),
+    };
+
+    revert_multi_dword_entries(&entries, "WER")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Privacidade — Desabilitar Activity History / Timeline
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ACTIVITY_HISTORY_PATH: &str = r"SOFTWARE\Policies\Microsoft\Windows\System";
+
+/// Chaves do Activity History: (Hive, path, key, valor_aplicado)
+const ACTIVITY_HISTORY_KEYS: [(Hive, &str, &str, u32); 3] = [
+    (
+        Hive::LocalMachine,
+        ACTIVITY_HISTORY_PATH,
+        "EnableActivityFeed",
+        0,
+    ),
+    (
+        Hive::LocalMachine,
+        ACTIVITY_HISTORY_PATH,
+        "PublishUserActivities",
+        0,
+    ),
+    (
+        Hive::LocalMachine,
+        ACTIVITY_HISTORY_PATH,
+        "UploadUserActivities",
+        0,
+    ),
+];
+
+fn get_activity_history_is_applied() -> Result<bool, String> {
+    for (hive, path, key, target) in &ACTIVITY_HISTORY_KEYS {
+        let val = read_dword(*hive, path, key)?.unwrap_or(99);
+        if val != *target {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn get_activity_history_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_activity_history_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_activity_history");
+
+        Ok(TweakInfo {
+            id: "disable_activity_history".to_string(),
+            name: "Desabilitar Histórico de Atividades".to_string(),
+            description: "Desabilita o registro e sincronização de atividades do usuário \
+                (Timeline do Windows). Impede que o Windows rastreie apps abertos, \
+                documentos acessados e publique/sincronize atividades com a Microsoft."
+                .to_string(),
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: histórico de atividades habilitado e sincronizado".to_string(),
+            hardware_filter: None,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn disable_activity_history() -> Result<(), String> {
+    if get_activity_history_is_applied()? {
+        return Err("Tweak 'disable_activity_history' já está aplicado".to_string());
+    }
+
+    let orig_vals: Vec<Value> = ACTIVITY_HISTORY_KEYS
+        .iter()
+        .map(|(hive, path, key, _)| {
+            read_dword(*hive, path, key).map(|opt| opt.map(|v| json!(v)).unwrap_or(Value::Null))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let backup_entries: Vec<Value> = ACTIVITY_HISTORY_KEYS
+        .iter()
+        .zip(orig_vals.iter())
+        .map(|((hive, path, key, _), orig)| {
+            json!({
+                "hive": format!("{:?}", hive),
+                "path": path,
+                "key": key,
+                "value": orig
+            })
+        })
+        .collect();
+
+    let applied_vals: Vec<Value> = ACTIVITY_HISTORY_KEYS
+        .iter()
+        .map(|(_, _, _, v)| json!(v))
+        .collect();
+
+    backup_before_apply(
+        "disable_activity_history",
+        TweakCategory::Registry,
+        "Activity History: EnableActivityFeed, PublishUserActivities, UploadUserActivities",
+        OriginalValue {
+            path: "MULTI".to_string(),
+            key: "activity_history_keys".to_string(),
+            value: Some(Value::Array(backup_entries)),
+            value_type: "MULTI_DWORD".to_string(),
+        },
+        Value::Array(applied_vals),
+    )?;
+
+    for (hive, path, key, target) in &ACTIVITY_HISTORY_KEYS {
+        write_dword(*hive, path, key, *target)?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn revert_activity_history() -> Result<(), String> {
+    let original = restore_from_backup("disable_activity_history")?;
+
+    let entries = match original.value {
+        Some(Value::Array(arr)) => arr,
+        _ => return Err("Formato de backup de Activity History inválido".to_string()),
+    };
+
+    revert_multi_dword_entries(&entries, "ActivityHistory")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Privacidade — Desabilitar Location Tracking Global
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const LOCATION_PATH: &str = r"SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors";
+const LOCATION_KEY: &str = "DisableLocation";
+
+fn get_location_tracking_is_applied() -> Result<bool, String> {
+    let val = read_dword(Hive::LocalMachine, LOCATION_PATH, LOCATION_KEY)?.unwrap_or(0);
+    Ok(val == 1)
+}
+
+#[tauri::command]
+pub async fn get_location_tracking_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_location_tracking_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_location_tracking");
+
+        Ok(TweakInfo {
+            id: "disable_location_tracking".to_string(),
+            name: "Desabilitar Rastreamento de Localização".to_string(),
+            description: "Desabilita o acesso à localização globalmente para todos os apps. \
+                Impede que o Windows e aplicativos coletem dados de localização GPS, \
+                Wi-Fi e IP do dispositivo."
+                .to_string(),
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: serviços de localização habilitados".to_string(),
+            hardware_filter: None,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn disable_location_tracking() -> Result<(), String> {
+    if get_location_tracking_is_applied()? {
+        return Err("Tweak 'disable_location_tracking' já está aplicado".to_string());
+    }
+
+    let orig = read_dword(Hive::LocalMachine, LOCATION_PATH, LOCATION_KEY)?
+        .map(|v| json!(v))
+        .unwrap_or(Value::Null);
+
+    backup_before_apply(
+        "disable_location_tracking",
+        TweakCategory::Registry,
+        "Location Tracking: DisableLocation",
+        OriginalValue {
+            path: "MULTI".to_string(),
+            key: "location_tracking_keys".to_string(),
+            value: Some(json!([{"hive": "LocalMachine", "path": LOCATION_PATH, "key": LOCATION_KEY, "value": orig}])),
+            value_type: "MULTI_DWORD".to_string(),
+        },
+        json!([1]),
+    )?;
+
+    write_dword(Hive::LocalMachine, LOCATION_PATH, LOCATION_KEY, 1)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn revert_location_tracking() -> Result<(), String> {
+    let original = restore_from_backup("disable_location_tracking")?;
+
+    let entries = match original.value {
+        Some(Value::Array(arr)) => arr,
+        _ => return Err("Formato de backup de Location Tracking inválido".to_string()),
+    };
+
+    revert_multi_dword_entries(&entries, "LocationTracking")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Privacidade — Desabilitar Feedback Requests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const FEEDBACK_PATH: &str = r"SOFTWARE\Microsoft\Siuf\Rules";
+const FEEDBACK_KEY: &str = "NumberOfSIUFInPeriod";
+
+fn get_feedback_requests_is_applied() -> Result<bool, String> {
+    let val = read_dword(Hive::CurrentUser, FEEDBACK_PATH, FEEDBACK_KEY)?;
+    // Aplicado = valor existe E é 0. Não existir = padrão Windows (não aplicado)
+    Ok(val == Some(0))
+}
+
+#[tauri::command]
+pub async fn get_feedback_requests_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_feedback_requests_is_applied().unwrap_or(false);
+        let (has_backup, last_applied) = backup_info("disable_feedback_requests");
+
+        Ok(TweakInfo {
+            id: "disable_feedback_requests".to_string(),
+            name: "Desabilitar Solicitações de Feedback".to_string(),
+            description: "Remove os prompts de feedback do Windows \
+                (\"Como está sendo sua experiência?\"). Impede que o Windows \
+                solicite avaliações e pesquisas de satisfação periodicamente."
+                .to_string(),
+            category: "privacy".to_string(),
+            is_applied,
+            requires_restart: false,
+            last_applied,
+            has_backup,
+            risk_level: RiskLevel::Low,
+            evidence_level: EvidenceLevel::Proven,
+            default_value_description:
+                "Padrão Windows: solicitações de feedback habilitadas".to_string(),
+            hardware_filter: None,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn disable_feedback_requests() -> Result<(), String> {
+    if get_feedback_requests_is_applied()? {
+        return Err("Tweak 'disable_feedback_requests' já está aplicado".to_string());
+    }
+
+    let orig = read_dword(Hive::CurrentUser, FEEDBACK_PATH, FEEDBACK_KEY)?
+        .map(|v| json!(v))
+        .unwrap_or(Value::Null);
+
+    backup_before_apply(
+        "disable_feedback_requests",
+        TweakCategory::Registry,
+        "Feedback Requests: NumberOfSIUFInPeriod",
+        OriginalValue {
+            path: "MULTI".to_string(),
+            key: "feedback_requests_keys".to_string(),
+            value: Some(json!([{"hive": "CurrentUser", "path": FEEDBACK_PATH, "key": FEEDBACK_KEY, "value": orig}])),
+            value_type: "MULTI_DWORD".to_string(),
+        },
+        json!([0]),
+    )?;
+
+    write_dword(Hive::CurrentUser, FEEDBACK_PATH, FEEDBACK_KEY, 0)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn revert_feedback_requests() -> Result<(), String> {
+    let original = restore_from_backup("disable_feedback_requests")?;
+
+    let entries = match original.value {
+        Some(Value::Array(arr)) => arr,
+        _ => return Err("Formato de backup de Feedback Requests inválido".to_string()),
+    };
+
+    revert_multi_dword_entries(&entries, "FeedbackRequests")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
