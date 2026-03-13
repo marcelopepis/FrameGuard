@@ -3,10 +3,11 @@
 // Manifesto completo, versão, links (GitHub, autor), verificar atualizações,
 // licença GPL v3 e referência sutil à Volt.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { getVersion } from '@tauri-apps/api/app';
 import {
   Github,
   ExternalLink,
@@ -28,7 +29,6 @@ import FrameGuardIcon from '../components/FrameGuardIcon';
 
 // ── Constantes ──────────────────────────────────────────────────────────────────
 
-const APP_VERSION = '0.2.1';
 const GITHUB_URL = 'https://github.com/marcelopepis/FrameGuard';
 const RELEASES_URL = 'https://github.com/marcelopepis/FrameGuard/releases';
 const AUTHOR_NAME = 'Marcelo Pepis';
@@ -48,7 +48,12 @@ type UpdaterState =
 // ── Componente ──────────────────────────────────────────────────────────────────
 
 export default function About() {
+  const [appVersion, setAppVersion] = useState('...');
   const [updaterState, setUpdaterState] = useState<UpdaterState>({ status: 'idle' });
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion('?'));
+  }, []);
 
   async function handleOpenUrl(url: string) {
     try {
@@ -125,7 +130,7 @@ export default function About() {
             <div className={styles.identityText}>
               <div className={styles.appName}>FrameGuard</div>
               <div className={styles.tagline}>Para quem joga, por quem entende.</div>
-              <div className={styles.version}>Versão {APP_VERSION} · GPL v3 · Windows 11</div>
+              <div className={styles.version}>Versão {appVersion} · GPL v3 · Windows 11</div>
             </div>
           </div>
         </div>
@@ -287,7 +292,7 @@ export default function About() {
                 <div className={styles.updaterCard}>
                   <div className={`${styles.statusRow} ${styles.successText}`}>
                     <CheckCircle2 size={16} />
-                    <span>Você está na versão mais recente (v{APP_VERSION})</span>
+                    <span>Você está na versão mais recente (v{appVersion})</span>
                   </div>
                 </div>
               )}
@@ -300,7 +305,7 @@ export default function About() {
                     Nova versão v{updaterState.version} disponível
                   </div>
                   <div className={styles.statusRow}>
-                    <span>Versão atual: v{APP_VERSION}</span>
+                    <span>Versão atual: v{appVersion}</span>
                   </div>
                   {updaterState.body && (
                     <div className={styles.changelogText}>{updaterState.body}</div>
