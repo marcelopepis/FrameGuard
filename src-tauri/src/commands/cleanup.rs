@@ -2103,3 +2103,171 @@ fn get_item_category(item_id: &str) -> &'static str {
         _ => "Outros",
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Docker Cleanup
+// ═══════════════════════════════════════════════════════════════════════════════
+
+use crate::utils::command_runner::run_command;
+
+/// Preview de limpeza Docker — tamanhos e contagens para exibição na UI.
+#[derive(Debug, Clone, Serialize)]
+pub struct DockerCleanupInfo {
+    pub stopped_containers: u32,
+    pub dangling_images: u32,
+    pub build_cache_size: String,
+    pub volumes_count: u32,
+}
+
+/// Opções de limpeza Docker — cada flag controla uma operação.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerCleanupOptions {
+    pub clean_containers: bool,
+    pub clean_images: bool,
+    pub clean_build_cache: bool,
+    pub clean_volumes: bool,
+}
+
+/// Verifica se Docker está instalado e acessível.
+#[tauri::command]
+pub async fn check_docker_installed() -> Result<bool, String> {
+    tokio::task::spawn_blocking(|| {
+        // Tenta `where docker` primeiro (encontra no PATH)
+        let result = run_command("where", &["docker"]);
+        if let Ok(out) = result {
+            if out.success && !out.stdout.trim().is_empty() {
+                return Ok(true);
+            }
+        }
+
+        // Fallback: verifica caminho padrão de instalação
+        let default_path = r"C:\Program Files\Docker\Docker\resources\bin\docker.exe";
+        Ok(std::path::Path::new(default_path).exists())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Analisa o uso de espaço do Docker e retorna preview para a UI.
+#[tauri::command]
+pub async fn get_docker_cleanup_preview() -> Result<DockerCleanupInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        // Containers parados
+        let stopped = run_command(
+            "docker",
+            &["ps", "--filter", "status=exited", "--filter", "status=created", "-q"],
+        )
+        .map(|o| {
+            if o.success {
+                o.stdout.lines().filter(|l| !l.trim().is_empty()).count() as u32
+            } else {
+                0
+            }
+        })
+        .unwrap_or(0);
+
+        // Imagens dangling
+        let dangling = run_command("docker", &["images", "--filter", "dangling=true", "-q"])
+            .map(|o| {
+                if o.success {
+                    o.stdout.lines().filter(|l| !l.trim().is_empty()).count() as u32
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0);
+
+        // Volumes não utilizados
+        let volumes = run_command("docker", &["volume", "ls", "--filter", "dangling=true", "-q"])
+            .map(|o| {
+                if o.success {
+                    o.stdout.lines().filter(|l| !l.trim().is_empty()).count() as u32
+                } else {
+                    0
+                }
+            })
+            .unwrap_or(0);
+
+        // Build cache — parsear de `docker system df`
+        let build_cache_size = run_command("docker", &["system", "df", "--format", "{{.Type}}\t{{.Size}}"])
+            .map(|o| {
+                if !o.success {
+                    return "Desconhecido".to_string();
+                }
+                for line in o.stdout.lines() {
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    if parts.len() >= 2 && parts[0].to_lowercase().contains("build cache") {
+                        return parts[1].trim().to_string();
+                    }
+                }
+                "0B".to_string()
+            })
+            .unwrap_or_else(|_| "Desconhecido".to_string());
+
+        Ok(DockerCleanupInfo {
+            stopped_containers: stopped,
+            dangling_images: dangling,
+            build_cache_size,
+            volumes_count: volumes,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Executa limpeza Docker com as opções selecionadas.
+#[tauri::command]
+pub async fn run_docker_cleanup(options: DockerCleanupOptions) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut summary = Vec::new();
+
+        if options.clean_containers {
+            match run_command("docker", &["container", "prune", "-f"]) {
+                Ok(out) if out.success => {
+                    summary.push(format!("Containers: {}", out.stdout.trim()));
+                }
+                Ok(out) => summary.push(format!("Containers: erro — {}", out.stderr.trim())),
+                Err(e) => summary.push(format!("Containers: erro — {}", e)),
+            }
+        }
+
+        if options.clean_images {
+            match run_command("docker", &["image", "prune", "-f"]) {
+                Ok(out) if out.success => {
+                    summary.push(format!("Imagens: {}", out.stdout.trim()));
+                }
+                Ok(out) => summary.push(format!("Imagens: erro — {}", out.stderr.trim())),
+                Err(e) => summary.push(format!("Imagens: erro — {}", e)),
+            }
+        }
+
+        if options.clean_build_cache {
+            match run_command("docker", &["builder", "prune", "-f"]) {
+                Ok(out) if out.success => {
+                    summary.push(format!("Build cache: {}", out.stdout.trim()));
+                }
+                Ok(out) => summary.push(format!("Build cache: erro — {}", out.stderr.trim())),
+                Err(e) => summary.push(format!("Build cache: erro — {}", e)),
+            }
+        }
+
+        if options.clean_volumes {
+            match run_command("docker", &["volume", "prune", "-f"]) {
+                Ok(out) if out.success => {
+                    summary.push(format!("Volumes: {}", out.stdout.trim()));
+                }
+                Ok(out) => summary.push(format!("Volumes: erro — {}", out.stderr.trim())),
+                Err(e) => summary.push(format!("Volumes: erro — {}", e)),
+            }
+        }
+
+        if summary.is_empty() {
+            return Ok("Nenhuma operação selecionada.".to_string());
+        }
+
+        Ok(summary.join("\n"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

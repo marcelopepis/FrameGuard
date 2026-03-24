@@ -105,7 +105,7 @@ const SECTIONS = [
     id: 'energy_cpu',
     title: 'Energia e CPU',
     subtitle: 'Plano de energia e gerenciamento de processador',
-    tweakIds: ['enable_ultimate_performance', 'disable_power_throttling'],
+    tweakIds: ['enable_ultimate_performance', 'disable_power_throttling', 'amd_ryzen_power_plan', 'intel_power_throttling_off', 'intel_turbo_boost_aggressive'],
   },
   {
     id: 'storage',

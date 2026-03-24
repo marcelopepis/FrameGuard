@@ -28,6 +28,7 @@ pub fn run() {
             system_info::get_system_status,
             system_info::get_system_usage,
             system_info::get_system_summary,
+            system_info::get_ftpm_warning,
             // Otimizações — Compressão de Wallpaper (tweaks/visual)
             tweaks::get_wallpaper_compression_info,
             tweaks::disable_wallpaper_compression,
@@ -89,6 +90,15 @@ pub fn run() {
             tweaks::get_power_throttling_info,
             tweaks::disable_power_throttling,
             tweaks::revert_power_throttling,
+            tweaks::get_amd_ryzen_power_plan_info,
+            tweaks::enable_amd_ryzen_power_plan,
+            tweaks::revert_amd_ryzen_power_plan,
+            tweaks::get_intel_power_throttling_off_info,
+            tweaks::enable_intel_power_throttling_off,
+            tweaks::revert_intel_power_throttling_off,
+            tweaks::get_intel_turbo_boost_aggressive_info,
+            tweaks::enable_intel_turbo_boost_aggressive,
+            tweaks::revert_intel_turbo_boost_aggressive,
             // Otimizações — Armazenamento (tweaks/power + tweaks/storage)
             tweaks::get_hibernation_info,
             tweaks::disable_hibernation,
@@ -154,6 +164,9 @@ pub fn run() {
             // Limpeza
             cleanup::scan_cleanup,
             cleanup::execute_cleanup,
+            cleanup::check_docker_installed,
+            cleanup::get_docker_cleanup_preview,
+            cleanup::run_docker_cleanup,
             // Saúde do Sistema — DISM
             health::run_dism_cleanup,
             health::run_dism_checkhealth,

@@ -189,6 +189,62 @@
   color: var(--color-error);
 }
 
+/* ─── Banner fTPM (AMD) ─────────────────────────────────── */
+
+.ftpmBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 20px;
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--radius-lg);
+  color: var(--status-amber);
+}
+
+.ftpmBanner > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ftpmContent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ftpmTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--status-amber);
+}
+
+.ftpmMessage {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.ftpmLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  width: fit-content;
+}
+
+.ftpmLink:hover {
+  opacity: 0.8;
+}
+
 /* ─── Seção Status Rápido ────────────────────────────────── */
 
 .statusSection {

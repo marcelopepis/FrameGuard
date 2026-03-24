@@ -1,6 +1,6 @@
 [package]
 name = "frameguard"
-version = "0.2.2"
+version = "0.2.3"
 description = "Utilitário de manutenção e otimização Windows 11 para gamers"
 authors = ["Marcelo Pepis"]
 license = "GPL-3.0-or-later"

@@ -18,6 +18,7 @@ import {
   Settings2,
   RefreshCw,
   ShieldAlert,
+  Box,
 } from 'lucide-react';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
@@ -313,6 +314,9 @@ export default function Cleanup() {
           }}
         />
       )}
+
+      {/* Docker — seção independente, sempre visível se Docker instalado */}
+      <DockerSection isRunning={isRunning} />
     </div>
   );
 }
@@ -629,6 +633,212 @@ function ReportView({ result, onNewScan }: { result: CleanupResult; onNewScan: (
           Novo escaneamento
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Subcomponente: Docker Cleanup ──────────────────────────────────────────
+
+interface DockerCleanupInfo {
+  stopped_containers: number;
+  dangling_images: number;
+  build_cache_size: string;
+  volumes_count: number;
+}
+
+function DockerSection({ isRunning }: { isRunning: boolean }) {
+  const [dockerInstalled, setDockerInstalled] = useState<boolean | null>(null);
+  const [preview, setPreview] = useState<DockerCleanupInfo | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const { showToast } = useToast();
+
+  // Opções de limpeza
+  const [cleanContainers, setCleanContainers] = useState(true);
+  const [cleanImages, setCleanImages] = useState(true);
+  const [cleanBuildCache, setCleanBuildCache] = useState(true);
+  const [cleanVolumes, setCleanVolumes] = useState(false);
+
+  // Detectar Docker na montagem
+  useEffect(() => {
+    invoke<boolean>('check_docker_installed')
+      .then(setDockerInstalled)
+      .catch(() => setDockerInstalled(false));
+  }, []);
+
+  // Não renderizar se Docker não instalado ou ainda detectando
+  if (dockerInstalled === null || dockerInstalled === false) return null;
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    setPreview(null);
+    setResult(null);
+    try {
+      const info = await invoke<DockerCleanupInfo>('get_docker_cleanup_preview');
+      setPreview(info);
+    } catch (e) {
+      showToast('error', 'Erro ao analisar Docker', String(e));
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleClean = async () => {
+    setCleaning(true);
+    setResult(null);
+    try {
+      const res = await invoke<string>('run_docker_cleanup', {
+        options: {
+          cleanContainers,
+          cleanImages,
+          cleanBuildCache,
+          cleanVolumes,
+        },
+      });
+      setResult(res);
+      showToast('success', 'Docker limpo', 'Limpeza Docker concluída.');
+      invoke('log_tweak_activity', {
+        name: 'Limpeza Docker',
+        applied: true,
+        success: true,
+      }).catch(() => {});
+      // Atualizar preview
+      handleAnalyze();
+    } catch (e) {
+      showToast('error', 'Erro na limpeza Docker', String(e));
+      invoke('log_tweak_activity', {
+        name: 'Limpeza Docker',
+        applied: true,
+        success: false,
+      }).catch(() => {});
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  const anySelected = cleanContainers || cleanImages || cleanBuildCache || cleanVolumes;
+  const disabled = isRunning || cleaning || analyzing;
+
+  return (
+    <div className={styles.dockerSection}>
+      <div className={styles.dockerHeader}>
+        <Box size={18} className={styles.dockerIcon} />
+        <div>
+          <h2 className={styles.dockerTitle}>Docker</h2>
+          <p className={styles.dockerSubtitle}>
+            Limpe containers parados, imagens não utilizadas e build cache
+          </p>
+        </div>
+      </div>
+
+      {!preview && !analyzing && (
+        <button className={styles.scanBtn} onClick={handleAnalyze} disabled={disabled}>
+          <Search size={14} />
+          Analisar
+        </button>
+      )}
+
+      {analyzing && (
+        <div className={styles.dockerAnalyzing}>
+          <Loader2 size={16} className={styles.spinner} />
+          <span>Analisando uso do Docker...</span>
+        </div>
+      )}
+
+      {preview && (
+        <div className={styles.dockerPreview}>
+          <div className={styles.dockerStats}>
+            <div className={styles.dockerStat}>
+              <span className={styles.dockerStatValue}>{preview.stopped_containers}</span>
+              <span className={styles.dockerStatLabel}>Containers parados</span>
+            </div>
+            <div className={styles.dockerStat}>
+              <span className={styles.dockerStatValue}>{preview.dangling_images}</span>
+              <span className={styles.dockerStatLabel}>Imagens dangling</span>
+            </div>
+            <div className={styles.dockerStat}>
+              <span className={styles.dockerStatValue}>{preview.build_cache_size}</span>
+              <span className={styles.dockerStatLabel}>Build cache</span>
+            </div>
+            <div className={styles.dockerStat}>
+              <span className={styles.dockerStatValue}>{preview.volumes_count}</span>
+              <span className={styles.dockerStatLabel}>Volumes não utilizados</span>
+            </div>
+          </div>
+
+          <div className={styles.dockerOptions}>
+            <label className={styles.dockerOption}>
+              <input
+                type="checkbox"
+                className={styles.checkbox}
+                checked={cleanContainers}
+                onChange={() => setCleanContainers(!cleanContainers)}
+                disabled={disabled}
+              />
+              <span>Containers parados</span>
+            </label>
+            <label className={styles.dockerOption}>
+              <input
+                type="checkbox"
+                className={styles.checkbox}
+                checked={cleanImages}
+                onChange={() => setCleanImages(!cleanImages)}
+                disabled={disabled}
+              />
+              <span>Imagens dangling/sem uso</span>
+            </label>
+            <label className={styles.dockerOption}>
+              <input
+                type="checkbox"
+                className={styles.checkbox}
+                checked={cleanBuildCache}
+                onChange={() => setCleanBuildCache(!cleanBuildCache)}
+                disabled={disabled}
+              />
+              <span>Build cache ({preview.build_cache_size})</span>
+            </label>
+            <label className={`${styles.dockerOption} ${styles.dockerOptionDanger}`}>
+              <input
+                type="checkbox"
+                className={styles.checkbox}
+                checked={cleanVolumes}
+                onChange={() => setCleanVolumes(!cleanVolumes)}
+                disabled={disabled}
+              />
+              <span>Volumes não utilizados</span>
+            </label>
+            {cleanVolumes && (
+              <div className={styles.dockerVolumeWarning}>
+                <AlertTriangle size={13} />
+                <span>
+                  Volumes podem conter bancos de dados e dados de projetos. Habilite apenas se
+                  souber o que está fazendo.
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className={styles.dockerActions}>
+            <button
+              className={styles.cleanBtn}
+              onClick={handleClean}
+              disabled={disabled || !anySelected}
+            >
+              {cleaning ? <Loader2 size={14} className={styles.spinner} /> : <Trash2 size={14} />}
+              {cleaning ? 'Limpando...' : 'Limpar selecionados'}
+            </button>
+            <button className={styles.btnNewScan} onClick={handleAnalyze} disabled={disabled}>
+              <RefreshCw size={13} />
+              Re-analisar
+            </button>
+          </div>
+
+          {result && (
+            <pre className={styles.dockerResult}>{result}</pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }

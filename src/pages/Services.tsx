@@ -9,6 +9,8 @@ import { Loader2, XCircle, RefreshCw, AlertTriangle, ChevronDown } from 'lucide-
 import styles from './Services.module.css';
 import { useGlobalRunning } from '../contexts/RunningContext';
 import { useToast } from '../contexts/ToastContext';
+import { getDetectedVendors } from '../services/systemInfo';
+import type { DetectedVendors } from '../services/systemInfo';
 
 // ── Tipos (espelham os structs Rust) ─────────────────────────────────────────
 
@@ -21,6 +23,8 @@ interface ServiceItem {
   startup_type: string;
   is_conditional: boolean;
   conditional_note: string | null;
+  warning: string | null;
+  cpu_vendor?: string | null;
   has_backup: boolean;
 }
 
@@ -62,6 +66,11 @@ const SERVICE_CATEGORIES = [
     id: 'enterprise',
     title: 'Enterprise / Não utilizado',
     hint: 'Desnecessários para uso pessoal',
+  },
+  {
+    id: 'xbox',
+    title: 'Xbox e Gaming',
+    hint: 'Contém avisos críticos (!)',
   },
 ];
 
@@ -194,6 +203,7 @@ export default function Services() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [vendors, setVendors] = useState<DetectedVendors | null>(null);
 
   // Seleção (checkboxes)
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
@@ -235,7 +245,15 @@ export default function Services() {
 
   useEffect(() => {
     loadData();
+    getDetectedVendors()
+      .then(setVendors)
+      .catch(() => setVendors(null));
   }, [loadData]);
+
+  // Filtra serviços vendor-specific (cpu_vendor) — fallback seguro: mostra todos
+  const filteredServices = vendors
+    ? services.filter((s) => !s.cpu_vendor || s.cpu_vendor === vendors.cpu_vendor)
+    : services;
 
   // ── Toggle de categoria ──
 
@@ -497,11 +515,11 @@ export default function Services() {
         <div className={styles.sectionCard}>
           <div className={styles.sectionHeader}>
             <span className={styles.sectionTitle}>Serviços do Windows</span>
-            <span className={styles.sectionSubtitle}>{services.length} serviços curados</span>
+            <span className={styles.sectionSubtitle}>{filteredServices.length} serviços curados</span>
           </div>
 
           {SERVICE_CATEGORIES.map((cat) => {
-            const catServices = services.filter((s) => s.category === cat.id);
+            const catServices = filteredServices.filter((s) => s.category === cat.id);
             if (catServices.length === 0) return null;
             const catKey = `svc_${cat.id}`;
             const isCollapsed = collapsed.has(catKey);
@@ -566,7 +584,15 @@ export default function Services() {
                                 <span className={styles.techName}>{svc.id}</span>
                               </div>
                             </td>
-                            <td className={styles.descCell}>{svc.description}</td>
+                            <td className={styles.descCell}>
+                              {svc.description}
+                              {svc.warning && (
+                                <div className={styles.warningInline}>
+                                  <AlertTriangle size={13} />
+                                  <span>{svc.warning}</span>
+                                </div>
+                              )}
+                            </td>
                             <td>
                               <div className={styles.statusCell}>
                                 <span

@@ -32,6 +32,9 @@ export interface HardwareFilter {
 export const TWEAK_HARDWARE_MAP: Record<string, HardwareFilter> = {
   disable_nvidia_telemetry: { gpu_vendor: 'nvidia' },
   classic_right_click: { min_build: 22000 }, // Windows 11 apenas
+  amd_ryzen_power_plan: { cpu_vendor: 'amd' },
+  intel_power_throttling_off: { cpu_vendor: 'intel' },
+  intel_turbo_boost_aggressive: { cpu_vendor: 'intel' },
 };
 
 // ── Hook ────────────────────────────────────────────────────────────────────

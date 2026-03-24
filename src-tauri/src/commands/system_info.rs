@@ -6,6 +6,7 @@ use std::time::Instant;
 use sysinfo::System;
 
 use crate::utils::command_runner::run_command;
+use crate::utils::registry::{subkey_exists, Hive};
 
 // ─── Cache de hardware estático (nunca muda durante a sessão) ────────────────
 
@@ -214,6 +215,51 @@ pub(crate) fn detect_gpu_vendor_sync() -> String {
     } else {
         "unknown".to_string()
     }
+}
+
+/// Verifica se o sistema tem CPU AMD com fTPM ativo e retorna aviso se detectado.
+///
+/// Retorna `Some(mensagem)` se AMD + TPM ativo, `None` caso contrário.
+/// O fTPM em processadores AMD pode causar micro-stutters intermitentes em jogos
+/// se o BIOS não estiver atualizado com AGESA 1207+.
+#[tauri::command]
+pub async fn get_ftpm_warning() -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(|| {
+        // 1. Verificar se CPU é AMD (via cache)
+        let cpu_name = HW_CACHE
+            .get()
+            .map(|h| h.cpu_name.to_lowercase())
+            .unwrap_or_default();
+
+        let is_amd = cpu_name.contains("amd")
+            || cpu_name.contains("ryzen")
+            || cpu_name.contains("threadripper");
+
+        if !is_amd {
+            return Ok(None);
+        }
+
+        // 2. Verificar se TPM está ativo via registry
+        // IntegrityServices\WBCL existe quando TPM está habilitado e coletando logs
+        let tpm_active = subkey_exists(
+            Hive::LocalMachine,
+            r"SYSTEM\CurrentControlSet\Control\IntegrityServices",
+        )
+        .unwrap_or(false);
+
+        if !tpm_active {
+            return Ok(None);
+        }
+
+        Ok(Some(
+            "Seu processador AMD usa fTPM (Firmware TPM), que pode causar micro-stutters \
+            intermitentes em jogos. Verifique se há atualização de BIOS disponível para \
+            sua placa-mãe com AGESA 1207 ou superior."
+                .to_string(),
+        ))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Pre-warm de todos os caches estáticos em background.

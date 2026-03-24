@@ -1,6 +1,6 @@
 //! Gerenciamento de serviços e tarefas agendadas do Windows.
 //!
-//! Contém uma lista curada de serviços (~27) e tarefas agendadas (~8) que são
+//! Contém uma lista curada de serviços (~33) e tarefas agendadas (~8) que são
 //! seguros para desabilitar em PCs de gaming, organizados por categoria
 //! (telemetria, diagnósticos, hardware, acesso remoto, enterprise).
 //!
@@ -37,6 +37,11 @@ pub struct ServiceItem {
     pub is_conditional: bool,
     /// Nota explicativa exibida quando `is_conditional` é `true`
     pub conditional_note: Option<String>,
+    /// Aviso crítico exibido em destaque na UI (ex: impacto em Xbox Game Pass)
+    pub warning: Option<String>,
+    /// Vendor de CPU requerido para exibir este serviço: `"intel"`, `"amd"` ou `null` (universal)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_vendor: Option<String>,
     /// `true` se existe backup Applied para este serviço (foi desabilitado pelo FrameGuard)
     pub has_backup: bool,
 }
@@ -111,6 +116,9 @@ struct CuratedService {
     category: &'static str,
     is_conditional: bool,
     conditional_note: Option<&'static str>,
+    warning: Option<&'static str>,
+    /// Vendor de CPU requerido: `Some("intel")`, `Some("amd")` ou `None` (universal)
+    cpu_vendor: Option<&'static str>,
 }
 
 struct CuratedTask {
@@ -132,6 +140,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "telemetry",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "dmwappushservice",
@@ -140,6 +150,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "telemetry",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "diagnosticshub.standardcollector.service",
@@ -148,6 +160,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "telemetry",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     // ── Diagnósticos e Compatibilidade ──
     CuratedService {
@@ -157,14 +171,18 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "diagnostics",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "WerSvc",
-        display_name: "Windows Error Reporting",
+        display_name: "Relatório de Erros do Windows",
         description: "Envia relatórios de erro e crash para a Microsoft. Consome recursos e envia dados.",
         category: "diagnostics",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "PcaSvc",
@@ -173,6 +191,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "diagnostics",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     // ── Hardware não utilizado ──
     CuratedService {
@@ -182,6 +202,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "hardware",
         is_conditional: true,
         conditional_note: Some("Necessário se você usa fones Bluetooth para chamadas de voz"),
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "bthserv",
@@ -190,6 +212,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "hardware",
         is_conditional: true,
         conditional_note: Some("Necessário se você usa qualquer dispositivo Bluetooth (mouse, teclado, fone)"),
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "WbioSrvc",
@@ -198,22 +222,28 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "hardware",
         is_conditional: true,
         conditional_note: Some("Necessário se você usa Windows Hello (impressão digital ou reconhecimento facial)"),
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "Fax",
-        display_name: "Fax",
+        display_name: "Serviço de Fax",
         description: "Permite enviar e receber faxes. Praticamente obsoleto em PCs modernos.",
         category: "hardware",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "Spooler",
-        display_name: "Print Spooler",
+        display_name: "Spooler de Impressão",
         description: "Gerencia a fila de impressão. Desabilitar impede qualquer impressão local ou em rede.",
         category: "hardware",
         is_conditional: true,
-        conditional_note: Some("Necessário se você usa impressora (local ou em rede)"),
+        conditional_note: Some("Desabilite apenas se não possui impressora. Nota: remover este serviço também elimina o vetor de ataque PrintNightmare (CVE-2021-34527)"),
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "PhoneSvc",
@@ -222,6 +252,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "hardware",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "SensorService",
@@ -230,6 +262,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "hardware",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "SensrSvc",
@@ -238,6 +272,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "hardware",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "SensorDataService",
@@ -246,15 +282,19 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "hardware",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     // ── Acesso remoto ──
     CuratedService {
         name: "RemoteRegistry",
-        display_name: "Remote Registry",
+        display_name: "Registro Remoto",
         description: "Permite usuários remotos modificarem o registro do Windows. Risco de segurança se habilitado.",
         category: "remote",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "RemoteAccess",
@@ -263,47 +303,59 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "remote",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "TermService",
-        display_name: "Remote Desktop Services",
+        display_name: "Serviços de Área de Trabalho Remota",
         description: "Permite acesso remoto ao computador via RDP. Risco de segurança se não utilizado.",
         category: "remote",
-        is_conditional: false,
-        conditional_note: None,
+        is_conditional: true,
+        conditional_note: Some("Desabilite apenas se não utiliza Conexão de Área de Trabalho Remota (RDP)"),
+        warning: None,
+        cpu_vendor: None,
     },
     // ── Enterprise / Não utilizado ──
     CuratedService {
         name: "MapsBroker",
-        display_name: "Downloaded Maps Manager",
+        display_name: "Gerenciador de Mapas Baixados",
         description: "Gerencia mapas offline do Windows. Consome recursos para manter mapas atualizados em background.",
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "lfsvc",
-        display_name: "Geolocation Service",
+        display_name: "Serviço de Geolocalização",
         description: "Monitora localização geográfica do sistema. Desnecessário em desktops de gaming.",
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "RetailDemo",
-        display_name: "Retail Demo Service",
+        display_name: "Serviço de Demonstração de Varejo",
         description: "Modo de demonstração para lojas de varejo. Completamente desnecessário em PCs pessoais.",
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "wisvc",
-        display_name: "Windows Insider Service",
+        display_name: "Serviço do Windows Insider",
         description: "Infraestrutura do programa Windows Insider (builds de preview). Desnecessário se não participa do programa.",
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "WpcMonSvc",
@@ -312,22 +364,28 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "SEMgrSvc",
-        display_name: "Payments and NFC/SE Manager",
+        display_name: "Pagamentos e NFC",
         description: "Gerencia pagamentos NFC e elementos seguros. Desnecessário em desktops sem NFC.",
         category: "enterprise",
-        is_conditional: false,
-        conditional_note: None,
+        is_conditional: true,
+        conditional_note: Some("Desabilite apenas se seu PC não possui leitor NFC"),
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "AJRouter",
-        display_name: "AllJoyn Router Service",
+        display_name: "Serviço de Roteador AllJoyn",
         description: "Roteia mensagens AllJoyn para dispositivos IoT. Desnecessário se não usa dispositivos IoT compatíveis.",
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "WalletService",
@@ -336,6 +394,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "SCardSvr",
@@ -344,6 +404,8 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
     },
     CuratedService {
         name: "SCPolicySvc",
@@ -352,6 +414,73 @@ const CURATED_SERVICES: &[CuratedService] = &[
         category: "enterprise",
         is_conditional: false,
         conditional_note: None,
+        warning: None,
+        cpu_vendor: None,
+    },
+    // ── Xbox e Gaming ──
+    CuratedService {
+        name: "XblAuthManager",
+        display_name: "Xbox Live Auth Manager",
+        description: "Gerencia autenticação com o Xbox Live. Necessário para jogos do Game Pass e conquistas.",
+        category: "xbox",
+        is_conditional: true,
+        conditional_note: Some("Necessário se você usa Xbox Game Pass, jogos da Microsoft Store ou conquistas Xbox"),
+        warning: Some("CRÍTICO: Desabilitar este serviço impede o login no Xbox Live. Jogos do Game Pass não iniciarão e conquistas (achievements) pararão de funcionar em todos os jogos Xbox."),
+        cpu_vendor: None,
+    },
+    CuratedService {
+        name: "XblGameSave",
+        display_name: "Xbox Live Game Save",
+        description: "Sincroniza saves de jogos Xbox com a nuvem. Necessário para manter progresso entre dispositivos.",
+        category: "xbox",
+        is_conditional: true,
+        conditional_note: Some("Necessário se você usa saves na nuvem em jogos Xbox/Game Pass"),
+        warning: Some("CRÍTICO: Desabilitar este serviço interrompe a sincronização de saves na nuvem. Progresso de jogos pode não ser salvo ou restaurado entre sessões e dispositivos."),
+        cpu_vendor: None,
+    },
+    CuratedService {
+        name: "XboxNetApiSvc",
+        display_name: "Xbox Live Networking Service",
+        description: "Gerencia rede Xbox Live para multiplayer online, detecção de NAT e party chat.",
+        category: "xbox",
+        is_conditional: true,
+        conditional_note: Some("Necessário se você joga multiplayer online em jogos Xbox/Game Pass"),
+        warning: Some("CRÍTICO: Desabilitar este serviço quebra o multiplayer online em jogos Xbox Live, detecção de NAT e party chat."),
+        cpu_vendor: None,
+    },
+    CuratedService {
+        name: "XboxGipSvc",
+        display_name: "Xbox Accessory Management Service",
+        description: "Gerencia periféricos Xbox conectados via USB ou wireless (controles, headsets).",
+        category: "xbox",
+        is_conditional: true,
+        conditional_note: Some("Necessário se você usa controles Xbox Elite, Series ou outros periféricos Xbox"),
+        warning: Some("Atenção: Desabilitar impede atualizações de firmware e remapeamento de botões em controles Xbox Elite e Series. Seguro apenas se não usa periféricos Xbox."),
+        cpu_vendor: None,
+    },
+    // ── Telemetria Intel (cpu_vendor: intel) ──
+    // NOTA: Os nomes de serviço abaixo correspondem aos drivers Intel mais comuns,
+    // mas podem variar conforme a versão do driver instalado. Validar em hardware
+    // Intel real com `sc query type= service state= all | findstr /i intel`.
+    CuratedService {
+        name: "igfxCUIService2.0.0.0",
+        display_name: "Telemetria Intel Graphics",
+        description: "Serviço de coleta de dados de uso da Intel Graphics. Envia dados de telemetria sobre o driver gráfico. Seguro desabilitar.",
+        category: "telemetry",
+        is_conditional: false,
+        conditional_note: None,
+        warning: None,
+        cpu_vendor: Some("intel"),
+    },
+    CuratedService {
+        name: "DTTSvc",
+        display_name: "Intel Dynamic Tuning Telemetry",
+        description: "Coleta dados de temperatura e performance para a Intel Dynamic Tuning Technology. Seguro desabilitar sem afetar o funcionamento do processador.",
+        category: "telemetry",
+        is_conditional: false,
+        conditional_note: None,
+        warning: None,
+        cpu_vendor: Some("intel"),
     },
 ];
 
@@ -541,6 +670,8 @@ pub async fn get_services_status() -> Result<Vec<ServiceItem>, String> {
                 startup_type,
                 is_conditional: curated.is_conditional,
                 conditional_note: curated.conditional_note.map(String::from),
+                warning: curated.warning.map(String::from),
+                cpu_vendor: curated.cpu_vendor.map(String::from),
                 has_backup: has_applied_backup(&bid),
             });
         }

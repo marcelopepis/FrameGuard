@@ -2,7 +2,7 @@
 
 use serde_json::{json, Value};
 
-use crate::commands::optimizations::{EvidenceLevel, RiskLevel, TweakInfo};
+use crate::commands::optimizations::{EvidenceLevel, HardwareFilter, RiskLevel, TweakInfo};
 use crate::utils::backup::{
     backup_before_apply, get_all_backups, restore_from_backup, BackupStatus, OriginalValue,
     TweakCategory,
@@ -380,6 +380,438 @@ pub fn enable_hibernation() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK — AMD Ryzen Power Plan
+//
+// Ativa o plano de energia otimizado para processadores AMD Ryzen.
+// Se o plano AMD Ryzen Balanced (instalado via drivers de chipset) existir,
+// ativa-o diretamente. Caso contrário, aplica parâmetros otimizados sobre o
+// plano ativo atual via powercfg.
+//
+// Revert: restaura o plano Balanceado padrão do Windows.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const AMD_RYZEN_PLAN_GUID: &str = "9897998c-92de-4669-853f-b7cd3ecb2790";
+const BALANCED_PLAN_GUID: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+
+static AMD_RYZEN_META: TweakMeta = TweakMeta {
+    id: "amd_ryzen_power_plan",
+    name: "AMD Ryzen Power Plan",
+    description: "Ativa o plano de energia otimizado para processadores AMD Ryzen. \
+        Melhora responsividade e frequências de boost comparado ao plano Balanceado \
+        padrão do Windows.",
+    category: "energy_cpu",
+    requires_restart: false,
+    risk_level: RiskLevel::Low,
+    evidence_level: EvidenceLevel::Proven,
+    default_value_description: "Padrão Windows: plano Balanceado ativo",
+    hardware_filter: None, // definido dinamicamente em get_info (contém String)
+};
+
+/// Verifica se o plano AMD Ryzen está ativo ou se os parâmetros manuais foram aplicados.
+fn get_amd_ryzen_plan_is_applied() -> Result<bool, String> {
+    let output = run_command("powercfg.exe", &["/getactivescheme"])?;
+    let lower = output.stdout.to_lowercase();
+
+    // Plano AMD Ryzen Balanced ativo diretamente
+    if lower.contains(AMD_RYZEN_PLAN_GUID) {
+        return Ok(true);
+    }
+
+    // Verifica se temos backup Applied (parâmetros manuais foram aplicados)
+    if let Ok(backups) = get_all_backups() {
+        if let Some(entry) = backups.get("amd_ryzen_power_plan") {
+            if entry.status == BackupStatus::Applied {
+                return Ok(true);
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Verifica se o plano AMD Ryzen Balanced existe no sistema.
+fn amd_ryzen_plan_exists() -> Result<bool, String> {
+    let output = run_command("powercfg.exe", &["/list"])?;
+    Ok(output.stdout.to_lowercase().contains(AMD_RYZEN_PLAN_GUID))
+}
+
+/// Retorna informações do tweak AMD Ryzen Power Plan com estado atual.
+#[tauri::command]
+pub async fn get_amd_ryzen_power_plan_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_amd_ryzen_plan_is_applied().unwrap_or(false);
+        let mut info = AMD_RYZEN_META.build(is_applied);
+        info.hardware_filter = Some(HardwareFilter {
+            gpu_vendor: None,
+            cpu_vendor: Some("amd".to_string()),
+        });
+        Ok(info)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Ativa o plano AMD Ryzen Power Plan.
+///
+/// Se o plano AMD Ryzen Balanced (GUID 9897998c-...) estiver disponível no
+/// sistema (drivers de chipset instalados), ativa-o diretamente.
+/// Caso contrário, aplica parâmetros otimizados sobre o plano ativo atual.
+#[tauri::command]
+pub async fn enable_amd_ryzen_power_plan() -> Result<(), String> {
+    tokio::task::spawn_blocking(|| {
+        if get_amd_ryzen_plan_is_applied()? {
+            return Err("Tweak 'amd_ryzen_power_plan' já está aplicado".to_string());
+        }
+
+        let original_guid = get_active_power_scheme_guid()?;
+        let plan_exists = amd_ryzen_plan_exists()?;
+
+        // Backup do GUID ativo original + modo de aplicação
+        backup_before_apply(
+            "amd_ryzen_power_plan",
+            TweakCategory::Powershell,
+            "AMD Ryzen Power Plan — GUID do plano ativo antes da troca",
+            OriginalValue {
+                path: "powercfg".to_string(),
+                key: "active_scheme_guid".to_string(),
+                value: Some(json!(original_guid)),
+                value_type: "STRING".to_string(),
+            },
+            json!(if plan_exists { "ryzen_plan" } else { "manual_params" }),
+        )?;
+
+        if plan_exists {
+            // Plano AMD existe — ativar diretamente
+            let result = run_command("powercfg.exe", &["/setactive", AMD_RYZEN_PLAN_GUID])?;
+            if !result.success {
+                return Err(format!(
+                    "Falha ao ativar plano AMD Ryzen Balanced: {}",
+                    result.stderr
+                ));
+            }
+        } else {
+            // Plano AMD não existe — aplicar parâmetros manualmente sobre o plano ativo
+            let params = [
+                &["/setacvalueindex", "scheme_current", "SUB_PROCESSOR", "PERFINCTHRESHOLD", "25"],
+                &["/setacvalueindex", "scheme_current", "SUB_PROCESSOR", "PERFDECTHRESHOLD", "10"],
+                &["/setacvalueindex", "scheme_current", "SUB_PROCESSOR", "PERFCHECK", "15"],
+                &["/setacvalueindex", "scheme_current", "SUB_PROCESSOR", "PROCTHROTTLEMIN", "90"],
+            ];
+
+            for args in &params {
+                let result = run_command("powercfg.exe", *args)?;
+                if !result.success {
+                    return Err(format!(
+                        "Falha ao aplicar parâmetro powercfg {:?}: {}",
+                        args, result.stderr
+                    ));
+                }
+            }
+
+            // Aplicar as alterações no plano ativo
+            let result = run_command("powercfg.exe", &["/setactive", "scheme_current"])?;
+            if !result.success {
+                return Err(format!(
+                    "Falha ao aplicar plano ativo: {}",
+                    result.stderr
+                ));
+            }
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Reverte o tweak AMD Ryzen Power Plan: restaura o plano Balanceado padrão do Windows.
+#[tauri::command]
+pub async fn revert_amd_ryzen_power_plan() -> Result<(), String> {
+    tokio::task::spawn_blocking(|| {
+        restore_from_backup("amd_ryzen_power_plan")?;
+
+        let result = run_command("powercfg.exe", &["/setactive", BALANCED_PLAN_GUID])?;
+        if !result.success {
+            return Err(format!(
+                "Falha ao restaurar plano Balanceado ({}): {}",
+                BALANCED_PLAN_GUID, result.stderr
+            ));
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK — Intel Power Throttling Off
+//
+// HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling
+//   -> PowerThrottlingOff = 1 (DWORD)
+// Intel-specific: aparece apenas em CPUs Intel via hardware_filter.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+static INTEL_POWER_THROTTLE_META: TweakMeta = TweakMeta {
+    id: "intel_power_throttling_off",
+    name: "Intel Power Throttling Off",
+    description: "Desabilita o Power Throttling do Windows para CPUs Intel. Impede que o \
+        sistema reduza a performance de processos em background durante gaming. Mais impacto \
+        em laptops.",
+    category: "energy_cpu",
+    requires_restart: false,
+    risk_level: RiskLevel::Low,
+    evidence_level: EvidenceLevel::Plausible,
+    default_value_description: "Padrão Windows: Power Throttling habilitado (PowerThrottlingOff = 0)",
+    hardware_filter: None, // definido dinamicamente em get_info (contém String)
+};
+
+/// Verifica se o Intel Power Throttling Off está aplicado (PowerThrottlingOff = 1).
+fn get_intel_power_throttling_is_applied() -> Result<bool, String> {
+    let val = read_dword(Hive::LocalMachine, POWER_THROTTLE_PATH, POWER_THROTTLE_KEY)?.unwrap_or(0);
+    Ok(val == 1)
+}
+
+/// Retorna informações do tweak Intel Power Throttling Off com estado atual.
+#[tauri::command]
+pub async fn get_intel_power_throttling_off_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_intel_power_throttling_is_applied()?;
+        let mut info = INTEL_POWER_THROTTLE_META.build(is_applied);
+        info.hardware_filter = Some(HardwareFilter {
+            gpu_vendor: None,
+            cpu_vendor: Some("intel".to_string()),
+        });
+        Ok(info)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Desabilita o Power Throttling para Intel escrevendo `PowerThrottlingOff = 1`.
+#[tauri::command]
+pub async fn enable_intel_power_throttling_off() -> Result<(), String> {
+    tokio::task::spawn_blocking(|| {
+        if get_intel_power_throttling_is_applied()? {
+            return Err("Tweak 'intel_power_throttling_off' já está aplicado".to_string());
+        }
+
+        let original = read_dword(Hive::LocalMachine, POWER_THROTTLE_PATH, POWER_THROTTLE_KEY)?;
+
+        backup_before_apply(
+            "intel_power_throttling_off",
+            TweakCategory::Registry,
+            "Intel Power Throttling Off — PowerThrottlingOff em HKLM\\...\\Power\\PowerThrottling",
+            OriginalValue {
+                path: format!("HKEY_LOCAL_MACHINE\\{}", POWER_THROTTLE_PATH),
+                key: POWER_THROTTLE_KEY.to_string(),
+                value: original.map(|v| json!(v)),
+                value_type: "DWORD".to_string(),
+            },
+            json!(1),
+        )?;
+
+        write_dword(
+            Hive::LocalMachine,
+            POWER_THROTTLE_PATH,
+            POWER_THROTTLE_KEY,
+            1,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Reverte o Intel Power Throttling: restaura PowerThrottlingOff = 0.
+#[tauri::command]
+pub async fn revert_intel_power_throttling_off() -> Result<(), String> {
+    tokio::task::spawn_blocking(|| {
+        restore_from_backup("intel_power_throttling_off")?;
+
+        write_dword(
+            Hive::LocalMachine,
+            POWER_THROTTLE_PATH,
+            POWER_THROTTLE_KEY,
+            0,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK — Intel Turbo Boost Agressivo
+//
+// Expõe o controle oculto de Processor Performance Boost Mode e seta para
+// Aggressive (valor 2) no plano ativo.
+//
+// Passo 1: HKLM\...\PowerSettings\{54533251-...}\{be337238-...}\Attributes = 2
+// Passo 2: powercfg /setacvalueindex scheme_current SUB_PROCESSOR PERFBOOSTMODE 2
+//
+// Revert: Attributes = 1, PERFBOOSTMODE = 1 (Enabled padrão)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const BOOST_MODE_SETTINGS_PATH: &str =
+    r"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\be337238-0d82-4146-a960-4f3749d470c7";
+const BOOST_MODE_ATTR_KEY: &str = "Attributes";
+
+static INTEL_TURBO_BOOST_META: TweakMeta = TweakMeta {
+    id: "intel_turbo_boost_aggressive",
+    name: "Intel Turbo Boost Agressivo",
+    description: "Expõe e ativa o modo de Turbo Boost Agressivo nas opções de energia do \
+        Windows. Permite que o processador Intel mantenha frequências mais altas por períodos \
+        maiores.",
+    category: "energy_cpu",
+    requires_restart: false,
+    risk_level: RiskLevel::Low,
+    evidence_level: EvidenceLevel::Plausible,
+    default_value_description:
+        "Padrão Windows: Boost Mode = Enabled (1), controle oculto (Attributes = 1)",
+    hardware_filter: None, // definido dinamicamente em get_info (contém String)
+};
+
+/// Verifica se o Turbo Boost Agressivo está aplicado:
+/// Attributes = 2 (exposto) e backup Applied.
+fn get_intel_turbo_boost_is_applied() -> Result<bool, String> {
+    let attr = read_dword(Hive::LocalMachine, BOOST_MODE_SETTINGS_PATH, BOOST_MODE_ATTR_KEY)?
+        .unwrap_or(1);
+
+    if attr != 2 {
+        return Ok(false);
+    }
+
+    // Confirma via backup que o FrameGuard aplicou
+    if let Ok(backups) = get_all_backups() {
+        if let Some(entry) = backups.get("intel_turbo_boost_aggressive") {
+            if entry.status == BackupStatus::Applied {
+                return Ok(true);
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Retorna informações do tweak Intel Turbo Boost Agressivo com estado atual.
+#[tauri::command]
+pub async fn get_intel_turbo_boost_aggressive_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_intel_turbo_boost_is_applied().unwrap_or(false);
+        let mut info = INTEL_TURBO_BOOST_META.build(is_applied);
+        info.hardware_filter = Some(HardwareFilter {
+            gpu_vendor: None,
+            cpu_vendor: Some("intel".to_string()),
+        });
+        Ok(info)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Ativa o Turbo Boost Agressivo: expõe o controle e seta PERFBOOSTMODE = 2.
+#[tauri::command]
+pub async fn enable_intel_turbo_boost_aggressive() -> Result<(), String> {
+    tokio::task::spawn_blocking(|| {
+        if get_intel_turbo_boost_is_applied()? {
+            return Err("Tweak 'intel_turbo_boost_aggressive' já está aplicado".to_string());
+        }
+
+        // Salva valor original de Attributes
+        let original_attr = read_dword(
+            Hive::LocalMachine,
+            BOOST_MODE_SETTINGS_PATH,
+            BOOST_MODE_ATTR_KEY,
+        )?;
+
+        backup_before_apply(
+            "intel_turbo_boost_aggressive",
+            TweakCategory::Registry,
+            "Intel Turbo Boost Agressivo — Attributes + PERFBOOSTMODE",
+            OriginalValue {
+                path: format!("HKEY_LOCAL_MACHINE\\{}", BOOST_MODE_SETTINGS_PATH),
+                key: BOOST_MODE_ATTR_KEY.to_string(),
+                value: original_attr.map(|v| json!(v)),
+                value_type: "DWORD".to_string(),
+            },
+            json!(2),
+        )?;
+
+        // Passo 1: expor o controle oculto (Attributes = 2)
+        write_dword(
+            Hive::LocalMachine,
+            BOOST_MODE_SETTINGS_PATH,
+            BOOST_MODE_ATTR_KEY,
+            2,
+        )?;
+
+        // Passo 2: setar PERFBOOSTMODE = 2 (Aggressive) no plano ativo
+        let result = run_command(
+            "powercfg.exe",
+            &["/setacvalueindex", "scheme_current", "SUB_PROCESSOR", "PERFBOOSTMODE", "2"],
+        )?;
+        if !result.success {
+            return Err(format!(
+                "Falha ao setar PERFBOOSTMODE = 2: {}",
+                result.stderr
+            ));
+        }
+
+        // Aplicar alterações no plano ativo
+        let result = run_command("powercfg.exe", &["/setactive", "scheme_current"])?;
+        if !result.success {
+            return Err(format!(
+                "Falha ao aplicar plano ativo: {}",
+                result.stderr
+            ));
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Reverte o Turbo Boost Agressivo: esconde o controle e restaura PERFBOOSTMODE = 1.
+#[tauri::command]
+pub async fn revert_intel_turbo_boost_aggressive() -> Result<(), String> {
+    tokio::task::spawn_blocking(|| {
+        restore_from_backup("intel_turbo_boost_aggressive")?;
+
+        // Restaurar Attributes = 1 (esconde o controle)
+        write_dword(
+            Hive::LocalMachine,
+            BOOST_MODE_SETTINGS_PATH,
+            BOOST_MODE_ATTR_KEY,
+            1,
+        )?;
+
+        // Restaurar PERFBOOSTMODE = 1 (Enabled padrão)
+        let result = run_command(
+            "powercfg.exe",
+            &["/setacvalueindex", "scheme_current", "SUB_PROCESSOR", "PERFBOOSTMODE", "1"],
+        )?;
+        if !result.success {
+            return Err(format!(
+                "Falha ao restaurar PERFBOOSTMODE = 1: {}",
+                result.stderr
+            ));
+        }
+
+        let result = run_command("powercfg.exe", &["/setactive", "scheme_current"])?;
+        if !result.success {
+            return Err(format!(
+                "Falha ao aplicar plano ativo: {}",
+                result.stderr
+            ));
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]

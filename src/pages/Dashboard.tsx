@@ -1,6 +1,8 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Cpu, Layers, Database, Globe, Clock } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { Cpu, Layers, Database, Globe, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
 import { usePlanExecution, useHardwareFilter } from '../hooks';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useToast } from '../contexts/ToastContext';
@@ -21,6 +23,7 @@ export default function Dashboard() {
   const { showToast } = useToast();
   const { executingPlan, execState, execute, closeModal, cleanup } = usePlanExecution();
   const { isCompatible } = useHardwareFilter();
+  const [ftpmWarning, setFtpmWarning] = useState<string | null>(null);
   const data = useDashboardData(cleanup);
   const {
     hw,
@@ -34,6 +37,13 @@ export default function Dashboard() {
     builtinPlans,
     refreshActivity,
   } = data;
+
+  // Detectar fTPM em CPUs AMD
+  useEffect(() => {
+    invoke<string | null>('get_ftpm_warning')
+      .then((msg) => setFtpmWarning(msg))
+      .catch(() => {}); // silencioso — não bloqueia o Dashboard
+  }, []);
 
   // Toast para status do ponto de restauração durante execução de plano
   useEffect(() => {
@@ -119,6 +129,23 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Aviso fTPM (AMD) */}
+      {ftpmWarning && (
+        <div className={styles.ftpmBanner}>
+          <AlertTriangle size={18} />
+          <div className={styles.ftpmContent}>
+            <strong className={styles.ftpmTitle}>Possível causa de stuttering detectada</strong>
+            <p className={styles.ftpmMessage}>{ftpmWarning}</p>
+            <button
+              className={styles.ftpmLink}
+              onClick={() => openUrl('https://www.amd.com/en/resources/support-articles/faqs/PA-410.html')}
+            >
+              Saiba mais <ExternalLink size={12} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Status Rápido */}
       <section className={styles.statusSection}>

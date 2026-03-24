@@ -159,6 +159,33 @@ export const TWEAK_REGISTRY: readonly TweakRegistryEntry[] = [
     applyCommand: 'disable_power_throttling',
     revertCommand: 'revert_power_throttling',
   },
+  {
+    id: 'amd_ryzen_power_plan',
+    name: 'Plano de Energia AMD Ryzen',
+    description: 'Ativa o plano de energia otimizado para processadores AMD Ryzen. Melhora responsividade e frequências de boost comparado ao plano Balanceado padrão.',
+    categoryKey: 'energy_cpu',
+    infoCommand: 'get_amd_ryzen_power_plan_info',
+    applyCommand: 'enable_amd_ryzen_power_plan',
+    revertCommand: 'revert_amd_ryzen_power_plan',
+  },
+  {
+    id: 'intel_power_throttling_off',
+    name: 'Desabilitar Power Throttling Intel',
+    description: 'Impede o Windows de reduzir performance de processos em background em CPUs Intel. Impacto maior em laptops.',
+    categoryKey: 'energy_cpu',
+    infoCommand: 'get_intel_power_throttling_off_info',
+    applyCommand: 'enable_intel_power_throttling_off',
+    revertCommand: 'revert_intel_power_throttling_off',
+  },
+  {
+    id: 'intel_turbo_boost_aggressive',
+    name: 'Turbo Boost Agressivo Intel',
+    description: 'Ativa o modo Turbo Boost Agressivo para CPUs Intel, mantendo frequências mais altas por mais tempo durante cargas de trabalho.',
+    categoryKey: 'energy_cpu',
+    infoCommand: 'get_intel_turbo_boost_aggressive_info',
+    applyCommand: 'enable_intel_turbo_boost_aggressive',
+    revertCommand: 'revert_intel_turbo_boost_aggressive',
+  },
 
   // ── Armazenamento ──────────────────────────────────────────────────────────
   {
