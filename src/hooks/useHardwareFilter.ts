@@ -31,6 +31,11 @@ export interface HardwareFilter {
 /** Tweaks que requerem hardware ou OS específico. Ausência = universal. */
 export const TWEAK_HARDWARE_MAP: Record<string, HardwareFilter> = {
   disable_nvidia_telemetry: { gpu_vendor: 'nvidia' },
+  nvidia_power_mizer: { gpu_vendor: 'nvidia' },
+  nvidia_telemetry_off: { gpu_vendor: 'nvidia' },
+  nvidia_overlay_off: { gpu_vendor: 'nvidia' },
+  amd_ulps_disable: { gpu_vendor: 'amd' },
+  amd_shader_cache: { gpu_vendor: 'amd' },
   classic_right_click: { min_build: 22000 }, // Windows 11 apenas
   amd_ryzen_power_plan: { cpu_vendor: 'amd' },
   intel_power_throttling_off: { cpu_vendor: 'intel' },

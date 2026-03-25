@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -12,11 +13,9 @@ import {
   Settings,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import FrameGuardIcon from '../FrameGuardIcon';
+import { getVersion } from '@tauri-apps/api/app';
 import SearchBar from '../SearchBar/SearchBar';
 import styles from './sidebar.module.css';
-
-const APP_VERSION = '0.2.0';
 
 type NavItemDef =
   | { kind: 'link'; path: string; label: string; Icon: LucideIcon; end?: boolean }
@@ -37,14 +36,14 @@ const ITEMS: NavItemDef[] = [
 ];
 
 export default function Sidebar() {
+  const [appVersion, setAppVersion] = useState('');
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion('?'));
+  }, []);
+
   return (
     <aside className={styles.sidebar}>
-      {/* Logo */}
-      <div className={styles.logo}>
-        <FrameGuardIcon size={26} className={styles.logoIcon} />
-        <span className={styles.logoText}>FrameGuard</span>
-      </div>
-
       {/* Busca global */}
       <SearchBar />
 
@@ -73,7 +72,7 @@ export default function Sidebar() {
 
       {/* Rodapé com versão */}
       <div className={styles.footer}>
-        <span className={styles.version}>v{APP_VERSION}</span>
+        <span className={styles.version}>{appVersion ? `v${appVersion}` : ''}</span>
       </div>
     </aside>
   );

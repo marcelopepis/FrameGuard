@@ -73,6 +73,26 @@ pub fn run() {
             tweaks::get_nvidia_telemetry_info,
             tweaks::disable_nvidia_telemetry,
             tweaks::revert_nvidia_telemetry,
+            // Otimizações — NVIDIA PowerMizer (tweaks/gpu)
+            tweaks::get_nvidia_power_mizer_info,
+            tweaks::enable_nvidia_power_mizer,
+            tweaks::revert_nvidia_power_mizer,
+            // Otimizações — NVIDIA Telemetria Off IFEO (tweaks/gpu)
+            tweaks::get_nvidia_telemetry_off_info,
+            tweaks::enable_nvidia_telemetry_off,
+            tweaks::revert_nvidia_telemetry_off,
+            // Otimizações — NVIDIA Overlay Off (tweaks/gpu)
+            tweaks::get_nvidia_overlay_off_info,
+            tweaks::disable_nvidia_overlay,
+            tweaks::revert_nvidia_overlay,
+            // Otimizações — AMD ULPS Disable (tweaks/gpu)
+            tweaks::get_amd_ulps_info,
+            tweaks::disable_amd_ulps,
+            tweaks::revert_amd_ulps,
+            // Otimizações — AMD Shader Cache (tweaks/gpu)
+            tweaks::get_amd_shader_cache_info,
+            tweaks::enable_amd_shader_cache,
+            tweaks::revert_amd_shader_cache,
             // Otimizações — Gaming (tweaks/gaming)
             tweaks::get_timer_resolution_info,
             tweaks::enable_timer_resolution,
@@ -83,6 +103,14 @@ pub fn run() {
             tweaks::get_fullscreen_optimizations_info,
             tweaks::disable_fullscreen_optimizations,
             tweaks::revert_fullscreen_optimizations,
+            // Otimizações — HVCI / Memory Integrity (tweaks/gaming)
+            tweaks::get_hvci_info,
+            tweaks::disable_hvci,
+            tweaks::revert_hvci,
+            // Otimizações — Timer Resolution 1ms (tweaks/gaming)
+            tweaks::get_timer_resolution_1ms_info,
+            tweaks::enable_timer_resolution_1ms,
+            tweaks::revert_timer_resolution_1ms,
             // Otimizações — Energia e CPU (tweaks/power)
             tweaks::get_ultimate_performance_info,
             tweaks::enable_ultimate_performance,

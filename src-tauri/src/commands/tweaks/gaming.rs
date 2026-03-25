@@ -788,3 +788,212 @@ pub fn revert_fullscreen_optimizations() -> Result<(), String> {
         .ok_or("Formato de backup inválido para 'disable_fullscreen_optimizations'")?;
     restore_multi_entries(arr)
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK — HVCI/VBS Disable (Core Isolation / Memory Integrity)
+//
+// HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity
+//   Enabled = 0 (DWORD) para desabilitar
+//   Enabled = 1 (DWORD) para habilitar (padrão Windows 11)
+//
+// Diferente do tweak VBS (EnableVirtualizationBasedSecurity) — este controla
+// especificamente o HVCI (Memory Integrity / Integridade de Memória).
+// Maior impacto mensurável de FPS: 5-10% médio, até 28% em CPUs sem MBEC.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const HVCI_REG_PATH: &str =
+    r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity";
+const HVCI_REG_KEY: &str = "Enabled";
+const HVCI_ENABLED: u32 = 1;
+const HVCI_DISABLED: u32 = 0;
+
+static HVCI_META: TweakMeta = TweakMeta {
+    id: "disable_hvci_vbs",
+    name: "HVCI / Integridade de Memória (Core Isolation)",
+    description: "Desabilita o Hypervisor-Protected Code Integrity (HVCI), também chamado de \
+        \"Integridade de Memória\" nas Configurações do Windows. Este é o tweak com maior \
+        impacto mensurável de FPS: 5-10% de ganho médio, podendo chegar a 28% em CPUs mais \
+        antigas sem suporte MBEC (hardware). A Microsoft documenta oficialmente este tradeoff \
+        — é uma decisão consciente entre segurança e performance. Atenção: reduz proteção \
+        contra rootkits kernel-level. Requer reinicialização para ter efeito.",
+    category: "gamer",
+    requires_restart: true,
+    risk_level: RiskLevel::Medium,
+    evidence_level: EvidenceLevel::Proven,
+    default_value_description: "Padrão Windows 11: HVCI habilitado (Enabled = 1)",
+    hardware_filter: None,
+};
+
+/// Retorna informações do tweak HVCI com estado atual do registro.
+///
+/// `is_applied = true` indica que o HVCI está **desabilitado** — estado otimizado
+/// para maximizar performance em jogos.
+/// Se a chave não existir, considera habilitado (comportamento padrão Win11).
+#[tauri::command]
+pub async fn get_hvci_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let hvci_enabled = read_dword(Hive::LocalMachine, HVCI_REG_PATH, HVCI_REG_KEY)?
+            .map(|v| v == HVCI_ENABLED)
+            .unwrap_or(true); // Se não existir, assume habilitado (padrão Win11)
+
+        Ok(HVCI_META.build(!hvci_enabled)) // tweak "aplicado" = HVCI desabilitado
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Desabilita HVCI definindo `Enabled = 0`.
+/// Cria a chave pai se não existir. Requer reinicialização para ter efeito.
+#[tauri::command]
+pub fn disable_hvci() -> Result<(), String> {
+    let hvci_enabled = read_dword(Hive::LocalMachine, HVCI_REG_PATH, HVCI_REG_KEY)?
+        .map(|v| v == HVCI_ENABLED)
+        .unwrap_or(true);
+
+    if !hvci_enabled {
+        return Err("Tweak 'disable_hvci_vbs' já está aplicado".to_string());
+    }
+
+    let original = read_dword(Hive::LocalMachine, HVCI_REG_PATH, HVCI_REG_KEY)?;
+
+    backup_before_apply(
+        "disable_hvci_vbs",
+        TweakCategory::Registry,
+        "HVCI / Memory Integrity — Enabled em DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
+        OriginalValue {
+            path: format!("HKEY_LOCAL_MACHINE\\{}", HVCI_REG_PATH),
+            key: HVCI_REG_KEY.to_string(),
+            value: original.map(|v| json!(v)),
+            value_type: "DWORD".to_string(),
+        },
+        json!(0),
+    )?;
+
+    write_dword(Hive::LocalMachine, HVCI_REG_PATH, HVCI_REG_KEY, HVCI_DISABLED)
+}
+
+/// Reabilita HVCI definindo `Enabled = 1`.
+/// Requer reinicialização para ter efeito.
+#[tauri::command]
+pub fn revert_hvci() -> Result<(), String> {
+    let original = restore_from_backup("disable_hvci_vbs")?;
+
+    match original.value {
+        None => {
+            // Chave não existia antes — restaurar para habilitado (padrão Win11)
+            write_dword(Hive::LocalMachine, HVCI_REG_PATH, HVCI_REG_KEY, HVCI_ENABLED)
+        }
+        Some(Value::Number(n)) => write_dword(
+            Hive::LocalMachine,
+            HVCI_REG_PATH,
+            HVCI_REG_KEY,
+            n.as_u64().unwrap_or(1) as u32,
+        ),
+        Some(other) => Err(format!(
+            "Tipo inesperado no backup de 'disable_hvci_vbs': {:?}",
+            other
+        )),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TWEAK — Timer Resolution Global 1ms
+//
+// HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel
+//   -> GlobalTimerResolutionRequests = 1 (DWORD)
+//
+// Força a resolução global do timer do Windows para 1ms (padrão: 15.6ms).
+// Não melhora FPS médio, mas reduz variação de frame times em 20-30%.
+// Efeito principal nos "1% lows" que causam a sensação de stuttering.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TIMER_1MS_PATH: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel";
+const TIMER_1MS_KEY: &str = "GlobalTimerResolutionRequests";
+
+static TIMER_1MS_META: TweakMeta = TweakMeta {
+    id: "timer_resolution_1ms",
+    name: "Timer Resolution Global 1ms",
+    description: "Força a resolução global do timer do Windows para 1ms (padrão: 15.6ms). \
+        Não melhora FPS médio, mas reduz variação de frame times em 20-30% — jogos ficam \
+        mais consistentes, especialmente em 144Hz+. Efeito principal nos \"1% lows\" que \
+        causam a sensação de stuttering.",
+    category: "gaming",
+    requires_restart: false,
+    risk_level: RiskLevel::Low,
+    evidence_level: EvidenceLevel::Proven,
+    default_value_description:
+        "Padrão Windows: GlobalTimerResolutionRequests ausente ou 0 (timer 15.6ms)",
+    hardware_filter: None,
+};
+
+/// Verifica se o timer resolution global 1ms está habilitado.
+fn get_timer_1ms_is_applied() -> Result<bool, String> {
+    let val = read_dword(Hive::LocalMachine, TIMER_1MS_PATH, TIMER_1MS_KEY)?.unwrap_or(0);
+    Ok(val == 1)
+}
+
+/// Retorna informações do tweak Timer Resolution 1ms com estado atual do registro.
+#[tauri::command]
+pub async fn get_timer_resolution_1ms_info() -> Result<TweakInfo, String> {
+    tokio::task::spawn_blocking(|| {
+        let is_applied = get_timer_1ms_is_applied()?;
+        Ok(TIMER_1MS_META.build(is_applied))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Habilita timer resolution global 1ms definindo `GlobalTimerResolutionRequests = 1`.
+#[tauri::command]
+pub fn enable_timer_resolution_1ms() -> Result<(), String> {
+    if get_timer_1ms_is_applied()? {
+        return Err("Tweak 'timer_resolution_1ms' já está aplicado".to_string());
+    }
+
+    let original = read_dword(Hive::LocalMachine, TIMER_1MS_PATH, TIMER_1MS_KEY)?;
+
+    backup_before_apply(
+        "timer_resolution_1ms",
+        TweakCategory::Registry,
+        "Timer Resolution 1ms — GlobalTimerResolutionRequests no kernel session manager",
+        OriginalValue {
+            path: format!("HKEY_LOCAL_MACHINE\\{}", TIMER_1MS_PATH),
+            key: TIMER_1MS_KEY.to_string(),
+            value: original.map(|v| json!(v)),
+            value_type: "DWORD".to_string(),
+        },
+        json!(1),
+    )?;
+
+    write_dword(Hive::LocalMachine, TIMER_1MS_PATH, TIMER_1MS_KEY, 1)
+}
+
+/// Reverte o timer resolution 1ms para o estado original (0 ou remove).
+#[tauri::command]
+pub fn revert_timer_resolution_1ms() -> Result<(), String> {
+    let original = restore_from_backup("timer_resolution_1ms")?;
+
+    match original.value {
+        None => {
+            if key_exists(Hive::LocalMachine, TIMER_1MS_PATH, TIMER_1MS_KEY)? {
+                delete_value(Hive::LocalMachine, TIMER_1MS_PATH, TIMER_1MS_KEY)?;
+            }
+        }
+        Some(Value::Number(n)) => {
+            write_dword(
+                Hive::LocalMachine,
+                TIMER_1MS_PATH,
+                TIMER_1MS_KEY,
+                n.as_u64().unwrap_or(0) as u32,
+            )?;
+        }
+        Some(other) => {
+            return Err(format!(
+                "Tipo inesperado no backup de 'timer_resolution_1ms': {:?}",
+                other
+            ));
+        }
+    }
+
+    Ok(())
+}

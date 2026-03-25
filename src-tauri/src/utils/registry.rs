@@ -153,6 +153,59 @@ pub fn write_string(hive: Hive, path: &str, key: &str, value: &str) -> Result<()
     })
 }
 
+/// Lê um valor binário (`REG_BINARY`) do registro.
+///
+/// Retorna `Ok(None)` se a subchave ou o valor não existirem.
+/// Retorna `Err` para problemas de acesso ou tipo incompatível.
+pub fn read_binary(hive: Hive, path: &str, key: &str) -> Result<Option<Vec<u8>>, String> {
+    let subkey = match hive.as_regkey().open_subkey(path) {
+        Ok(k) => k,
+        Err(e) if is_not_found(&e) => return Ok(None),
+        Err(e) => return Err(format!("Erro ao abrir '{}': {}", full_path(hive, path), e)),
+    };
+
+    match subkey.get_raw_value(key) {
+        Ok(val) => Ok(Some(val.bytes)),
+        Err(e) if is_not_found(&e) => Ok(None),
+        Err(e) => Err(format!(
+            "Erro ao ler binário '{}' em '{}': {}",
+            key,
+            full_path(hive, path),
+            e
+        )),
+    }
+}
+
+/// Escreve um valor binário (`REG_BINARY`) no registro.
+///
+/// Cria a subchave automaticamente se ela não existir.
+pub fn write_binary(hive: Hive, path: &str, key: &str, value: &[u8]) -> Result<(), String> {
+    use winreg::enums::REG_BINARY;
+    use winreg::RegValue;
+
+    let (subkey, _) = hive.as_regkey().create_subkey(path).map_err(|e| {
+        format!(
+            "Erro ao criar/abrir '{}' para escrita: {}",
+            full_path(hive, path),
+            e
+        )
+    })?;
+
+    let reg_val = RegValue {
+        bytes: value.to_vec(),
+        vtype: REG_BINARY,
+    };
+
+    subkey.set_raw_value(key, &reg_val).map_err(|e| {
+        format!(
+            "Erro ao escrever binário '{}' em '{}': {}",
+            key,
+            full_path(hive, path),
+            e
+        )
+    })
+}
+
 /// Remove um valor do registro.
 ///
 /// Abre a subchave com permissão de escrita (`KEY_SET_VALUE`) e remove

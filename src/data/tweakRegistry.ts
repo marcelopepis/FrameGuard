@@ -139,6 +139,78 @@ export const TWEAK_REGISTRY: readonly TweakRegistryEntry[] = [
     applyCommand: 'disable_fullscreen_optimizations',
     revertCommand: 'revert_fullscreen_optimizations',
   },
+  {
+    id: 'disable_hvci_vbs',
+    name: 'Desabilitar HVCI / Integridade de Memória',
+    description:
+      'Desativa a Integridade de Memória do Windows (HVCI). Maior ganho de FPS mensurável: 5-10% em média, até 28% em CPUs sem suporte MBEC. Requer reinicialização. Tradeoff: reduz proteção contra rootkits kernel-level.',
+    categoryKey: 'gaming',
+    infoCommand: 'get_hvci_info',
+    applyCommand: 'disable_hvci',
+    revertCommand: 'revert_hvci',
+  },
+  {
+    id: 'timer_resolution_1ms',
+    name: 'Timer Resolution 1ms',
+    description:
+      'Reduz a resolução do timer global do Windows de 15.6ms para 1ms. Não aumenta FPS médio, mas melhora consistência de frames em 20-30% — menos stuttering e 1% lows mais altos. Efeito mais notável em 144Hz+.',
+    categoryKey: 'gaming',
+    infoCommand: 'get_timer_resolution_1ms_info',
+    applyCommand: 'enable_timer_resolution_1ms',
+    revertCommand: 'revert_timer_resolution_1ms',
+  },
+
+  // ── GPU Vendor-Specific ─────────────────────────────────────────────────────
+  {
+    id: 'nvidia_power_mizer',
+    name: 'NVIDIA PowerMizer — Performance Máxima',
+    description:
+      "Força a GPU NVIDIA a operar sempre em frequência máxima (P-State P0), eliminando downclocks em idle e transições de frequência. Equivale a 'Prefer Maximum Performance' no painel NVIDIA.",
+    categoryKey: 'gpu_display',
+    infoCommand: 'get_nvidia_power_mizer_info',
+    applyCommand: 'enable_nvidia_power_mizer',
+    revertCommand: 'revert_nvidia_power_mizer',
+  },
+  {
+    id: 'nvidia_telemetry_off',
+    name: 'NVIDIA Telemetria Off',
+    description:
+      'Bloqueia o processo de coleta de dados da NVIDIA em background e desabilita scheduled tasks de relatório. Reduz interferência de CPU/disco sem afetar o driver ou o painel NVIDIA.',
+    categoryKey: 'gpu_display',
+    infoCommand: 'get_nvidia_telemetry_off_info',
+    applyCommand: 'enable_nvidia_telemetry_off',
+    revertCommand: 'revert_nvidia_telemetry_off',
+  },
+  {
+    id: 'nvidia_overlay_off',
+    name: 'NVIDIA Overlay Off (ShadowPlay)',
+    description:
+      'Desabilita o overlay in-game do GeForce Experience. O overlay injeta DLL em todos os jogos adicionando overhead de CPU. Desabilitar remove esta latência sem desinstalar o GFE.',
+    categoryKey: 'gpu_display',
+    infoCommand: 'get_nvidia_overlay_off_info',
+    applyCommand: 'disable_nvidia_overlay',
+    revertCommand: 'revert_nvidia_overlay',
+  },
+  {
+    id: 'amd_ulps_disable',
+    name: 'AMD ULPS Disable',
+    description:
+      'Desabilita o Ultra Low Power State da GPU AMD. Elimina delays de wake de 100-500ms, black screens em multi-monitor e stutters ao retornar de screensaver. Recomendado para qualquer sistema AMD com múltiplos monitores.',
+    categoryKey: 'gpu_display',
+    infoCommand: 'get_amd_ulps_info',
+    applyCommand: 'disable_amd_ulps',
+    revertCommand: 'revert_amd_ulps',
+  },
+  {
+    id: 'amd_shader_cache',
+    name: 'AMD Shader Cache Forçado',
+    description:
+      'Força o shader cache AMD para modo permanente em vez do automático. Reduz stutters de compilação de shaders em jogos DX12/Vulkan — especialmente notável em Elden Ring, STALKER 2 e outros títulos.',
+    categoryKey: 'gpu_display',
+    infoCommand: 'get_amd_shader_cache_info',
+    applyCommand: 'enable_amd_shader_cache',
+    revertCommand: 'revert_amd_shader_cache',
+  },
 
   // ── Energia e CPU ───────────────────────────────────────────────────────────
   {
